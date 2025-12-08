@@ -1,95 +1,71 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 
-const API_BASE_URL =
-import.meta.env.VITE_MINA_API_BASE_URL ??
-"[https://mina-editorial-ai-api.onrender.com](https://mina-editorial-ai-api.onrender.com)";
+// ---------------------------
+// Types
+// ---------------------------
 
 type HealthPayload = {
 ok: boolean;
-service?: string;
-time?: string;
+service: string;
+time: string;
 };
 
-type CreditsPayload = {
+type CreditsBalancePayload = {
 ok: boolean;
+requestId?: string;
 customerId: string;
 balance: number;
+historyLength?: number;
 meta?: {
-imageCost: number;
-motionCost: number;
+imageCost?: number;
+motionCost?: number;
 };
 };
 
-type Mode = "still" | "motion";
+// ---------------------------
+// Config
+// ---------------------------
 
-type GalleryItem = {
-url: string;
-createdAt: string;
-};
+// This should match the env var on Render
+// (Settings → Environment → VITE_MINA_API_BASE_URL)
+const API_BASE_URL =
+import.meta.env.VITE_MINA_API_BASE_URL ||
+"[https://mina-editorial-ai-api.onrender.com](https://mina-editorial-ai-api.onrender.com)";
 
-const DEFAULT_CUSTOMER_ID = "8766256447571";
+// ---------------------------
+// App component
+// ---------------------------
 
 const App: React.FC = () => {
-const [mode, setMode] = useState<Mode>("still");
-
-// API status
-const [health, setHealth] = useState<HealthPayload | null>(null);
 const [checkingHealth, setCheckingHealth] = useState(false);
 const [healthError, setHealthError] = useState<string | null>(null);
+const [health, setHealth] = useState<HealthPayload | null>(null);
 
-// Customer + credits
-const [customerId, setCustomerId] = useState<string>(DEFAULT_CUSTOMER_ID);
-const [credits, setCredits] = useState<CreditsPayload | null>(null);
+const [customerIdInput, setCustomerIdInput] = useState("");
 const [checkingCredits, setCheckingCredits] = useState(false);
 const [creditsError, setCreditsError] = useState<string | null>(null);
+const [credits, setCredits] = useState<CreditsBalancePayload | null>(null);
 
-// Still form
-const [productImageUrl, setProductImageUrl] = useState("");
-const [referencesUrl, setReferencesUrl] = useState("");
-const [brief, setBrief] = useState("");
-const [tone, setTone] = useState("");
-const [platform, setPlatform] = useState("tiktok");
-const [minaVision, setMinaVision] = useState(true);
+// -------------------------
+// Helpers
+// -------------------------
 
-const [isGeneratingStill, setIsGeneratingStill] = useState(false);
-const [generationError, setGenerationError] = useState<string | null>(null);
-
-// Gallery / latest image
-const [gallery, setGallery] = useState<GalleryItem[]>([]);
-const [activeIndex, setActiveIndex] = useState(0);
-const [latestPrompt, setLatestPrompt] = useState<string | null>(null);
-
-// ---- Notion-like steps ----
-
-const steps = useMemo(
-() => ({
-description: brief.trim().length > 0,
-format: !!platform,
-style: tone.trim().length > 0,
-product: productImageUrl.trim().length > 0,
-refs: referencesUrl.trim().length > 0,
-vision: minaVision,
-}),
-[brief, platform, tone, productImageUrl, referencesUrl, minaVision]
-);
-
-// ---- API helpers ----
-
-async function checkHealth() {
-if (!API_BASE_URL) {
-setHealthError("Missing VITE_MINA_API_BASE_URL env var.");
-return;
-}
+async function handleCheckHealth() {
+try {
+setCheckingHealth(true);
+setHealthError(null);
 
 ```
-try {
-  setCheckingHealth(true);
-  setHealthError(null);
   const res = await fetch(API_BASE_URL + "/health");
-  const data: HealthPayload = await res.json();
+  if (!res.ok) {
+    throw new Error("Health endpoint returned " + res.status);
+  }
+
+  const data = (await res.json()) as HealthPayload;
   setHealth(data);
 } catch (err: any) {
-  setHealthError(err?.message || "Failed to reach Mina API.");
+  setHealthError(err?.message || "Unexpected error");
+  setHealth(null);
 } finally {
   setCheckingHealth(false);
 }
@@ -97,32 +73,40 @@ try {
 
 }
 
-async function fetchCredits(id: string) {
-if (!API_BASE_URL) return;
-const trimmed = id.trim();
-if (!trimmed) return;
+async function handleCheckCredits() {
+const trimmedId = customerIdInput.trim();
+if (!trimmedId) {
+setCreditsError("Paste a Shopify customer.id first.");
+setCredits(null);
+return;
+}
 
 ```
 try {
   setCheckingCredits(true);
   setCreditsError(null);
 
-  const url = new URL(API_BASE_URL + "/credits/balance");
-  url.searchParams.set("customerId", trimmed);
+  const url =
+    API_BASE_URL +
+    "/credits/balance?customerId=" +
+    encodeURIComponent(trimmedId);
 
-  const res = await fetch(url.toString());
-  const data = (await res.json()) as CreditsPayload & {
-    meta?: { imageCost: number; motionCost: number };
-  };
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error("Credits endpoint returned " + res.status);
+  }
 
-  setCredits({
-    ok: data.ok,
-    customerId: data.customerId,
-    balance: data.balance,
-    meta: data.meta,
-  });
+  const data = (await res.json()) as CreditsBalancePayload;
+  if (!data.ok) {
+    throw new Error(
+      data as unknown as string || "API replied with ok = false"
+    );
+  }
+
+  setCredits(data);
 } catch (err: any) {
-  setCreditsError(err?.message || "Could not fetch credits.");
+  setCreditsError(err?.message || "Unexpected error");
+  setCredits(null);
 } finally {
   setCheckingCredits(false);
 }
@@ -130,399 +114,369 @@ try {
 
 }
 
-// Dev helper: give this customer a huge balance
-async function grantDevCredits() {
-if (!API_BASE_URL) return;
-
-```
-try {
-  setCreditsError(null);
-  const cid = (customerId.trim() || DEFAULT_CUSTOMER_ID);
-
-  const res = await fetch(API_BASE_URL + "/credits/add", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      customerId: cid,
-      amount: 9999999,
-      reason: "dev-topup",
-      source: "frontend-dev",
-    }),
-  });
-
-  const data = await res.json();
-  if (!data.ok) {
-    throw new Error(data.message || "Top-up failed");
-  }
-
-  await fetchCredits(cid);
-} catch (err: any) {
-  setCreditsError(
-    err?.message || "Dev top-up failed. Check /credits/add endpoint."
-  );
-}
-```
-
-}
-
-async function createStill() {
-if (!API_BASE_URL) return;
-
-```
-setGenerationError(null);
-
-if (!brief.trim() && !productImageUrl.trim()) {
-  setGenerationError("Give Mina at least a brief or a product image URL.");
-  return;
-}
-
-try {
-  setIsGeneratingStill(true);
-
-  const payload = {
-    productImageUrl: productImageUrl.trim() || undefined,
-    styleImageUrls: referencesUrl
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
-    brief: brief.trim(),
-    tone: tone.trim(),
-    platform,
-    minaVisionEnabled: minaVision,
-    customerId: customerId.trim() || DEFAULT_CUSTOMER_ID,
-  };
-
-  const res = await fetch(API_BASE_URL + "/editorial/generate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  const data = await res.json();
-
-  if (!data.ok) {
-    throw new Error(data.message || "Generation failed.");
-  }
-
-  const url: string | null = data.imageUrl || null;
-  const urls: string[] = Array.isArray(data.imageUrls)
-    ? data.imageUrls
-    : url
-    ? [url]
-    : [];
-
-  if (!urls.length) {
-    throw new Error("Mina responded but no image URL found.");
-  }
-
-  const now = new Date().toISOString();
-  const newItems: GalleryItem[] = urls.map((u) => ({
-    url: u,
-    createdAt: now,
-  }));
-
-  setGallery((prev) => [...newItems, ...prev]);
-  setActiveIndex(0);
-  setLatestPrompt(data.prompt || null);
-
-  await fetchCredits(customerId.trim() || DEFAULT_CUSTOMER_ID);
-} catch (err: any) {
-  setGenerationError(err?.message || "Something went wrong.");
-} finally {
-  setIsGeneratingStill(false);
-}
-```
-
-}
-
+// Ping backend automatically on first load
 useEffect(() => {
-checkHealth();
-fetchCredits(DEFAULT_CUSTOMER_ID);
+handleCheckHealth();
 }, []);
 
-const activeImage = gallery[activeIndex] || null;
+// -------------------------
+// Render
+// -------------------------
 
-return ( <div className="mina-root"> <header className="mina-header"> <div className="mina-header-left"> <div className="mina-logo-wordmark"> <span className="mina-logo-dot" /> <span className="mina-logo-text">Mina Editorial AI</span> <span className="mina-logo-tag">Falta Studio</span> </div>
+return (
+<div
+style={{
+minHeight: "100vh",
+background: "radial-gradient(circle at top, #0f172a 0%, #020617 55%)",
+color: "#e5e7eb",
+fontFamily:
+"-apple-system, BlinkMacSystemFont, system-ui, -system-ui, sans-serif",
+padding: "32px 24px",
+}}
+>
+{/* Top bar */}
+<header
+style={{
+display: "flex",
+alignItems: "center",
+justifyContent: "space-between",
+marginBottom: 32,
+}}
+>
+<div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+<span
+style={{
+width: 9,
+height: 9,
+borderRadius: "999px",
+backgroundColor: "#22c55e",
+boxShadow: "0 0 10px rgba(34,197,94,0.7)",
+}}
+/>
+<span
+style={{
+fontSize: 15,
+letterSpacing: 0.08,
+textTransform: "uppercase",
+color: "#e5e7eb",
+}}
+>
+Mina Editorial AI · Beta </span> </div>
 
 ```
-      <nav className="mina-nav">
-        <button
-          className={
-            "mina-nav-tab " + (mode === "still" ? "is-active" : "")
-          }
-          onClick={() => setMode("still")}
-        >
-          Still life images
-        </button>
-        <button
-          className={
-            "mina-nav-tab " + (mode === "motion" ? "is-active" : "")
-          }
-          onClick={() => setMode("motion")}
-        >
-          Animate this
-        </button>
-      </nav>
-    </div>
-
-    <div className="mina-header-right">
-      <div className="mina-status-pill">
-        <span
-          className={
-            "mina-status-dot " + (health && health.ok ? "ok" : "off")
-          }
-        />
-        <span className="mina-status-label">API</span>
-        <span className="mina-status-value">
-          {checkingHealth
-            ? "Checking..."
-            : health && health.ok
-            ? "Online"
-            : "Offline"}
-        </span>
-        {health && health.time && (
-          <span className="mina-status-time">
-            {new Date(health.time).toLocaleString()}
-          </span>
-        )}
-      </div>
-
-      <div className="mina-credits">
-        <div className="mina-credits-top">
-          <span className="mina-credits-label">Credits</span>
-          <span className="mina-credits-value">
-            {checkingCredits
-              ? "—"
-              : credits && typeof credits.balance === "number"
-              ? credits.balance.toLocaleString()
-              : "0"}
-          </span>
-        </div>
-        <div className="mina-credits-sub">
-          <span>
-            {(credits && credits.meta && credits.meta.imageCost) || 1} img ·{" "}
-            {(credits && credits.meta && credits.meta.motionCost) || 5} motion
-          </span>
-          <button
-            type="button"
-            className="mina-credits-dev"
-            onClick={grantDevCredits}
-          >
-            Dev: 9,999,999 → this user
-          </button>
-        </div>
-      </div>
+    <div
+      style={{
+        fontSize: 13,
+        opacity: 0.8,
+      }}
+    >
+      API base URL:&nbsp;
+      <code style={{ opacity: 0.9 }}>{API_BASE_URL}</code>
     </div>
   </header>
 
-  <main className="mina-main">
-    {/* LEFT: Notion-like form */}
-    <section className="mina-pane mina-pane-left">
-      <div className="mina-left-inner">
-        <div className="mina-customer-row">
-          <label className="mina-customer-label">Customer ID</label>
-          <div className="mina-customer-input-row">
-            <input
-              className="mina-input mina-input-underlined"
-              value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-              onBlur={() =>
-                fetchCredits(customerId.trim() || DEFAULT_CUSTOMER_ID)
-              }
-            />
-            <button
-              type="button"
-              className="mina-small-link"
-              onClick={() =>
-                fetchCredits(customerId.trim() || DEFAULT_CUSTOMER_ID)
-              }
-            >
-              Refresh credits
-            </button>
-          </div>
+  {/* Layout: left (credits) / right (info) */}
+  <main
+    style={{
+      display: "grid",
+      gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 1fr)",
+      gap: 28,
+      maxWidth: 1100,
+      margin: "0 auto",
+    }}
+  >
+    {/* Left card */}
+    <section
+      style={{
+        borderRadius: 24,
+        border: "1px solid rgba(148,163,184,0.3)",
+        background:
+          "linear-gradient(135deg, rgba(15,23,42,0.9), rgba(15,23,42,0.6))",
+        boxShadow:
+          "0 18px 60px rgba(15,23,42,0.85), 0 0 0 1px rgba(148,163,184,0.15)",
+        padding: 28,
+      }}
+    >
+      <h1
+        style={{
+          fontSize: 24,
+          letterSpacing: 0.08,
+          textTransform: "uppercase",
+          marginBottom: 6,
+        }}
+      >
+        Mina control room
+      </h1>
+      <p
+        style={{
+          fontSize: 14,
+          opacity: 0.7,
+          marginBottom: 24,
+          maxWidth: 520,
+        }}
+      >
+        Simple panel to talk to your Mina API, check credits, and verify the
+        backend is alive before we build the full studio UI.
+      </p>
+
+      {/* Health status */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "10px 12px",
+          borderRadius: 999,
+          backgroundColor: "rgba(15,23,42,0.9)",
+          border: "1px solid rgba(148,163,184,0.35)",
+          marginBottom: 22,
+          fontSize: 13,
+        }}
+      >
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: "999px",
+            backgroundColor: healthError ? "#f97373" : "#22c55e",
+            boxShadow: healthError
+              ? "0 0 10px rgba(248,113,113,0.9)"
+              : "0 0 10px rgba(34,197,94,0.9)",
+          }}
+        />
+        <span style={{ opacity: 0.85 }}>
+          API:&nbsp;
+          {checkingHealth
+            ? "Checking…"
+            : healthError
+            ? "Error (see message below)."
+            : health?.ok
+            ? "Online"
+            : "Offline"}
+        </span>
+        {health?.time && (
+          <span style={{ opacity: 0.6 }}>
+            • Server time:&nbsp;
+            {new Date(health.time).toLocaleString()}
+          </span>
+        )}
+        <button
+          onClick={handleCheckHealth}
+          style={{
+            marginLeft: "auto",
+            fontSize: 13,
+            border: "none",
+            background: "transparent",
+            color: "#a5b4fc",
+            cursor: "pointer",
+          }}
+        >
+          Re-check
+        </button>
+      </div>
+
+      {healthError && (
+        <div
+          style={{
+            marginBottom: 20,
+            fontSize: 12,
+            color: "#fecaca",
+          }}
+        >
+          Health error: {healthError}
         </div>
+      )}
 
-        <div className="mina-steps">
-          <StepRow
-            label="Describe how you want your photo to feel."
-            done={steps.description}
-          >
-            <textarea
-              className="mina-textarea"
-              placeholder="Soft desert ritual, warm light, minimal props..."
-              value={brief}
-              onChange={(e) => setBrief(e.target.value)}
-            />
-          </StepRow>
+      {/* Credits checker */}
+      <div
+        style={{
+          marginTop: 10,
+          paddingTop: 14,
+          borderTop: "1px solid rgba(148,163,184,0.4)",
+        }}
+      >
+        <h2
+          style={{
+            fontSize: 16,
+            marginBottom: 6,
+          }}
+        >
+          Check a customer’s Mina credits
+        </h2>
+        <p
+          style={{
+            fontSize: 13,
+            opacity: 0.75,
+            marginBottom: 16,
+          }}
+        >
+          Paste a Shopify <code>customer.id</code> and Mina will show how
+          many credits they have in the in-memory store on the API.
+        </p>
 
-          <StepRow label="Choose the format." done={steps.format}>
-            <select
-              className="mina-select"
-              value={platform}
-              onChange={(e) => setPlatform(e.target.value)}
-            >
-              <option value="tiktok">TikTok / Reels · 9:16</option>
-              <option value="square">Square · 1:1</option>
-              <option value="youtube">YouTube · 16:9</option>
-            </select>
-          </StepRow>
-
-          <StepRow
-            label="Describe the editorial style / tone."
-            done={steps.style}
-          >
-            <input
-              className="mina-input mina-input-underlined"
-              placeholder="Calm, sensual, clinical..."
-              value={tone}
-              onChange={(e) => setTone(e.target.value)}
-            />
-          </StepRow>
-
-          <StepRow
-            label="+ upload / paste your product image URL."
-            done={steps.product}
-          >
-            <input
-              className="mina-input mina-input-underlined"
-              placeholder="https://… (drag & drop later)"
-              value={productImageUrl}
-              onChange={(e) => setProductImageUrl(e.target.value)}
-            />
-          </StepRow>
-
-          <StepRow
-            label="+ upload / paste style reference URLs (comma separated)."
-            done={steps.refs}
-          >
-            <input
-              className="mina-input mina-input-underlined"
-              placeholder="https://ref-1…, https://ref-2…"
-              value={referencesUrl}
-              onChange={(e) => setReferencesUrl(e.target.value)}
-            />
-          </StepRow>
-
-          <StepRow label="Mina Vision Intelligence." done={steps.vision}>
-            <ToggleLine
-              checked={minaVision}
-              onChange={setMinaVision}
-              label={minaVision ? "ON" : "OFF"}
-            />
-          </StepRow>
-        </div>
-
-        <div className="mina-actions">
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            marginBottom: 14,
+          }}
+        >
+          <input
+            value={customerIdInput}
+            onChange={(e) => setCustomerIdInput(e.target.value)}
+            placeholder="8766256447571"
+            style={{
+              flex: 1,
+              padding: "10px 12px",
+              borderRadius: 999,
+              border: "1px solid rgba(148,163,184,0.5)",
+              backgroundColor: "rgba(15,23,42,0.9)",
+              color: "#e5e7eb",
+              fontSize: 14,
+              outline: "none",
+            }}
+          />
           <button
-            type="button"
-            className="mina-primary-link"
-            onClick={createStill}
-            disabled={isGeneratingStill}
+            onClick={handleCheckCredits}
+            disabled={checkingCredits}
+            style={{
+              padding: "10px 18px",
+              borderRadius: 999,
+              border: "none",
+              cursor: "pointer",
+              fontSize: 14,
+              fontWeight: 500,
+              background:
+                "linear-gradient(135deg, #4f46e5, #a855f7)",
+              color: "#e5e7eb",
+              opacity: checkingCredits ? 0.7 : 1,
+            }}
           >
-            {isGeneratingStill ? "Creating…" : "Create still"}
+            {checkingCredits ? "Checking…" : "Check credits"}
           </button>
-          {generationError && (
-            <div className="mina-error-text">{generationError}</div>
-          )}
-          {creditsError && (
-            <div className="mina-error-text">{creditsError}</div>
-          )}
-          {healthError && (
-            <div className="mina-error-text">{healthError}</div>
-          )}
         </div>
+
+        {creditsError && (
+          <div
+            style={{
+              fontSize: 12,
+              color: "#fecaca",
+              marginBottom: 8,
+            }}
+          >
+            {creditsError}
+          </div>
+        )}
+
+        {credits && (
+          <div
+            style={{
+              marginTop: 10,
+              padding: 14,
+              borderRadius: 18,
+              background:
+                "radial-gradient(circle at top, rgba(34,197,94,0.12), rgba(15,23,42,0.95))",
+              border: "1px solid rgba(34,197,94,0.45)",
+              fontSize: 13,
+            }}
+          >
+            <div style={{ marginBottom: 4 }}>
+              Customer:{" "}
+              <span style={{ fontWeight: 600 }}>{credits.customerId}</span>
+            </div>
+            <div>
+              Balance:{" "}
+              <span style={{ fontWeight: 600 }}>
+                {credits.balance ?? 0}
+              </span>{" "}
+              Machta credits
+            </div>
+            <div style={{ marginTop: 6, opacity: 0.8 }}>
+              Image cost: {credits.meta?.imageCost ?? 1} credits · Motion
+              cost: {credits.meta?.motionCost ?? 5} credits
+            </div>
+          </div>
+        )}
       </div>
     </section>
 
-    {/* RIGHT: image frame */}
-    <section className="mina-pane mina-pane-right">
-      <div className="mina-right-inner">
-        <div className="mina-right-frame">
-          {activeImage ? (
-            <img
-              src={activeImage.url}
-              alt="Mina latest still"
-              className="mina-still-image"
-            />
-          ) : (
-            <div className="mina-placeholder">
-              <div className="mina-placeholder-title">Latest still</div>
-              <div className="mina-placeholder-text">
-                When you create a still, it will appear here in a full-bleed
-                editorial frame.
-              </div>
-            </div>
-          )}
-        </div>
+    {/* Right column: info + roadmap */}
+    <section
+      style={{
+        borderRadius: 24,
+        border: "1px solid rgba(148,163,184,0.35)",
+        background:
+          "radial-gradient(circle at top left, rgba(56,189,248,0.12), rgba(15,23,42,0.96))",
+        padding: 24,
+        boxShadow: "0 22px 70px rgba(15,23,42,0.95)",
+        fontSize: 13,
+      }}
+    >
+      <h2
+        style={{
+          fontSize: 16,
+          marginBottom: 12,
+        }}
+      >
+        What’s wired right now
+      </h2>
 
-        <div className="mina-right-bottom">
-          <div className="mina-carousel-dots">
-            {gallery.length > 1 &&
-              gallery.map((item, idx) => (
-                <button
-                  key={item.createdAt + "_" + idx}
-                  className={"mina-dot " + (idx === activeIndex ? "is-active" : "")}
-                  onClick={() => setActiveIndex(idx)}
-                />
-              ))}
-          </div>
+      <ul
+        style={{
+          listStyle: "none",
+          padding: 0,
+          margin: "0 0 20px 0",
+          display: "grid",
+          gap: 8,
+        }}
+      >
+        <li>✅ /health → shows if the Mina API is alive.</li>
+        <li>
+          ✅ /credits/balance → reads credits from the in-memory store
+          (including Shopify Machta top-ups).
+        </li>
+        <li>
+          ✅ Frontend reads{" "}
+          <code style={{ opacity: 0.85 }}>VITE_MINA_API_BASE_URL</code>{" "}
+          from Render env, so you can point it to prod or staging just by
+          changing that value.
+        </li>
+      </ul>
 
-          <div className="mina-prompt-box">
-            {latestPrompt ? (
-              <>
-                <div className="mina-prompt-label">
-                  What Mina asked the model:
-                </div>
-                <div className="mina-prompt-text">{latestPrompt}</div>
-              </>
-            ) : (
-              <div className="mina-prompt-empty">
-                Speak to me later about what you like and dislike about my
-                generations. I will remember.
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <h3
+        style={{
+          fontSize: 14,
+          marginBottom: 10,
+        }}
+      >
+        Next steps for Mina Studio
+      </h3>
+      <ol
+        style={{
+          paddingLeft: 18,
+          margin: 0,
+          display: "grid",
+          gap: 6,
+          opacity: 0.9,
+        }}
+      >
+        <li>
+          Login + basic profile (customer sees their sessions plus credits).
+        </li>
+        <li>
+          Full editorial generator UI (product image, style, brief, Mina
+          Vision toggle).
+        </li>
+        <li>
+          Motion step with auto-suggested ASMR motion text from GPT.
+        </li>
+        <li>Separate admin dashboard (tweaking costs, presets, logs).</li>
+      </ol>
     </section>
   </main>
 </div>
 ```
 
-);
-};
-
-// ---- Small helper components ----
-
-interface StepRowProps {
-label: string;
-done?: boolean;
-children: React.ReactNode;
-}
-
-const StepRow: React.FC<StepRowProps> = ({ label, done, children }) => {
-return ( <div className="mina-step-row">
-<div className={"mina-step-line " + (done ? "is-done" : "")} /> <div className="mina-step-body"> <div className="mina-step-label">{label}</div> <div className="mina-step-control">{children}</div> </div> </div>
-);
-};
-
-interface ToggleLineProps {
-checked: boolean;
-onChange: (val: boolean) => void;
-label: string;
-}
-
-const ToggleLine: React.FC<ToggleLineProps> = ({
-checked,
-onChange,
-label,
-}) => {
-return (
-<button
-type="button"
-className={"mina-toggle " + (checked ? "is-on" : "is-off")}
-onClick={() => onChange(!checked)}
-> <span className="mina-toggle-pill"> <span className="mina-toggle-knob" /> </span> <span className="mina-toggle-label">{label}</span> </button>
 );
 };
 
