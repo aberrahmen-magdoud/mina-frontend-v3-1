@@ -1,23 +1,10 @@
-import { useEffect, useState } from "react";
-import "./index.css";
-
-// ===============================
-// Config
-// ===============================
+import React, { useEffect, useState } from "react";
 
 const API_BASE_URL =
-  import.meta.env.VITE_MINA_API_BASE_URL || "http://localhost:3000";
+  import.meta.env.VITE_MINA_API_BASE_URL ||
+  "https://mina-editorial-ai-api.onrender.com";
 
-// Mock customer id – this should match a real Shopify customer id
-// that has credits in your backend. For now it's constant.
-const MOCK_CUSTOMER_ID = "8766256447571";
-
-// Auto top-up local storage key
-const AUTO_TOPUP_KEY = "mina_auto_topup_settings_v1";
-
-// ===============================
-// Types
-// ===============================
+// -------- Types --------
 
 type HealthPayload = {
   ok: boolean;
@@ -30,7 +17,7 @@ type CreditsMeta = {
   motionCost: number;
 };
 
-type CreditsBalancePayload = {
+type CreditsBalance = {
   ok: boolean;
   requestId: string;
   customerId: string;
@@ -39,96 +26,92 @@ type CreditsBalancePayload = {
   meta: CreditsMeta;
 };
 
-type TabId = "playground" | "profile";
+type EditorialResponse = {
+  ok: boolean;
+  message: string;
+  requestId: string;
+  prompt: string;
+  imageUrl: string | null;
+  imageUrls?: string[];
+  generationId: string;
+  sessionId: string;
+  credits: {
+    balance: number;
+    cost: number;
+  };
+  gpt?: any;
+};
 
-type GenerationKind = "image" | "motion";
+type MotionSuggestResponse = {
+  ok: boolean;
+  requestId: string;
+  suggestion: string;
+  gpt?: any;
+};
 
-type GenerationItem = {
+type MotionResponse = {
+  ok: boolean;
+  message: string;
+  requestId: string;
+  prompt: string;
+  videoUrl: string | null;
+  generationId: string;
+  sessionId: string;
+  credits: {
+    balance: number;
+    cost: number;
+  };
+  gpt?: any;
+};
+
+type LikePayload = {
+  ok: boolean;
+  message: string;
+  requestId: string;
+  totals: {
+    likesForCustomer: number;
+  };
+};
+
+type StillItem = {
   id: string;
-  kind: GenerationKind;
   url: string;
   prompt: string;
   createdAt: string;
-  platform: string;
-  sessionId?: string | null;
 };
 
-type AutoTopUpSettings = {
-  enabled: boolean;
-  monthlyLimitUsd: number;
-  packSize: number;
+type MotionItem = {
+  id: string;
+  url: string;
+  prompt: string;
+  createdAt: string;
 };
 
-// ===============================
-// Helpers
-// ===============================
+// -------- Helpers --------
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const url = `${API_BASE_URL}${path}`;
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options && options.headers),
-    },
-  });
+const devCustomerId = "8766256447571"; // your test user, credits come from backend
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`HTTP ${res.status} – ${text}`);
-  }
-
-  return (await res.json()) as T;
-}
-
-function loadAutoTopupFromStorage(): AutoTopUpSettings {
-  if (typeof window === "undefined") {
-    return {
-      enabled: false,
-      monthlyLimitUsd: 100,
-      packSize: 50,
-    };
-  }
+function formatTime(ts?: string) {
+  if (!ts) return "";
   try {
-    const raw = window.localStorage.getItem(AUTO_TOPUP_KEY);
-    if (!raw) {
-      return {
-        enabled: false,
-        monthlyLimitUsd: 100,
-        packSize: 50,
-      };
-    }
-    const parsed = JSON.parse(raw);
-    return {
-      enabled: Boolean(parsed.enabled),
-      monthlyLimitUsd: Number(parsed.monthlyLimitUsd || 100),
-      packSize: Number(parsed.packSize || 50),
-    };
+    const d = new Date(ts);
+    return d.toLocaleString();
   } catch {
-    return {
-      enabled: false,
-      monthlyLimitUsd: 100,
-      packSize: 50,
-    };
+    return ts;
   }
 }
 
-function saveAutoTopupToStorage(settings: AutoTopUpSettings) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(AUTO_TOPUP_KEY, JSON.stringify(settings));
-  } catch {
-    // ignore
-  }
+function classNames(...parts: Array<string | false | null | undefined>) {
+  return parts.filter(Boolean).join(" ");
 }
 
-// ===============================
-// App
-// ===============================
+// -------- App --------
 
 function App() {
   // Tabs
-  const [activeTab, setActiveTab] = useState<TabId>("playground");
+  const [activeTab, setActiveTab] = useState<"playground" | "profile">(
+    "playground"
+  );
 
   // Health
   const [health, setHealth] = useState<HealthPayload | null>(null);
@@ -136,542 +119,599 @@ function App() {
   const [healthError, setHealthError] = useState<string | null>(null);
 
   // Credits
-  const [credits, setCredits] = useState<CreditsBalancePayload | null>(null);
+  const [credits, setCredits] = useState<CreditsBalance | null>(null);
+  const [creditsLoading, setCreditsLoading] = useState(false);
   const [creditsError, setCreditsError] = useState<string | null>(null);
-  const [loadingCredits, setLoadingCredits] = useState(false);
 
-  // Session
+  // Session (Mina session id from API)
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionStarting, setSessionStarting] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
-  const [creatingSession, setCreatingSession] = useState(false);
 
-  // Editorial image input
+  // Still: inputs
   const [productImageUrl, setProductImageUrl] = useState("");
-  const [styleImageUrl, setStyleImageUrl] = useState("");
+  const [styleImageUrlsRaw, setStyleImageUrlsRaw] = useState("");
   const [brief, setBrief] = useState("");
   const [tone, setTone] = useState("Poetic");
   const [platform, setPlatform] = useState("tiktok");
+  const [stylePresetKey, setStylePresetKey] = useState("soft-desert-editorial");
   const [minaVisionEnabled, setMinaVisionEnabled] = useState(true);
-  const [stylePresetKey, setStylePresetKey] = useState("");
 
-  // Last outputs
-  const [lastImageUrl, setLastImageUrl] = useState<string | null>(null);
-  const [lastVideoUrl, setLastVideoUrl] = useState<string | null>(null);
-  const [lastPrompt, setLastPrompt] = useState<string | null>(null);
+  // Still: generation state
+  const [stillGenerating, setStillGenerating] = useState(false);
+  const [stillError, setStillError] = useState<string | null>(null);
+  const [lastStillPrompt, setLastStillPrompt] = useState<string | null>(null);
+  const [stillItems, setStillItems] = useState<StillItem[]>([]);
+  const [stillIndex, setStillIndex] = useState(0);
 
-  // Image generation state
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [generateError, setGenerateError] = useState<string | null>(null);
-
-  // Motion
+  // Motion: inputs
   const [motionDescription, setMotionDescription] = useState("");
-  const [isSuggestingMotion, setIsSuggestingMotion] = useState(false);
-  const [isGeneratingMotion, setIsGeneratingMotion] = useState(false);
+  const [motionSuggestLoading, setMotionSuggestLoading] = useState(false);
+  const [motionSuggestError, setMotionSuggestError] = useState<string | null>(
+    null
+  );
+
+  // Motion: generation state
+  const [motionGenerating, setMotionGenerating] = useState(false);
   const [motionError, setMotionError] = useState<string | null>(null);
+  const [motionItems, setMotionItems] = useState<MotionItem[]>([]);
+  const [motionIndex, setMotionIndex] = useState(0);
 
-  // Feedback
-  const [likeComment, setLikeComment] = useState("");
-  const [likeSending, setLikeSending] = useState(false);
-  const [likeMessage, setLikeMessage] = useState<string | null>(null);
+  // Profile / auto-topup (UI only for now)
+  const [autoTopupEnabled, setAutoTopupEnabled] = useState(false);
+  const [autoTopupLimit, setAutoTopupLimit] = useState("200");
+  const [autoTopupPack, setAutoTopupPack] = useState("MINA-50");
 
-  // Local history (this browser only)
-  const [history, setHistory] = useState<GenerationItem[]>([]);
+  // --- Derived: steps completion (Notion-like) ---
 
-  // Auto top-up (local-only for now)
-  const [autoTopupEnabled, setAutoTopupEnabled] = useState(
-    () => loadAutoTopupFromStorage().enabled,
-  );
-  const [autoMonthlyLimit, setAutoMonthlyLimit] = useState<string>(() =>
-    String(loadAutoTopupFromStorage().monthlyLimitUsd),
-  );
-  const [autoPackSize, setAutoPackSize] = useState<string>(() =>
-    String(loadAutoTopupFromStorage().packSize),
-  );
+  const step1Done = Boolean(health?.ok && sessionId);
+  const step2Done = Boolean(productImageUrl || styleImageUrlsRaw.trim().length);
+  const step3Done = Boolean(brief.trim().length);
+  const step4Done = stillItems.length > 0;
+  const step5Done = motionItems.length > 0;
 
-  // ===============================
-  // API calls
-  // ===============================
+  // --- Start-up: check health + credits + session once ---
 
-  async function handleCheckHealth() {
-    setCheckingHealth(true);
-    setHealthError(null);
+  useEffect(() => {
+    const bootstrap = async () => {
+      await handleCheckHealth();
+      await handleFetchCredits();
+      await handleStartSession();
+    };
+    void bootstrap();
+  }, []);
 
+  // --- API calls ---
+
+  const handleCheckHealth = async () => {
     try {
-      const data = await apiFetch<HealthPayload>("/health");
+      setCheckingHealth(true);
+      setHealthError(null);
+      const res = await fetch(`${API_BASE_URL}/health`);
+      if (!res.ok) {
+        throw new Error(`Health error: ${res.status}`);
+      }
+      const data = (await res.json()) as HealthPayload;
       setHealth(data);
     } catch (err: any) {
-      setHealthError(err?.message || "Failed to reach Mina API");
+      setHealthError(err?.message || "Failed to reach Mina API.");
     } finally {
       setCheckingHealth(false);
     }
-  }
+  };
 
-  async function handleLoadCredits() {
-    setLoadingCredits(true);
-    setCreditsError(null);
-
+  const handleFetchCredits = async () => {
     try {
-      const qp = encodeURIComponent(MOCK_CUSTOMER_ID);
-      const data = await apiFetch<CreditsBalancePayload>(
-        `/credits/balance?customerId=${qp}`,
+      setCreditsLoading(true);
+      setCreditsError(null);
+      const res = await fetch(
+        `${API_BASE_URL}/credits/balance?customerId=${encodeURIComponent(
+          devCustomerId
+        )}`
       );
+      if (!res.ok) {
+        throw new Error(`Credits error: ${res.status}`);
+      }
+      const data = (await res.json()) as CreditsBalance;
       setCredits(data);
     } catch (err: any) {
-      setCreditsError(err?.message || "Failed to load credits");
+      setCreditsError(err?.message || "Failed to load credits.");
     } finally {
-      setLoadingCredits(false);
+      setCreditsLoading(false);
     }
-  }
+  };
 
-  async function ensureSession(): Promise<string> {
-    if (sessionId) return sessionId;
-
-    setCreatingSession(true);
-    setSessionError(null);
-
+  const handleStartSession = async () => {
     try {
-      type StartSessionPayload = {
-        ok: boolean;
-        session: { id: string };
-      };
-
-      const data = await apiFetch<StartSessionPayload>("/sessions/start", {
+      setSessionStarting(true);
+      setSessionError(null);
+      const res = await fetch(`${API_BASE_URL}/sessions/start`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          customerId: MOCK_CUSTOMER_ID,
+          customerId: devCustomerId,
           platform,
-          title: "Mina session",
+          title: "Mina Editorial Session",
         }),
       });
-
-      if (!data.ok || !data.session?.id) {
-        throw new Error("Session start failed");
+      if (!res.ok) {
+        throw new Error(`Session error: ${res.status}`);
       }
-
-      setSessionId(data.session.id);
-      return data.session.id;
+      const data = await res.json();
+      if (data?.session?.id) {
+        setSessionId(data.session.id);
+      } else {
+        throw new Error("Missing session id in response.");
+      }
     } catch (err: any) {
-      setSessionError(err?.message || "Failed to start session");
-      throw err;
+      setSessionError(err?.message || "Failed to start session.");
     } finally {
-      setCreatingSession(false);
+      setSessionStarting(false);
     }
-  }
+  };
 
-  async function handleGenerateImage() {
-    setIsGeneratingImage(true);
-    setGenerateError(null);
-    setLastVideoUrl(null);
-
+  const handleGenerateStill = async () => {
     try {
-      const sid = await ensureSession();
+      setStillGenerating(true);
+      setStillError(null);
 
-      const styleImages = styleImageUrl
-        .split(",")
-        .map((s) => s.trim())
+      const styleImageUrls = styleImageUrlsRaw
+        .split("\n")
+        .map((v) => v.trim())
         .filter(Boolean);
 
-      type EditorialResponse = {
-        ok: boolean;
-        imageUrl: string | null;
-        imageUrls?: string[];
-        prompt: string;
-        sessionId: string;
-        generationId: string;
-      };
-
-      const payload = {
-        customerId: MOCK_CUSTOMER_ID,
-        sessionId: sid,
-        productImageUrl: productImageUrl || undefined,
-        styleImageUrls: styleImages,
-        brief: brief || undefined,
-        tone: tone || undefined,
-        platform,
-        minaVisionEnabled,
-        stylePresetKey: stylePresetKey || undefined,
-      };
-
-      const data = await apiFetch<EditorialResponse>("/editorial/generate", {
+      const res = await fetch(`${API_BASE_URL}/editorial/generate`, {
         method: "POST",
-        body: JSON.stringify(payload),
-      });
-
-      if (!data.ok) {
-        throw new Error("Mina could not generate image");
-      }
-      if (!data.imageUrl) {
-        throw new Error("No imageUrl returned from Mina");
-      }
-
-      const finalImageUrl = data.imageUrl;
-      const nowIso = new Date().toISOString();
-
-      setLastImageUrl(finalImageUrl);
-      setLastPrompt(data.prompt);
-
-      setHistory((prev) => {
-        const next: GenerationItem[] = [
-          {
-            id: data.generationId || `image-${nowIso}`,
-            kind: "image",
-            url: finalImageUrl,
-            prompt: data.prompt,
-            createdAt: nowIso,
-            platform,
-            sessionId: data.sessionId || sid,
-          },
-          ...prev,
-        ];
-        return next.slice(0, 100);
-      });
-
-      // refresh credits after successful spend
-      void handleLoadCredits();
-    } catch (err: any) {
-      setGenerateError(err?.message || "Failed to generate image");
-    } finally {
-      setIsGeneratingImage(false);
-    }
-  }
-
-  async function handleSuggestMotion() {
-    if (!lastImageUrl) {
-      setMotionError(
-        "Generate a still image first so Mina can propose a motion idea.",
-      );
-      return;
-    }
-
-    setIsSuggestingMotion(true);
-    setMotionError(null);
-
-    try {
-      type MotionSuggestResponse = {
-        ok: boolean;
-        suggestion: string;
-      };
-
-      const payload = {
-        customerId: MOCK_CUSTOMER_ID,
-        referenceImageUrl: lastImageUrl,
-        tone,
-        platform,
-        minaVisionEnabled,
-        stylePresetKey: stylePresetKey || undefined,
-      };
-
-      const data = await apiFetch<MotionSuggestResponse>("/motion/suggest", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-
-      if (!data.ok || !data.suggestion) {
-        throw new Error("No motion suggestion returned");
-      }
-
-      setMotionDescription(data.suggestion);
-    } catch (err: any) {
-      setMotionError(err?.message || "Failed to suggest motion");
-    } finally {
-      setIsSuggestingMotion(false);
-    }
-  }
-
-  async function handleGenerateMotion() {
-    if (!lastImageUrl) {
-      setMotionError("Generate a still image first, or paste a lastImageUrl.");
-      return;
-    }
-    if (!motionDescription.trim()) {
-      setMotionError("Describe how Mina should move the scene first.");
-      return;
-    }
-
-    setIsGeneratingMotion(true);
-    setMotionError(null);
-
-    try {
-      const sid = await ensureSession();
-
-      type MotionResponse = {
-        ok: boolean;
-        videoUrl: string | null;
-        prompt: string;
-        generationId: string;
-        sessionId: string;
-      };
-
-      const payload = {
-        customerId: MOCK_CUSTOMER_ID,
-        sessionId: sid,
-        lastImageUrl,
-        motionDescription,
-        tone,
-        platform,
-        minaVisionEnabled,
-        stylePresetKey: stylePresetKey || undefined,
-        durationSeconds: 5,
-      };
-
-      const data = await apiFetch<MotionResponse>("/motion/generate", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-
-      if (!data.ok) {
-        throw new Error("Mina could not generate motion");
-      }
-      if (!data.videoUrl) {
-        throw new Error("No videoUrl returned from Mina");
-      }
-
-      const finalVideoUrl = data.videoUrl;
-      const nowIso = new Date().toISOString();
-
-      setLastVideoUrl(finalVideoUrl);
-      setLastPrompt(data.prompt);
-
-      setHistory((prev) => {
-        const next: GenerationItem[] = [
-          {
-            id: data.generationId || `motion-${nowIso}`,
-            kind: "motion",
-            url: finalVideoUrl,
-            prompt: data.prompt,
-            createdAt: nowIso,
-            platform,
-            sessionId: data.sessionId || sid,
-          },
-          ...prev,
-        ];
-        return next.slice(0, 100);
-      });
-
-      void handleLoadCredits();
-    } catch (err: any) {
-      setMotionError(err?.message || "Failed to generate motion");
-    } finally {
-      setIsGeneratingMotion(false);
-    }
-  }
-
-  async function handleSendLike() {
-    if (!lastPrompt || (!lastImageUrl && !lastVideoUrl)) {
-      setLikeMessage("Generate something first.");
-      return;
-    }
-
-    setLikeSending(true);
-    setLikeMessage(null);
-
-    try {
-      const isMotion = Boolean(lastVideoUrl);
-
-      type LikeResponse = {
-        ok: boolean;
-        message: string;
-      };
-
-      const body: any = {
-        customerId: MOCK_CUSTOMER_ID,
-        resultType: isMotion ? "motion" : "image",
-        platform,
-        prompt: lastPrompt,
-        comment: likeComment || undefined,
-        imageUrl: !isMotion ? lastImageUrl : undefined,
-        videoUrl: isMotion ? lastVideoUrl : undefined,
-        sessionId,
-      };
-
-      const data = await apiFetch<LikeResponse>("/feedback/like", {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-
-      if (!data.ok) {
-        throw new Error(data.message || "Like failed");
-      }
-
-      setLikeMessage("Saved. Mina Vision will remember this vibe. ✨");
-      setLikeComment("");
-    } catch (err: any) {
-      setLikeMessage(err?.message || "Failed to send feedback");
-    } finally {
-      setLikeSending(false);
-    }
-  }
-
-  async function handleDevAddCredits() {
-    try {
-      await apiFetch("/credits/add", {
-        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          customerId: MOCK_CUSTOMER_ID,
-          amount: 999999,
-          reason: "dev-test",
-          source: "frontend-dev",
+          customerId: devCustomerId,
+          sessionId,
+          productImageUrl: productImageUrl.trim() || null,
+          styleImageUrls,
+          brief,
+          tone,
+          platform,
+          minaVisionEnabled,
+          stylePresetKey,
+          maxImages: 1,
         }),
       });
-      void handleLoadCredits();
-    } catch {
-      // ignore
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        const msg =
+          errJson?.message ||
+          `Error ${res.status}: Failed to generate editorial still.`;
+        throw new Error(msg);
+      }
+
+      const data = (await res.json()) as EditorialResponse;
+      const url = data.imageUrl || data.imageUrls?.[0];
+      if (!url) {
+        throw new Error("No image URL in Mina response.");
+      }
+
+      setLastStillPrompt(data.prompt);
+      if (data.credits) {
+        setCredits((prev) =>
+          prev
+            ? {
+                ...prev,
+                balance: data.credits.balance,
+              }
+            : prev
+        );
+      }
+
+      const newItem: StillItem = {
+        id: data.generationId,
+        url,
+        prompt: data.prompt,
+        createdAt: new Date().toISOString(),
+      };
+
+      setStillItems((prev) => {
+        const next = [newItem, ...prev];
+        setStillIndex(0);
+        return next;
+      });
+    } catch (err: any) {
+      setStillError(err?.message || "Unexpected error generating still.");
+    } finally {
+      setStillGenerating(false);
     }
-  }
+  };
 
-  // ===============================
-  // Effects
-  // ===============================
+  const handleSuggestMotion = async () => {
+    if (!stillItems.length) return;
+    const currentStill = stillItems[stillIndex] || stillItems[0];
+    if (!currentStill) return;
 
-  useEffect(() => {
-    void handleCheckHealth();
-    void handleLoadCredits();
-  }, []);
+    try {
+      setMotionSuggestLoading(true);
+      setMotionSuggestError(null);
+      const res = await fetch(`${API_BASE_URL}/motion/suggest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId: devCustomerId,
+          referenceImageUrl: currentStill.url,
+          tone,
+          platform,
+          minaVisionEnabled,
+          stylePresetKey,
+        }),
+      });
 
-  useEffect(() => {
-    const limit = Number(autoMonthlyLimit || "0");
-    const pack = Number(autoPackSize || "0");
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        const msg =
+          errJson?.message ||
+          `Error ${res.status}: Failed to suggest motion idea.`;
+        throw new Error(msg);
+      }
 
-    const settings: AutoTopUpSettings = {
-      enabled: autoTopupEnabled,
-      monthlyLimitUsd: Number.isFinite(limit) && limit > 0 ? limit : 100,
-      packSize: Number.isFinite(pack) && pack > 0 ? pack : 50,
-    };
+      const data = (await res.json()) as MotionSuggestResponse;
+      setMotionDescription(data.suggestion);
+    } catch (err: any) {
+      setMotionSuggestError(
+        err?.message || "Unexpected error suggesting motion."
+      );
+    } finally {
+      setMotionSuggestLoading(false);
+    }
+  };
 
-    saveAutoTopupToStorage(settings);
-  }, [autoTopupEnabled, autoMonthlyLimit, autoPackSize]);
+  const handleGenerateMotion = async () => {
+    if (!stillItems.length) {
+      setMotionError("Generate at least one still image first.");
+      return;
+    }
 
-  // ===============================
-  // Render
-  // ===============================
+    const currentStill = stillItems[stillIndex] || stillItems[0];
+    if (!currentStill) {
+      setMotionError("No still selected.");
+      return;
+    }
+
+    if (!motionDescription.trim()) {
+      setMotionError("Describe the motion first (or use Mina’s suggestion).");
+      return;
+    }
+
+    try {
+      setMotionGenerating(true);
+      setMotionError(null);
+
+      const res = await fetch(`${API_BASE_URL}/motion/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId: devCustomerId,
+          sessionId,
+          lastImageUrl: currentStill.url,
+          motionDescription: motionDescription.trim(),
+          tone,
+          platform,
+          minaVisionEnabled,
+          stylePresetKey,
+          durationSeconds: 5, // your default
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        const msg =
+          errJson?.message ||
+          `Error ${res.status}: Failed to generate motion.`;
+        throw new Error(msg);
+      }
+
+      const data = (await res.json()) as MotionResponse;
+      const url = data.videoUrl;
+      if (!url) {
+        throw new Error("No video URL in Mina response.");
+      }
+
+      if (data.credits) {
+        setCredits((prev) =>
+          prev
+            ? {
+                ...prev,
+                balance: data.credits.balance,
+              }
+            : prev
+        );
+      }
+
+      const newItem: MotionItem = {
+        id: data.generationId,
+        url,
+        prompt: data.prompt,
+        createdAt: new Date().toISOString(),
+      };
+
+      setMotionItems((prev) => {
+        const next = [newItem, ...prev];
+        setMotionIndex(0);
+        return next;
+      });
+    } catch (err: any) {
+      setMotionError(err?.message || "Unexpected error generating motion.");
+    } finally {
+      setMotionGenerating(false);
+    }
+  };
+
+  const handleLike = async (type: "image" | "motion") => {
+    try {
+      const isImage = type === "image";
+      const item = isImage
+        ? stillItems[stillIndex] || stillItems[0]
+        : motionItems[motionIndex] || motionItems[0];
+
+      if (!item) return;
+
+      const res = await fetch(`${API_BASE_URL}/feedback/like`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId: devCustomerId,
+          sessionId,
+          generationId: item.id,
+          platform,
+          resultType: type,
+          prompt: item.prompt,
+          comment: "",
+          imageUrl: isImage ? item.url : "",
+          videoUrl: !isImage ? item.url : "",
+        }),
+      });
+
+      if (!res.ok) {
+        return;
+      }
+
+      const data = (await res.json()) as LikePayload;
+      console.log("Like stored. Total likes:", data.totals.likesForCustomer);
+    } catch {
+      // ignore like errors from UI
+    }
+  };
+
+  // -------- Render helpers --------
+
+  const currentStill = stillItems[stillIndex] || null;
+  const currentMotion = motionItems[motionIndex] || null;
+
+  const imageCost = credits?.meta?.imageCost ?? 1;
+  const motionCost = credits?.meta?.motionCost ?? 5;
+
+  const canGenerateStill =
+    !stillGenerating &&
+    !!sessionId &&
+    !!productImageUrl.trim() &&
+    !!brief.trim();
+
+  const canGenerateMotion =
+    !motionGenerating &&
+    !!sessionId &&
+    !!currentStill &&
+    !!motionDescription.trim();
+
+  const creditsLabel = (() => {
+    if (creditsLoading) return "Loading credits…";
+    if (creditsError) return "Credits error";
+    if (!credits) return "Credits —";
+    return `Credits ${credits.balance}`;
+  })();
+
+  const isConnected = Boolean(health?.ok);
+
+  // -------- JSX --------
 
   return (
     <div className="mina-root">
+      {/* Header */}
       <header className="mina-header">
-        <div className="mina-logo">Mina Editorial AI</div>
+        <div className="mina-logo">MINA · Editorial AI</div>
         <div className="mina-header-right">
           <div className="mina-tabs">
             <button
-              type="button"
-              className={activeTab === "playground" ? "tab active" : "tab"}
+              className={classNames(
+                "tab",
+                activeTab === "playground" && "active"
+              )}
               onClick={() => setActiveTab("playground")}
             >
               Playground
             </button>
             <button
-              type="button"
-              className={activeTab === "profile" ? "tab active" : "tab"}
+              className={classNames(
+                "tab",
+                activeTab === "profile" && "active"
+              )}
               onClick={() => setActiveTab("profile")}
             >
               Profile
             </button>
           </div>
-          <div className="mina-credits-badge">
-            <span>{credits ? `${credits.balance} Machta` : "— Machta"}</span>
-          </div>
+          <div className="mina-credits-badge">{creditsLabel}</div>
         </div>
       </header>
 
+      {/* Main */}
       <main className="mina-main">
         {activeTab === "playground" ? (
           <div className="mina-layout">
-            {/* LEFT SIDE – controls */}
+            {/* LEFT – Steps / inputs */}
             <div className="mina-left">
-              {/* Connection */}
+              {/* STEP 1 – Connection & session */}
               <section className="mina-section">
                 <div className="section-title">
-                  <span className="step-dot step-done" />
-                  <span>Connection</span>
+                  <span
+                    className={classNames(
+                      "step-dot",
+                      step1Done && "step-done"
+                    )}
+                  />
+                  <span>01 · Connection & session</span>
                 </div>
                 <div className="section-body">
                   <div className="status-row">
-                    <span className="status-label">API</span>
-                    {checkingHealth ? (
-                      <span className="status-chip">Checking…</span>
-                    ) : health?.ok ? (
-                      <span className="status-chip ok">Online</span>
-                    ) : (
-                      <span className="status-chip error">Error</span>
-                    )}
-                    <button
-                      type="button"
-                      className="link-button"
-                      onClick={handleCheckHealth}
+                    <div className="status-label">API</div>
+                    <div
+                      className={classNames(
+                        "status-chip",
+                        isConnected && "ok",
+                        healthError && "error"
+                      )}
                     >
-                      refresh
+                      {checkingHealth
+                        ? "Checking…"
+                        : isConnected
+                        ? "Connected"
+                        : "Not connected"}
+                    </div>
+                    <button
+                      className="link-button subtle"
+                      onClick={handleCheckHealth}
+                      disabled={checkingHealth}
+                    >
+                      Recheck
                     </button>
                   </div>
+                  {health?.time && (
+                    <div className="hint small">
+                      Last ping:{" "}
+                      {new Date(health.time).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  )}
                   {healthError && (
                     <div className="status-error">{healthError}</div>
                   )}
 
                   <div className="status-row">
-                    <span className="status-label">Credits</span>
-                    {loadingCredits ? (
-                      <span className="status-chip">Loading…</span>
-                    ) : credits ? (
-                      <span className="status-chip ok">
-                        {credits.balance} Machta
-                      </span>
-                    ) : (
-                      <span className="status-chip">—</span>
-                    )}
-                    <button
-                      type="button"
-                      className="link-button"
-                      onClick={handleLoadCredits}
+                    <div className="status-label">Session</div>
+                    <div
+                      className={classNames(
+                        "status-chip",
+                        sessionId && "ok",
+                        sessionError && "error"
+                      )}
                     >
-                      refresh
-                    </button>
+                      {sessionStarting
+                        ? "Starting…"
+                        : sessionId
+                        ? "Active"
+                        : "Idle"}
+                    </div>
                     <button
-                      type="button"
                       className="link-button subtle"
-                      onClick={handleDevAddCredits}
+                      onClick={handleStartSession}
+                      disabled={sessionStarting}
                     >
-                      dev +9,999,99
+                      Restart
                     </button>
                   </div>
-                  {creditsError && (
-                    <div className="status-error">{creditsError}</div>
-                  )}
                   {sessionError && (
                     <div className="status-error">{sessionError}</div>
                   )}
                 </div>
               </section>
 
-              {/* Still generation */}
+              {/* STEP 2 – Product & style */}
               <section className="mina-section">
                 <div className="section-title">
-                  <span className="step-dot" />
-                  <span>Still life</span>
+                  <span
+                    className={classNames(
+                      "step-dot",
+                      step2Done && "step-done"
+                    )}
+                  />
+                  <span>02 · Product & style</span>
                 </div>
                 <div className="section-body">
-                  <label className="field">
-                    <div className="field-label">Product image URL</div>
+                  <div className="field">
+                    <div className="field-label">Hero product image URL</div>
                     <input
                       className="field-input"
-                      type="text"
-                      placeholder="https://… main product image"
+                      placeholder="https://cdn.shopify.com/..."
                       value={productImageUrl}
                       onChange={(e) => setProductImageUrl(e.target.value)}
                     />
-                  </label>
-
-                  <label className="field">
-                    <div className="field-label">
-                      Style references (comma separated URLs)
+                    <div className="hint small">
+                      Later this becomes real upload / drag & drop. For now,
+                      paste an image URL from Shopify or CDN.
                     </div>
-                    <input
-                      className="field-input"
-                      type="text"
-                      placeholder="https://… , https://…"
-                      value={styleImageUrl}
-                      onChange={(e) => setStyleImageUrl(e.target.value)}
-                    />
-                  </label>
+                  </div>
 
-                  <label className="field">
+                  <div className="field">
+                    <div className="field-label">Extra style reference URLs</div>
+                    <textarea
+                      className="field-textarea"
+                      placeholder="Optional. One URL per line."
+                      value={styleImageUrlsRaw}
+                      onChange={(e) => setStyleImageUrlsRaw(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="field-row">
+                    <div className="field field-inline">
+                      <div className="field-label">Style preset</div>
+                      <select
+                        className="field-input"
+                        value={stylePresetKey}
+                        onChange={(e) => setStylePresetKey(e.target.value)}
+                      >
+                        <option value="soft-desert-editorial">
+                          Soft desert editorial
+                        </option>
+                        <option value="chrome-neon-night">
+                          Chrome neon night
+                        </option>
+                        <option value="bathroom-ritual">
+                          Bathroom ritual
+                        </option>
+                      </select>
+                    </div>
+                    <div className="field-toggle">
+                      <input
+                        type="checkbox"
+                        checked={minaVisionEnabled}
+                        onChange={(e) =>
+                          setMinaVisionEnabled(e.target.checked)
+                        }
+                      />
+                      <span
+                        className={classNames(
+                          "toggle-label",
+                          minaVisionEnabled ? "on" : "off"
+                        )}
+                      >
+                        Mina Vision Intelligence
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* STEP 3 – Brief & tone */}
+              <section className="mina-section">
+                <div className="section-title">
+                  <span
+                    className={classNames(
+                      "step-dot",
+                      step3Done && "step-done"
+                    )}
+                  />
+                  <span>03 · Brief & format</span>
+                </div>
+                <div className="section-body">
+                  <div className="field">
                     <div className="field-label">Brief</div>
                     <textarea
                       className="field-textarea"
@@ -679,21 +719,18 @@ function App() {
                       value={brief}
                       onChange={(e) => setBrief(e.target.value)}
                     />
-                  </label>
+                  </div>
 
                   <div className="field-row">
-                    <label className="field field-inline">
+                    <div className="field field-inline">
                       <div className="field-label">Tone</div>
                       <input
                         className="field-input"
-                        type="text"
-                        placeholder="Poetic"
                         value={tone}
                         onChange={(e) => setTone(e.target.value)}
                       />
-                    </label>
-
-                    <label className="field field-inline">
+                    </div>
+                    <div className="field field-inline">
                       <div className="field-label">Platform</div>
                       <select
                         className="field-input"
@@ -701,62 +738,173 @@ function App() {
                         onChange={(e) => setPlatform(e.target.value)}
                       >
                         <option value="tiktok">TikTok / Reels (9:16)</option>
-                        <option value="instagram">Instagram Post (4:5)</option>
+                        <option value="instagram">Instagram post (4:5)</option>
                         <option value="youtube">YouTube (16:9)</option>
                       </select>
-                    </label>
-                  </div>
-
-                  <div className="field-row">
-                    <label className="field field-inline">
-                      <div className="field-label">Style preset</div>
-                      <select
-                        className="field-input"
-                        value={stylePresetKey}
-                        onChange={(e) => setStylePresetKey(e.target.value)}
-                      >
-                        <option value="">None</option>
-                        <option value="soft-desert-editorial">
-                          Soft Desert Editorial
-                        </option>
-                        <option value="chrome-neon-night">
-                          Chrome Neon Night
-                        </option>
-                        <option value="bathroom-ritual">
-                          Bathroom Ritual
-                        </option>
-                      </select>
-                    </label>
-
-                    <label className="field-toggle">
-                      <input
-                        type="checkbox"
-                        checked={minaVisionEnabled}
-                        onChange={(e) => setMinaVisionEnabled(e.target.checked)}
-                      />
-                      <span
-                        className={
-                          minaVisionEnabled
-                            ? "toggle-label on"
-                            : "toggle-label off"
-                        }
-                      >
-                        Mina Vision Intelligence
-                      </span>
-                    </label>
+                    </div>
                   </div>
 
                   <div className="section-actions">
                     <button
-                      type="button"
                       className="primary-button"
-                      onClick={handleGenerateImage}
-                      disabled={isGeneratingImage || creatingSession}
+                      onClick={handleGenerateStill}
+                      disabled={!canGenerateStill}
                     >
-                      {isGeneratingImage ? "Composing still…" : "Create still"}
+                      {stillGenerating
+                        ? "Creating still…"
+                        : `Create still (−${imageCost} credits)`}
                     </button>
-                    {generateError && (
-                      <div className="error-text">{generateError}</div>
+                    {stillError && (
+                      <div className="error-text">{stillError}</div>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              {/* STEP 4 & 5 – Motion */}
+              <section className="mina-section">
+                <div className="section-title">
+                  <span
+                    className={classNames(
+                      "step-dot",
+                      step4Done && step5Done && "step-done"
+                    )}
+                  />
+                  <span>04 · Motion loop</span>
+                </div>
+                <div className="section-body">
+                  <div className="hint small">
+                    Mina reads the current still, proposes a motion idea, then
+                    Kling animates it.
+                  </div>
+
+                  <div className="field-row">
+                    <button
+                      className="secondary-button"
+                      onClick={handleSuggestMotion}
+                      disabled={
+                        motionSuggestLoading ||
+                        !stillItems.length ||
+                        stillGenerating
+                      }
+                    >
+                      {motionSuggestLoading
+                        ? "Thinking motion…"
+                        : "Suggest motion"}
+                    </button>
+                    <button
+                      className="secondary-button"
+                      onClick={handleGenerateMotion}
+                      disabled={!canGenerateMotion}
+                    >
+                      {motionGenerating
+                        ? "Animating…"
+                        : `Create motion (−${motionCost} credits)`}
+                    </button>
+                  </div>
+
+                  <div className="field">
+                    <div className="field-label">Motion description</div>
+                    <textarea
+                      className="field-textarea"
+                      placeholder="Wait for Mina’s idea… or type your own motion in 1–2 sentences."
+                      value={motionDescription}
+                      onChange={(e) => setMotionDescription(e.target.value)}
+                    />
+                  </div>
+
+                  {motionError && (
+                    <div className="status-error">{motionError}</div>
+                  )}
+                  {motionSuggestError && (
+                    <div className="status-error">{motionSuggestError}</div>
+                  )}
+                </div>
+              </section>
+            </div>
+
+            {/* RIGHT – Output / pile */}
+            <div className="mina-right">
+              {/* Stills */}
+              <section className="mina-section">
+                <div className="section-title">
+                  <span
+                    className={classNames(
+                      "step-dot",
+                      step4Done && "step-done"
+                    )}
+                  />
+                  <span>Stills · Pile</span>
+                </div>
+                <div className="section-body">
+                  <div className="output-shell">
+                    {stillItems.length === 0 ? (
+                      <div className="output-placeholder">
+                        No stills yet. Fill steps 2 & 3, then “Create still”.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="output-media">
+                          {currentStill && (
+                            <img
+                              src={currentStill.url}
+                              alt="Mina still"
+                              loading="lazy"
+                            />
+                          )}
+                        </div>
+                        <div className="output-meta">
+                          <div className="output-tag-row">
+                            <div className="output-tag">
+                              {stillIndex + 1} / {stillItems.length}
+                            </div>
+                            <div className="output-tag subtle">Still</div>
+                          </div>
+                          {currentStill && (
+                            <>
+                              <div className="output-prompt">
+                                {currentStill.prompt}
+                              </div>
+                              <div className="hint small">
+                                {formatTime(currentStill.createdAt)}
+                              </div>
+                            </>
+                          )}
+                          <div className="section-actions">
+                            <button
+                              className="secondary-button"
+                              onClick={() =>
+                                setStillIndex((prev) =>
+                                  prev <= 0
+                                    ? stillItems.length - 1
+                                    : prev - 1
+                                )
+                              }
+                              disabled={stillItems.length <= 1}
+                            >
+                              ◀
+                            </button>
+                            <button
+                              className="secondary-button"
+                              onClick={() =>
+                                setStillIndex((prev) =>
+                                  prev >= stillItems.length - 1 ? 0 : prev + 1
+                                )
+                              }
+                              disabled={stillItems.length <= 1}
+                            >
+                              ▶
+                            </button>
+                            <button
+                              className="link-button"
+                              onClick={() => handleLike("image")}
+                              disabled={!currentStill}
+                            >
+                              ♥ Like · “More of this”
+                            </button>
+                          </div>
+                        </div>
+                      </>
                     )}
                   </div>
                 </div>
@@ -765,288 +913,219 @@ function App() {
               {/* Motion */}
               <section className="mina-section">
                 <div className="section-title">
-                  <span className="step-dot" />
-                  <span>Motion</span>
+                  <span
+                    className={classNames(
+                      "step-dot",
+                      step5Done && "step-done"
+                    )}
+                  />
+                  <span>Motion · Pile</span>
                 </div>
                 <div className="section-body">
-                  <div className="hint">
-                    Mina will read the last still, then suggest and create short
-                    motion (up to ~10s).
-                  </div>
-
-                  <label className="field">
-                    <div className="field-label">
-                      Motion idea (Mina writes first, then you can edit)
-                    </div>
-                    <textarea
-                      className="field-textarea"
-                      placeholder="Slow editorial camera drift with soft breeze and moving shadows…"
-                      value={motionDescription}
-                      onChange={(e) => setMotionDescription(e.target.value)}
-                    />
-                  </label>
-
-                  <div className="section-actions">
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={handleSuggestMotion}
-                      disabled={isSuggestingMotion || !lastImageUrl}
-                    >
-                      {isSuggestingMotion ? "Thinking motion…" : "Suggest motion"}
-                    </button>
-                    <button
-                      type="button"
-                      className="primary-button"
-                      onClick={handleGenerateMotion}
-                      disabled={isGeneratingMotion}
-                    >
-                      {isGeneratingMotion ? "Rendering motion…" : "Create motion"}
-                    </button>
-                  </div>
-
-                  {motionError && (
-                    <div className="error-text">{motionError}</div>
-                  )}
-                </div>
-              </section>
-
-              {/* Feedback */}
-              <section className="mina-section">
-                <div className="section-title">
-                  <span className="step-dot" />
-                  <span>Tell Mina what you liked</span>
-                </div>
-                <div className="section-body">
-                  <label className="field">
-                    <div className="field-label">
-                      Speak to me (what you like / dislike)
-                    </div>
-                    <textarea
-                      className="field-textarea"
-                      placeholder="“I love the soft breeze and minimal backdrop, but the light is too harsh.”"
-                      value={likeComment}
-                      onChange={(e) => setLikeComment(e.target.value)}
-                    />
-                  </label>
-                  <div className="section-actions">
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={handleSendLike}
-                      disabled={likeSending}
-                    >
-                      {likeSending
-                        ? "Saving to Mina Vision…"
-                        : "Save feedback + like"}
-                    </button>
-                    {likeMessage && (
-                      <div className="hint small">{likeMessage}</div>
+                  <div className="output-shell">
+                    {motionItems.length === 0 ? (
+                      <div className="output-placeholder">
+                        No motion yet. Generate a still, let Mina suggest motion,
+                        then animate.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="output-media">
+                          {currentMotion && (
+                            <video
+                              src={currentMotion.url}
+                              controls
+                              playsInline
+                              loop
+                            />
+                          )}
+                        </div>
+                        <div className="output-meta">
+                          <div className="output-tag-row">
+                            <div className="output-tag">
+                              {motionIndex + 1} / {motionItems.length}
+                            </div>
+                            <div className="output-tag subtle">Motion</div>
+                          </div>
+                          {currentMotion && (
+                            <>
+                              <div className="output-prompt">
+                                {currentMotion.prompt}
+                              </div>
+                              <div className="hint small">
+                                {formatTime(currentMotion.createdAt)}
+                              </div>
+                            </>
+                          )}
+                          <div className="section-actions">
+                            <button
+                              className="secondary-button"
+                              onClick={() =>
+                                setMotionIndex((prev) =>
+                                  prev <= 0
+                                    ? motionItems.length - 1
+                                    : prev - 1
+                                )
+                              }
+                              disabled={motionItems.length <= 1}
+                            >
+                              ◀
+                            </button>
+                            <button
+                              className="secondary-button"
+                              onClick={() =>
+                                setMotionIndex((prev) =>
+                                  prev >= motionItems.length - 1 ? 0 : prev + 1
+                                )
+                              }
+                              disabled={motionItems.length <= 1}
+                            >
+                              ▶
+                            </button>
+                            <button
+                              className="link-button"
+                              onClick={() => handleLike("motion")}
+                              disabled={!currentMotion}
+                            >
+                              ♥ Like · “More of this”
+                            </button>
+                          </div>
+                        </div>
+                      </>
                     )}
                   </div>
                 </div>
               </section>
             </div>
-
-            {/* RIGHT SIDE – output */}
-            <div className="mina-right">
-              <div className="output-shell">
-                {!lastImageUrl && !lastVideoUrl ? (
-                  <div className="output-placeholder">
-                    <p>Mina will show your stills and motions here.</p>
-                    <p className="hint">
-                      Start by pasting a product image URL on the left.
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="output-media">
-                      {lastVideoUrl ? (
-                        <video
-                          src={lastVideoUrl}
-                          controls
-                          autoPlay
-                          loop
-                          playsInline
-                        />
-                      ) : lastImageUrl ? (
-                        <img src={lastImageUrl} alt="Mina still" />
-                      ) : null}
-                    </div>
-                    <div className="output-meta">
-                      <div className="output-tag-row">
-                        <span className="output-tag">
-                          {lastVideoUrl ? "Motion" : "Still"}
-                        </span>
-                        <span className="output-tag subtle">
-                          {platform.toUpperCase()}
-                        </span>
-                      </div>
-                      {lastPrompt && (
-                        <p className="output-prompt">{lastPrompt}</p>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
           </div>
         ) : (
-          // =====================
           // PROFILE TAB
-          // =====================
           <div className="profile-layout">
-            {/* Profile & balance */}
             <section className="mina-section wide">
               <div className="section-title">
                 <span className="step-dot step-done" />
-                <span>Profile & balance</span>
-              </div>
-              <div className="section-body profile-body">
-                <div>
-                  <div className="profile-label">Customer id (mock)</div>
-                  <div className="profile-value">{MOCK_CUSTOMER_ID}</div>
-                  <div className="profile-hint">
-                    Later this will be your real Shopify / Mina account id.
-                  </div>
-                </div>
-                <div>
-                  <div className="profile-label">Credits</div>
-                  <div className="profile-value">
-                    {credits ? `${credits.balance} Machta` : "—"}
-                  </div>
-                  <div className="profile-hint">
-                    1 still ≈ {credits?.meta.imageCost ?? 1} Machta · 1 motion ≈{" "}
-                    {credits?.meta.motionCost ?? 5} Machta
-                  </div>
-                </div>
-                <div>
-                  <div className="profile-label">
-                    This browser’s gallery only
-                  </div>
-                  <div className="profile-value">
-                    {history.length} generations
-                  </div>
-                  <div className="profile-hint">
-                    For now gallery is local. Later we’ll sync with your account.
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* Auto top-up settings (local proto) */}
-            <section className="mina-section wide">
-              <div className="section-title">
-                <span className="step-dot" />
-                <span>Auto top-up (prototype)</span>
-              </div>
-              <div className="section-body profile-body">
-                <div className="auto-topup-row">
-                  <label className="field-toggle">
-                    <input
-                      type="checkbox"
-                      checked={autoTopupEnabled}
-                      onChange={(e) => setAutoTopupEnabled(e.target.checked)}
-                    />
-                    <span
-                      className={
-                        autoTopupEnabled
-                          ? "toggle-label on"
-                          : "toggle-label off"
-                      }
-                    >
-                      Automatically buy credits when I’m empty
-                    </span>
-                  </label>
-                  <div className="profile-hint">
-                    Saved only in this browser. Later this will connect to
-                    Stripe + real billing.
-                  </div>
-                </div>
-
-                <div className="auto-topup-grid">
-                  <label className="field">
-                    <div className="field-label">
-                      Top-up pack size <span className="field-unit">Machta</span>
-                    </div>
-                    <input
-                      className="field-input"
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={autoPackSize}
-                      onChange={(e) => setAutoPackSize(e.target.value)}
-                    />
-                  </label>
-
-                  <label className="field">
-                    <div className="field-label">
-                      Monthly limit{" "}
-                      <span className="field-unit">USD (for you)</span>
-                    </div>
-                    <input
-                      className="field-input"
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={autoMonthlyLimit}
-                      onChange={(e) => setAutoMonthlyLimit(e.target.value)}
-                    />
-                  </label>
-                </div>
-
-                <div className="profile-hint">
-                  Not charging anything yet – this is just to shape the
-                  experience like the OpenAI API: a monthly ceiling and an
-                  auto-refill pack.{" "}
-                  <span className="profile-hint-strong">
-                    Your backend logic will later read these values and decide
-                    when to call Stripe.
-                  </span>
-                </div>
-              </div>
-            </section>
-
-            {/* Gallery */}
-            <section className="mina-section wide">
-              <div className="section-title">
-                <span className="step-dot" />
-                <span>Gallery (local)</span>
+                <span>Profile · Account & billing</span>
               </div>
               <div className="section-body">
-                {history.length === 0 ? (
-                  <div className="hint">
-                    Generate stills or motions in the Playground and they will
-                    appear here as your Mina grid.
+                <div className="profile-body">
+                  <div>
+                    <div className="profile-label">Customer id</div>
+                    <div className="profile-value">{devCustomerId}</div>
+                    <div className="profile-hint">
+                      Coming from Shopify customer. Later: real login / auth.
+                    </div>
                   </div>
-                ) : (
-                  <div className="gallery-grid">
-                    {history.map((item) => (
-                      <div className="gallery-item" key={item.id}>
-                        <div className="gallery-media">
-                          {item.kind === "motion" ? (
-                            <video src={item.url} playsInline loop muted />
-                          ) : (
-                            <img src={item.url} alt={item.kind} />
-                          )}
+                  <div>
+                    <div className="profile-label">Credits</div>
+                    <div className="profile-value">
+                      {credits?.balance ?? 0} Machta
+                    </div>
+                    <div className="profile-hint">
+                      Image −{imageCost} · Motion −{motionCost} credits
+                    </div>
+                  </div>
+                  <div className="auto-topup-row">
+                    <div className="profile-label">Auto top-up</div>
+                    <div className="field-toggle">
+                      <input
+                        type="checkbox"
+                        checked={autoTopupEnabled}
+                        onChange={(e) =>
+                          setAutoTopupEnabled(e.target.checked)
+                        }
+                      />
+                      <span
+                        className={classNames(
+                          "toggle-label",
+                          autoTopupEnabled ? "on" : "off"
+                        )}
+                      >
+                        Enable auto top-up like OpenAI API
+                      </span>
+                    </div>
+                    <div className="auto-topup-grid">
+                      <div className="field">
+                        <div className="field-label">
+                          Monthly limit{" "}
+                          <span className="field-unit">(USD)</span>
                         </div>
-                        <div className="gallery-meta">
-                          <div className="gallery-meta-top">
-                            <span className="gallery-tag">
-                              {item.kind === "motion" ? "Motion" : "Still"}
-                            </span>
-                            <span className="gallery-tag subtle">
-                              {item.platform.toUpperCase()}
-                            </span>
-                          </div>
-                          <div className="gallery-date">
-                            {new Date(item.createdAt).toLocaleString()}
-                          </div>
+                        <input
+                          className="field-input"
+                          type="number"
+                          min={10}
+                          value={autoTopupLimit}
+                          onChange={(e) => setAutoTopupLimit(e.target.value)}
+                        />
+                      </div>
+                      <div className="field">
+                        <div className="field-label">Pack</div>
+                        <select
+                          className="field-input"
+                          value={autoTopupPack}
+                          onChange={(e) => setAutoTopupPack(e.target.value)}
+                        >
+                          <option value="MINA-50">Mina 50 Machta</option>
+                          {/* later: more packs */}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="profile-hint">
+                      This is UI only for now. Later your admin dashboard will
+                      connect this to Stripe + Shopify.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="mina-section wide">
+              <div className="section-title">
+                <span className="step-dot" />
+                <span>Gallery · Recent generations</span>
+              </div>
+              <div className="section-body">
+                <div className="hint small">
+                  Next step: this will pull real history from the Mina backend.
+                  For now, only the current session lives in memory on the
+                  server.
+                </div>
+                <div className="gallery-grid">
+                  {stillItems.map((s) => (
+                    <div key={s.id} className="gallery-item">
+                      <div className="gallery-media">
+                        <img src={s.url} alt="Still" loading="lazy" />
+                      </div>
+                      <div className="gallery-meta">
+                        <div className="gallery-meta-top">
+                          <span className="gallery-tag">Still</span>
+                          <span className="gallery-date">
+                            {formatTime(s.createdAt)}
+                          </span>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    </div>
+                  ))}
+                  {motionItems.map((m) => (
+                    <div key={m.id} className="gallery-item">
+                      <div className="gallery-media">
+                        <video src={m.url} muted playsInline />
+                      </div>
+                      <div className="gallery-meta">
+                        <div className="gallery-meta-top">
+                          <span className="gallery-tag subtle">Motion</span>
+                          <span className="gallery-date">
+                            {formatTime(m.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {stillItems.length === 0 && motionItems.length === 0 && (
+                    <div className="hint small">
+                      No generations yet in this browser. Use Playground first.
+                    </div>
+                  )}
+                </div>
               </div>
             </section>
           </div>
