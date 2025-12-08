@@ -33,6 +33,20 @@ type EditorialResponse = {
   prompt?: string;
 };
 
+type MotionResponse = {
+  ok: boolean;
+  videoUrl?: string;
+  message?: string;
+  error?: string;
+  prompt?: string;
+};
+
+type MotionSuggestResponse = {
+  ok: boolean;
+  suggestion?: string;
+  error?: string;
+};
+
 type FeedbackLikeResponse = {
   ok: boolean;
   message?: string;
@@ -81,6 +95,16 @@ const App: React.FC = () => {
 
   // Local “pile” of liked images
   const [likedImages, setLikedImages] = useState<LikedImage[]>([]);
+
+  // Motion state
+  const [motionDescription, setMotionDescription] = useState<string>("");
+  const [motionVideoUrl, setMotionVideoUrl] = useState<string | null>(null);
+  const [motionLoading, setMotionLoading] = useState<boolean>(false);
+  const [motionError, setMotionError] = useState<string | null>(null);
+  const [motionSuggesting, setMotionSuggesting] = useState<boolean>(false);
+  const [motionSuggestError, setMotionSuggestError] = useState<string | null>(
+    null
+  );
 
   const checkHealth = async () => {
     try {
@@ -181,6 +205,9 @@ const App: React.FC = () => {
       setEditorialError(null);
       setFeedbackError(null);
       setFeedbackSuccess(null);
+      setMotionError(null);
+      setMotionSuggestError(null);
+      setMotionVideoUrl(null);
 
       const res = await fetch(`${API_BASE_URL}/editorial/generate`, {
         method: "POST",
@@ -285,6 +312,102 @@ const App: React.FC = () => {
       );
     } finally {
       setFeedbackSending(false);
+    }
+  };
+
+  const handleSuggestMotion = async () => {
+    if (!previewImageUrl) {
+      setMotionSuggestError("Generate a still first – Mina needs an image.");
+      return;
+    }
+    try {
+      setMotionSuggesting(true);
+      setMotionSuggestError(null);
+      setMotionError(null);
+
+      const res = await fetch(`${API_BASE_URL}/motion/suggest`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          referenceImageUrl: previewImageUrl,
+          tone,
+          platform,
+          minaVisionEnabled,
+          customerId,
+        }),
+      });
+
+      const data = (await res.json()) as MotionSuggestResponse;
+      if (!data.ok || !data.suggestion) {
+        setMotionSuggestError(
+          data.error ||
+            data.suggestion ||
+            "Mina couldn't suggest a motion idea this time."
+        );
+        return;
+      }
+
+      setMotionDescription(data.suggestion);
+    } catch (err: any) {
+      setMotionSuggestError(
+        err?.message || "Unexpected error while suggesting motion."
+      );
+    } finally {
+      setMotionSuggesting(false);
+    }
+  };
+
+  const handleGenerateMotion = async () => {
+    if (!previewImageUrl) {
+      setMotionError("Generate a still first – Mina needs a reference frame.");
+      return;
+    }
+    if (!motionDescription.trim()) {
+      setMotionError(
+        "Let Mina know how you want the scene to move (or hit Suggest)."
+      );
+      return;
+    }
+    try {
+      setMotionLoading(true);
+      setMotionError(null);
+
+      const res = await fetch(`${API_BASE_URL}/motion/generate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          lastImageUrl: previewImageUrl,
+          motionDescription,
+          tone,
+          platform,
+          minaVisionEnabled,
+          customerId,
+        }),
+      });
+
+      const data = (await res.json()) as MotionResponse;
+      if (!data.ok) {
+        setMotionError(
+          data.message || data.error || "Mina could not generate motion."
+        );
+        return;
+      }
+
+      if (data.videoUrl) {
+        setMotionVideoUrl(data.videoUrl);
+      }
+
+      await loadCredits(customerId);
+    } catch (err: any) {
+      setMotionError(
+        err?.message || "Unexpected error while generating motion."
+      );
+    } finally {
+      setMotionLoading(false);
     }
   };
 
@@ -439,7 +562,7 @@ const App: React.FC = () => {
               const isDone =
                 (stepNumber === 1 && (!!productImageUrl || !!brief)) ||
                 (stepNumber === 2 && !!previewImageUrl) ||
-                (stepNumber === 3 && false);
+                (stepNumber === 3 && !!motionVideoUrl);
               return (
                 <div
                   key={label}
@@ -769,12 +892,12 @@ const App: React.FC = () => {
             gap: 12,
           }}
         >
-          <span>Mina prototype UI · v0.2 (with likes)</span>
+          <span>Mina prototype UI · v0.3 (still + motion)</span>
           {healthError && <span>Health error: {healthError}</span>}
         </div>
       </div>
 
-      {/* RIGHT – preview + feedback + liked pile */}
+      {/* RIGHT – preview + feedback + liked pile + motion */}
       <div
         style={{
           flex: "1 1 50%",
@@ -922,6 +1045,131 @@ const App: React.FC = () => {
               )}
             </div>
 
+            {/* Motion from this still */}
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: 16,
+                backgroundColor: "rgba(255, 255, 255, 0.9)",
+                border: "1px solid rgba(8, 10, 0, 0.06)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                fontSize: 13,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <span style={{ fontSize: 12, opacity: 0.8 }}>
+                  Motion from this still
+                </span>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 10,
+                    alignItems: "center",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={handleSuggestMotion}
+                    disabled={motionSuggesting}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      padding: 0,
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: 1.5,
+                      cursor: "pointer",
+                      opacity: motionSuggesting ? 0.5 : 1,
+                    }}
+                  >
+                    {motionSuggesting ? "Reading still…" : "Suggest motion"}
+                  </button>
+                  <span
+                    style={{
+                      width: 1,
+                      height: 16,
+                      backgroundColor: "rgba(8, 10, 0, 0.1)",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleGenerateMotion}
+                    disabled={motionLoading}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      padding: 0,
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: 1.5,
+                      cursor: "pointer",
+                      opacity: motionLoading ? 0.5 : 1,
+                    }}
+                  >
+                    {motionLoading ? "Animating…" : "Animate this still"}
+                  </button>
+                </div>
+              </div>
+
+              <textarea
+                placeholder="Slow, minimal editorial motion with a gentle camera drift and soft ASMR-like movement of light or props."
+                value={motionDescription}
+                onChange={(e) => setMotionDescription(e.target.value)}
+                rows={2}
+                style={{
+                  border: "none",
+                  borderTop: "1px solid rgba(8, 10, 0, 0.08)",
+                  marginTop: 6,
+                  paddingTop: 6,
+                  background: "transparent",
+                  fontSize: 12,
+                  outline: "none",
+                  resize: "vertical",
+                }}
+              />
+
+              {(motionError || motionSuggestError) && (
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "#b91c1c",
+                  }}
+                >
+                  {motionError || motionSuggestError}
+                </div>
+              )}
+              {motionVideoUrl && (
+                <div
+                  style={{
+                    marginTop: 8,
+                    borderRadius: 16,
+                    overflow: "hidden",
+                    border: "1px solid rgba(8, 10, 0, 0.08)",
+                    backgroundColor: "#111827",
+                  }}
+                >
+                  <video
+                    src={motionVideoUrl}
+                    controls
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      display: "block",
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
             {/* Liked pile */}
             {likedImages.length > 0 && (
               <div
@@ -937,7 +1185,7 @@ const App: React.FC = () => {
                   style={{
                     opacity: 0.7,
                     display: "flex",
-                    justifyContent: "space-between",
+                    justifyContent: "space_between",
                     alignItems: "center",
                   }}
                 >
@@ -1023,8 +1271,10 @@ const App: React.FC = () => {
               Paste a product image URL and a short brief on the left, then tap{" "}
               <span style={{ fontWeight: 600 }}>Create editorial still</span>.
               Mina will think out loud with you, spend credits, and show the
-              first still here. Motion and session history will live on this
-              side too.
+              first still here. Then ask her to{" "}
+              <span style={{ fontWeight: 600 }}>Suggest motion</span> and{" "}
+              <span style={{ fontWeight: 600 }}>Animate this still</span> for a
+              short Kling video.
             </div>
           </div>
         )}
