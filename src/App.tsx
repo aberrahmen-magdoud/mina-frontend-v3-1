@@ -1,94 +1,84 @@
-// =======================
-// PART 1 – Imports & constants
-// =======================
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import "./index.css";
 
-// IMPORTANT: your backend URL from Render
-// Make sure VITE_MINA_API_BASE_URL is set in Render → Environment
-const API_BASE_URL =
-  import.meta.env.VITE_MINA_API_BASE_URL ||
-  "https://mina-editorial-ai-api.onrender.com";
+// ===============================
+// Config
+// ===============================
 
-// For now, use a fixed test customer id so credits & likes work
+const API_BASE_URL =
+  import.meta.env.VITE_MINA_API_BASE_URL || "http://localhost:3000";
+
+// Use a real Shopify customer id for testing if you want.
+// This is only mocked on the frontend side.
 const MOCK_CUSTOMER_ID = "8766256447571";
 
-type Mode = "still" | "motion";
+// ===============================
+// Types
+// ===============================
 
-interface HealthPayload {
+type HealthPayload = {
   ok: boolean;
-  service?: string;
-  time?: string;
-}
+  service: string;
+  time: string;
+};
 
-interface CreditsPayload {
+type CreditsMeta = {
+  imageCost: number;
+  motionCost: number;
+};
+
+type CreditsBalancePayload = {
   ok: boolean;
+  requestId: string;
   customerId: string;
   balance: number;
-  historyLength?: number;
-  meta?: {
-    imageCost?: number;
-    motionCost?: number;
-  };
-}
+  historyLength: number;
+  meta: CreditsMeta;
+};
 
-interface EditorialResponse {
-  ok: boolean;
-  message?: string;
-  requestId?: string;
-  prompt?: string;
-  imageUrl?: string;
-  imageUrls?: string[];
-  generationId?: string;
-  sessionId?: string;
-  credits?: {
-    balance: number;
-    cost: number;
-  };
-  error?: string;
-}
+type TabId = "playground" | "profile";
 
-interface MotionSuggestResponse {
-  ok: boolean;
-  suggestion?: string;
-  error?: string;
-}
+type GenerationKind = "image" | "motion";
 
-interface MotionResponse {
-  ok: boolean;
-  message?: string;
-  videoUrl?: string;
-  prompt?: string;
-  generationId?: string;
-  sessionId?: string;
-  credits?: {
-    balance: number;
-    cost: number;
-  };
-  error?: string;
-}
-
-interface GenerationHistoryItem {
+type GenerationItem = {
   id: string;
-  kind: "image" | "motion";
+  kind: GenerationKind;
   url: string;
   prompt: string;
   createdAt: string;
+  platform: string;
+  sessionId?: string | null;
+};
+
+// ===============================
+// Helpers
+// ===============================
+
+async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const url = `${API_BASE_URL}${path}`;
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options && options.headers),
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`HTTP ${res.status} – ${text}`);
+  }
+
+  return (await res.json()) as T;
 }
 
-// Small helper
-function classNames(...parts: (string | false | null | undefined)[]): string {
-  return parts.filter(Boolean).join(" ");
-}
+// ===============================
+// App
+// ===============================
 
-// =======================
-// PART 2 – Main App
-// =======================
-
-const App: React.FC = () => {
-  // ---- Global state ----
-  const [mode, setMode] = useState<Mode>("still");
-  const [sessionId, setSessionId] = useState<string | null>(null);
+function App() {
+  // Tabs
+  const [activeTab, setActiveTab] = useState<TabId>("playground");
 
   // Health
   const [health, setHealth] = useState<HealthPayload | null>(null);
@@ -96,1239 +86,808 @@ const App: React.FC = () => {
   const [healthError, setHealthError] = useState<string | null>(null);
 
   // Credits
-  const [credits, setCredits] = useState<number | null>(null);
-  const [creditsMeta, setCreditsMeta] = useState<{
-    imageCost?: number;
-    motionCost?: number;
-  }>({});
+  const [credits, setCredits] = useState<CreditsBalancePayload | null>(null);
   const [creditsError, setCreditsError] = useState<string | null>(null);
-  const [creditsLoading, setCreditsLoading] = useState(false);
+  const [loadingCredits, setLoadingCredits] = useState(false);
 
-  // Toast / banner
-  const [flash, setFlash] = useState<string | null>(null);
+  // Session
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [creatingSession, setCreatingSession] = useState(false);
 
-  // ---- Still image form ----
+  // Editorial image input
   const [productImageUrl, setProductImageUrl] = useState("");
-  const [styleUrl1, setStyleUrl1] = useState("");
-  const [styleUrl2, setStyleUrl2] = useState("");
+  const [styleImageUrl, setStyleImageUrl] = useState("");
   const [brief, setBrief] = useState("");
   const [tone, setTone] = useState("Poetic");
   const [platform, setPlatform] = useState("tiktok");
   const [minaVisionEnabled, setMinaVisionEnabled] = useState(true);
   const [stylePresetKey, setStylePresetKey] = useState("");
 
+  // Last outputs
+  const [lastImageUrl, setLastImageUrl] = useState<string | null>(null);
+  const [lastVideoUrl, setLastVideoUrl] = useState<string | null>(null);
+  const [lastPrompt, setLastPrompt] = useState<string | null>(null);
+
+  // Image generation state
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [imageError, setImageError] = useState<string | null>(null);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
-  const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null);
-  const [currentImagePrompt, setCurrentImagePrompt] = useState<string | null>(
-    null
-  );
-  const [currentImageGenId, setCurrentImageGenId] = useState<string | null>(
-    null
-  );
-  const [imageFeedback, setImageFeedback] = useState("");
-
-  // ---- Motion form ----
-  const [motionReferenceUrl, setMotionReferenceUrl] = useState("");
+  // Motion
   const [motionDescription, setMotionDescription] = useState("");
-  const [motionTone, setMotionTone] = useState("Editorial calm");
-  const [motionPlatform, setMotionPlatform] = useState("tiktok");
-  const [durationSeconds, setDurationSeconds] = useState(5);
-
   const [isSuggestingMotion, setIsSuggestingMotion] = useState(false);
   const [isGeneratingMotion, setIsGeneratingMotion] = useState(false);
   const [motionError, setMotionError] = useState<string | null>(null);
 
-  const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(null);
-  const [currentVideoPrompt, setCurrentVideoPrompt] = useState<string | null>(
-    null
-  );
-  const [currentMotionGenId, setCurrentMotionGenId] = useState<string | null>(
-    null
-  );
-  const [motionFeedback, setMotionFeedback] = useState("");
+  // Feedback
+  const [likeComment, setLikeComment] = useState("");
+  const [likeSending, setLikeSending] = useState(false);
+  const [likeMessage, setLikeMessage] = useState<string | null>(null);
 
-  // ---- Simple history (last 12 items) ----
-  const [history, setHistory] = useState<GenerationHistoryItem[]>([]);
+  // Local history (this browser only)
+  const [history, setHistory] = useState<GenerationItem[]>([]);
 
-  // =======================
-  // PART 3 – Helpers (API)
-  // =======================
+  // ===============================
+  // API calls
+  // ===============================
 
-  function flashMessage(msg: string) {
-    setFlash(msg);
-    setTimeout(() => {
-      setFlash((cur) => (cur === msg ? null : cur));
-    }, 4000);
-  }
+  async function handleCheckHealth() {
+    setCheckingHealth(true);
+    setHealthError(null);
 
-  async function loadHealth() {
     try {
-      setCheckingHealth(true);
-      setHealthError(null);
-      const res = await fetch(`${API_BASE_URL}/health`);
-      const data: HealthPayload = await res.json();
+      const data = await apiFetch<HealthPayload>("/health");
       setHealth(data);
     } catch (err: any) {
-      console.error("Health check error", err);
-      setHealthError(err?.message || "Failed to reach Mina backend.");
+      setHealthError(err?.message || "Failed to reach Mina API");
     } finally {
       setCheckingHealth(false);
     }
   }
 
-  async function loadCredits() {
+  async function handleLoadCredits() {
+    setLoadingCredits(true);
+    setCreditsError(null);
+
     try {
-      setCreditsLoading(true);
-      setCreditsError(null);
-      const res = await fetch(
-        `${API_BASE_URL}/credits/balance?customerId=${encodeURIComponent(
-          MOCK_CUSTOMER_ID
-        )}`
+      const qp = encodeURIComponent(MOCK_CUSTOMER_ID);
+      const data = await apiFetch<CreditsBalancePayload>(
+        `/credits/balance?customerId=${qp}`,
       );
-      const data: CreditsPayload = await res.json();
-      if (!data.ok) {
-        setCreditsError("Credits API responded with error.");
-        return;
-      }
-      setCredits(data.balance);
-      if (data.meta) setCreditsMeta(data.meta);
+      setCredits(data);
     } catch (err: any) {
-      console.error("Credits error", err);
-      setCreditsError(err?.message || "Failed to load credits.");
+      setCreditsError(err?.message || "Failed to load credits");
     } finally {
-      setCreditsLoading(false);
+      setLoadingCredits(false);
     }
   }
 
-  async function ensureSession(currentPlatform: string): Promise<string> {
+  async function ensureSession(): Promise<string> {
     if (sessionId) return sessionId;
-    const res = await fetch(`${API_BASE_URL}/sessions/start`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        customerId: MOCK_CUSTOMER_ID,
-        platform: currentPlatform,
-        title: "Mina session",
-      }),
-    });
-    const data = await res.json();
-    if (!data.ok || !data.session?.id) {
-      throw new Error("Could not start Mina session");
-    }
-    setSessionId(data.session.id);
-    return data.session.id;
-  }
 
-  async function devTopUp() {
+    setCreatingSession(true);
+    setSessionError(null);
+
     try {
-      const res = await fetch(`${API_BASE_URL}/credits/add`, {
+      type StartSessionPayload = {
+        ok: boolean;
+        session: { id: string };
+      };
+
+      const data = await apiFetch<StartSessionPayload>("/sessions/start", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerId: MOCK_CUSTOMER_ID,
-          amount: 9999999,
-          reason: "dev-topup",
-          source: "ui",
+          platform,
+          title: "Mina session",
         }),
       });
-      const data = await res.json();
-      if (!data.ok) {
-        flashMessage("Top up failed.");
-        return;
+
+      if (!data.ok || !data.session?.id) {
+        throw new Error("Session start failed");
       }
-      flashMessage("Dev Machta added ✔");
-      loadCredits();
-    } catch (err) {
-      console.error("Top up error", err);
-      flashMessage("Top up error.");
+
+      setSessionId(data.session.id);
+      return data.session.id;
+    } catch (err: any) {
+      setSessionError(err?.message || "Failed to start session");
+      throw err;
+    } finally {
+      setCreatingSession(false);
     }
   }
 
-  // =======================
-  // PART 4 – Still generation
-  // =======================
-
   async function handleGenerateImage() {
+    setIsGeneratingImage(true);
+    setGenerateError(null);
+    setLastVideoUrl(null);
+
     try {
-      setIsGeneratingImage(true);
-      setImageError(null);
-      setMode("still");
+      const sid = await ensureSession();
 
-      if (!productImageUrl && !brief) {
-        setImageError(
-          "Give Mina at least a product image or a brief so she knows what to create."
-        );
-        return;
-      }
+      const styleImages = styleImageUrl
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
 
-      const sId = await ensureSession(platform);
+      type EditorialResponse = {
+        ok: boolean;
+        imageUrl: string | null;
+        imageUrls?: string[];
+        prompt: string;
+        sessionId: string;
+        generationId: string;
+      };
 
-      const styleImageUrls = [styleUrl1, styleUrl2].filter((u) => u.trim());
-      const body = {
+      const payload = {
         customerId: MOCK_CUSTOMER_ID,
-        sessionId: sId,
-        productImageUrl: productImageUrl.trim() || undefined,
-        styleImageUrls,
-        brief: brief.trim() || undefined,
-        tone: tone.trim() || undefined,
+        sessionId: sid,
+        productImageUrl: productImageUrl || undefined,
+        styleImageUrls: styleImages,
+        brief: brief || undefined,
+        tone: tone || undefined,
         platform,
         minaVisionEnabled,
         stylePresetKey: stylePresetKey || undefined,
       };
 
-      const res = await fetch(`${API_BASE_URL}/editorial/generate`, {
+      const data = await apiFetch<EditorialResponse>("/editorial/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
 
-      const data: EditorialResponse = await res.json();
       if (!data.ok) {
-        const msg =
-          data.message ||
-          data.error ||
-          "Mina could not finish this editorial generation.";
-        setImageError(msg);
-        flashMessage(msg);
-        return;
+        throw new Error("Mina could not generate image");
+      }
+      if (!data.imageUrl) {
+        throw new Error("No imageUrl returned from Mina");
       }
 
-      if (data.imageUrl) {
-        setCurrentImageUrl(data.imageUrl);
-        setCurrentImagePrompt(data.prompt || "");
-        setCurrentImageGenId(data.generationId || null);
-        setMotionReferenceUrl(data.imageUrl); // auto pass into motion
+      const finalImageUrl = data.imageUrl;
+      const nowIso = new Date().toISOString();
 
-        const newItem: GenerationHistoryItem = {
-          id: data.generationId || `img-${Date.now()}`,
-          kind: "image",
-          url: data.imageUrl,
-          prompt: data.prompt || "",
-          createdAt: new Date().toISOString(),
-        };
-        setHistory((prev) => [newItem, ...prev].slice(0, 12));
-      }
+      setLastImageUrl(finalImageUrl);
+      setLastPrompt(data.prompt);
 
-      if (data.credits?.balance !== undefined) {
-        setCredits(data.credits.balance);
-      }
+      setHistory((prev) => {
+        const next: GenerationItem[] = [
+          {
+            id: data.generationId || `image-${nowIso}`,
+            kind: "image",
+            url: finalImageUrl,
+            prompt: data.prompt,
+            createdAt: nowIso,
+            platform,
+            sessionId: data.sessionId || sid,
+          },
+          ...prev,
+        ];
+        return next.slice(0, 100);
+      });
 
-      flashMessage("Mina finished a still-life frame ✨");
+      // refresh credits after successful spend
+      void handleLoadCredits();
     } catch (err: any) {
-      console.error("Image generation error", err);
-      const msg =
-        err?.message || "Unexpected error during editorial generation.";
-      setImageError(msg);
-      flashMessage(msg);
+      setGenerateError(err?.message || "Failed to generate image");
     } finally {
       setIsGeneratingImage(false);
     }
   }
 
-  async function handleLikeImage() {
-    if (!currentImageUrl || !currentImagePrompt) {
-      flashMessage("Generate an image first.");
+  async function handleSuggestMotion() {
+    if (!lastImageUrl) {
+      setMotionError(
+        "Generate a still image first so Mina can propose a motion idea.",
+      );
       return;
     }
+
+    setIsSuggestingMotion(true);
+    setMotionError(null);
+
     try {
-      const body = {
-        customerId: MOCK_CUSTOMER_ID,
-        resultType: "image",
-        platform,
-        prompt: currentImagePrompt,
-        comment: imageFeedback.trim() || undefined,
-        imageUrl: currentImageUrl,
-        videoUrl: undefined,
-        sessionId: sessionId || undefined,
-        generationId: currentImageGenId || undefined,
+      type MotionSuggestResponse = {
+        ok: boolean;
+        suggestion: string;
       };
 
-      const res = await fetch(`${API_BASE_URL}/feedback/like`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-      if (!data.ok) {
-        flashMessage("Could not save Mina Vision like.");
-        return;
-      }
-      flashMessage("Saved to Mina Vision Intelligence 💛");
-    } catch (err) {
-      console.error("Like image error", err);
-      flashMessage("Error while saving like.");
-    }
-  }
-
-  // =======================
-  // PART 5 – Motion flows
-  // =======================
-
-  async function handleSuggestMotion() {
-    try {
-      setIsSuggestingMotion(true);
-      setMotionError(null);
-
-      const refUrl =
-        motionReferenceUrl.trim() || currentImageUrl || productImageUrl;
-      if (!refUrl) {
-        setMotionError("Mina needs a still frame to imagine the motion.");
-        return;
-      }
-
-      const body = {
+      const payload = {
         customerId: MOCK_CUSTOMER_ID,
-        referenceImageUrl: refUrl,
-        tone: motionTone.trim() || undefined,
-        platform: motionPlatform,
+        referenceImageUrl: lastImageUrl,
+        tone,
+        platform,
         minaVisionEnabled,
         stylePresetKey: stylePresetKey || undefined,
       };
 
-      const res = await fetch(`${API_BASE_URL}/motion/suggest`, {
+      const data = await apiFetch<MotionSuggestResponse>("/motion/suggest", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
 
-      const data: MotionSuggestResponse = await res.json();
       if (!data.ok || !data.suggestion) {
-        const msg =
-          data.error || "Mina couldn't suggest a motion idea this time.";
-        setMotionError(msg);
-        flashMessage(msg);
-        return;
+        throw new Error("No motion suggestion returned");
       }
 
       setMotionDescription(data.suggestion);
-      flashMessage("Mina suggested a motion idea 💭");
     } catch (err: any) {
-      console.error("Motion suggest error", err);
-      const msg =
-        err?.message || "Unexpected error while suggesting motion idea.";
-      setMotionError(msg);
-      flashMessage(msg);
+      setMotionError(err?.message || "Failed to suggest motion");
     } finally {
       setIsSuggestingMotion(false);
     }
   }
 
   async function handleGenerateMotion() {
+    if (!lastImageUrl) {
+      setMotionError("Generate a still image first, or paste a lastImageUrl.");
+      return;
+    }
+    if (!motionDescription.trim()) {
+      setMotionError("Describe how Mina should move the scene first.");
+      return;
+    }
+
+    setIsGeneratingMotion(true);
+    setMotionError(null);
+
     try {
-      setIsGeneratingMotion(true);
-      setMotionError(null);
-      setMode("motion");
+      const sid = await ensureSession();
 
-      const refUrl =
-        motionReferenceUrl.trim() || currentImageUrl || productImageUrl;
-      if (!refUrl) {
-        setMotionError("Mina needs a still frame to animate.");
-        return;
-      }
-      if (!motionDescription.trim()) {
-        setMotionError("Describe the motion or let Mina suggest one.");
-        return;
-      }
-
-      const sId = await ensureSession(motionPlatform);
-
-      const body = {
-        customerId: MOCK_CUSTOMER_ID,
-        sessionId: sId,
-        lastImageUrl: refUrl,
-        motionDescription: motionDescription.trim(),
-        tone: motionTone.trim() || undefined,
-        platform: motionPlatform,
-        minaVisionEnabled,
-        stylePresetKey: stylePresetKey || undefined,
-        durationSeconds,
+      type MotionResponse = {
+        ok: boolean;
+        videoUrl: string | null;
+        prompt: string;
+        generationId: string;
+        sessionId: string;
       };
 
-      const res = await fetch(`${API_BASE_URL}/motion/generate`, {
+      const payload = {
+        customerId: MOCK_CUSTOMER_ID,
+        sessionId: sid,
+        lastImageUrl,
+        motionDescription,
+        tone,
+        platform,
+        minaVisionEnabled,
+        stylePresetKey: stylePresetKey || undefined,
+        durationSeconds: 5,
+      };
+
+      const data = await apiFetch<MotionResponse>("/motion/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
 
-      const data: MotionResponse = await res.json();
       if (!data.ok) {
-        const msg =
-          data.message ||
-          data.error ||
-          "Mina could not finish this motion clip.";
-        setMotionError(msg);
-        flashMessage(msg);
-        return;
+        throw new Error("Mina could not generate motion");
+      }
+      if (!data.videoUrl) {
+        throw new Error("No videoUrl returned from Mina");
       }
 
-      if (data.videoUrl) {
-        setCurrentVideoUrl(data.videoUrl);
-        setCurrentVideoPrompt(data.prompt || "");
-        setCurrentMotionGenId(data.generationId || null);
+      const finalVideoUrl = data.videoUrl;
+      const nowIso = new Date().toISOString();
 
-        const newItem: GenerationHistoryItem = {
-          id: data.generationId || `motion-${Date.now()}`,
-          kind: "motion",
-          url: data.videoUrl,
-          prompt: data.prompt || "",
-          createdAt: new Date().toISOString(),
-        };
-        setHistory((prev) => [newItem, ...prev].slice(0, 12));
-      }
+      setLastVideoUrl(finalVideoUrl);
+      setLastPrompt(data.prompt);
 
-      if (data.credits?.balance !== undefined) {
-        setCredits(data.credits.balance);
-      }
+      setHistory((prev) => {
+        const next: GenerationItem[] = [
+          {
+            id: data.generationId || `motion-${nowIso}`,
+            kind: "motion",
+            url: finalVideoUrl,
+            prompt: data.prompt,
+            createdAt: nowIso,
+            platform,
+            sessionId: data.sessionId || sid,
+          },
+          ...prev,
+        ];
+        return next.slice(0, 100);
+      });
 
-      flashMessage("Mina finished a motion clip 🎬");
+      void handleLoadCredits();
     } catch (err: any) {
-      console.error("Motion generation error", err);
-      const msg =
-        err?.message || "Unexpected error during motion generation.";
-      setMotionError(msg);
-      flashMessage(msg);
+      setMotionError(err?.message || "Failed to generate motion");
     } finally {
       setIsGeneratingMotion(false);
     }
   }
 
-  async function handleLikeMotion() {
-    if (!currentVideoUrl || !currentVideoPrompt) {
-      flashMessage("Generate a motion clip first.");
+  async function handleSendLike() {
+    if (!lastPrompt || (!lastImageUrl && !lastVideoUrl)) {
+      setLikeMessage("Generate something first.");
       return;
     }
+
+    setLikeSending(true);
+    setLikeMessage(null);
+
     try {
-      const body = {
-        customerId: MOCK_CUSTOMER_ID,
-        resultType: "motion",
-        platform: motionPlatform,
-        prompt: currentVideoPrompt,
-        comment: motionFeedback.trim() || undefined,
-        imageUrl: undefined,
-        videoUrl: currentVideoUrl,
-        sessionId: sessionId || undefined,
-        generationId: currentMotionGenId || undefined,
+      const isMotion = Boolean(lastVideoUrl);
+
+      type LikeResponse = {
+        ok: boolean;
+        message: string;
       };
 
-      const res = await fetch(`${API_BASE_URL}/feedback/like`, {
+      const body: any = {
+        customerId: MOCK_CUSTOMER_ID,
+        resultType: isMotion ? "motion" : "image",
+        platform,
+        prompt: lastPrompt,
+        comment: likeComment || undefined,
+        imageUrl: !isMotion ? lastImageUrl : undefined,
+        videoUrl: isMotion ? lastVideoUrl : undefined,
+        sessionId,
+      };
+
+      const data = await apiFetch<LikeResponse>("/feedback/like", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
 
-      const data = await res.json();
       if (!data.ok) {
-        flashMessage("Could not save Mina Vision like for motion.");
-        return;
+        throw new Error(data.message || "Like failed");
       }
-      flashMessage("Saved motion to Mina Vision Intelligence 💛");
-    } catch (err) {
-      console.error("Like motion error", err);
-      flashMessage("Error while saving motion like.");
+
+      setLikeMessage("Saved. Mina Vision will remember this vibe. ✨");
+      setLikeComment("");
+    } catch (err: any) {
+      setLikeMessage(err?.message || "Failed to send feedback");
+    } finally {
+      setLikeSending(false);
     }
   }
 
-  // =======================
-  // PART 6 – Effects
-  // =======================
+  async function handleDevAddCredits() {
+    try {
+      await apiFetch("/credits/add", {
+        method: "POST",
+        body: JSON.stringify({
+          customerId: MOCK_CUSTOMER_ID,
+          amount: 999999,
+          reason: "dev-test",
+          source: "frontend-dev",
+        }),
+      });
+      void handleLoadCredits();
+    } catch {
+      // ignore
+    }
+  }
+
+  // ===============================
+  // Effects
+  // ===============================
 
   useEffect(() => {
-    loadHealth();
-    loadCredits();
+    void handleCheckHealth();
+    void handleLoadCredits();
   }, []);
 
-  // =======================
-  // PART 7 – UI sections
-  // =======================
-
-  const creditsLabel =
-    credits === null
-      ? "–"
-      : credits.toLocaleString("en-US", { maximumFractionDigits: 0 });
-
-  const imageCostLabel = creditsMeta.imageCost ?? 1;
-  const motionCostLabel = creditsMeta.motionCost ?? 5;
+  // ===============================
+  // Render
+  // ===============================
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        backgroundColor: "#EEEED2",
-        color: "#080A00",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {/* Top bar */}
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "12px 24px",
-          borderBottom: "1px solid rgba(8,10,0,0.12)",
-          fontFamily: '"Schibsted Grotesk", system-ui, -apple-system, sans-serif',
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={{ fontSize: 18, fontWeight: 600 }}>Mina Editorial AI</div>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>
-            {checkingHealth
-              ? "Checking backend…"
-              : health?.ok
-              ? `Online · ${health?.service ?? ""}`
-              : healthError
-              ? `Offline · ${healthError}`
-              : "Status unknown"}
+    <div className="mina-root">
+      <header className="mina-header">
+        <div className="mina-logo">Mina Editorial AI</div>
+        <div className="mina-header-right">
+          <div className="mina-tabs">
+            <button
+              type="button"
+              className={activeTab === "playground" ? "tab active" : "tab"}
+              onClick={() => setActiveTab("playground")}
+            >
+              Playground
+            </button>
+            <button
+              type="button"
+              className={activeTab === "profile" ? "tab active" : "tab"}
+              onClick={() => setActiveTab("profile")}
+            >
+              Profile
+            </button>
           </div>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: 16,
-            alignItems: "center",
-            fontSize: 12,
-          }}
-        >
-          <div style={{ opacity: 0.7 }}>
-            Image: {imageCostLabel} Machta · Motion: {motionCostLabel} Machta
+          <div className="mina-credits-badge">
+            <span>{credits ? `${credits.balance} Machta` : "— Machta"}</span>
           </div>
-          <div
-            style={{
-              padding: "6px 10px",
-              borderRadius: 999,
-              border: "1px solid rgba(8,10,0,0.18)",
-              backgroundColor: "#F6F4E5",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <span style={{ fontSize: 11, textTransform: "uppercase" }}>
-              Credits
-            </span>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>
-              {creditsLoading ? "…" : creditsLabel}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={devTopUp}
-            style={{
-              fontSize: 11,
-              textTransform: "uppercase",
-              letterSpacing: 0.1,
-              border: "none",
-              background: "none",
-              cursor: "pointer",
-              opacity: 0.6,
-            }}
-          >
-            + 9,999,999 Machta (dev)
-          </button>
         </div>
       </header>
 
-      {/* Flash */}
-      {flash && (
-        <div
-          style={{
-            padding: "8px 24px",
-            fontSize: 13,
-            backgroundColor: "#080A00",
-            color: "#EEEED2",
-          }}
-        >
-          {flash}
-        </div>
-      )}
-
-      {/* Main body: 50/50 split */}
-      <main
-        style={{
-          flex: 1,
-          display: "flex",
-          minHeight: 0,
-        }}
-      >
-        {/* LEFT – controls */}
-        <div
-          style={{
-            width: "50%",
-            borderRight: "1px solid rgba(8,10,0,0.12)",
-            padding: "24px 24px 32px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 24,
-            fontFamily:
-              '"Schibsted Grotesk", system-ui, -apple-system, sans-serif',
-          }}
-        >
-          {/* Mode tabs */}
-          <div
-            style={{
-              display: "flex",
-              gap: 12,
-              marginBottom: 4,
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setMode("still")}
-              style={{
-                border: "none",
-                background: "none",
-                cursor: "pointer",
-                padding: "4px 0",
-                fontSize: 14,
-                fontWeight: mode === "still" ? 600 : 400,
-                opacity: mode === "still" ? 1 : 0.5,
-                borderBottom:
-                  mode === "still"
-                    ? "2px solid rgba(8,10,0,0.9)"
-                    : "2px solid transparent",
-              }}
-            >
-              Still
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("motion")}
-              style={{
-                border: "none",
-                background: "none",
-                cursor: "pointer",
-                padding: "4px 0",
-                fontSize: 14,
-                fontWeight: mode === "motion" ? 600 : 400,
-                opacity: mode === "motion" ? 1 : 0.5,
-                borderBottom:
-                  mode === "motion"
-                    ? "2px solid rgba(8,10,0,0.9)"
-                    : "2px solid transparent",
-              }}
-            >
-              Motion
-            </button>
-          </div>
-
-          {/* Shared toggles */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 16,
-              fontSize: 13,
-              opacity: minaVisionEnabled ? 1 : 0.6,
-            }}
-          >
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={minaVisionEnabled}
-                onChange={(e) => setMinaVisionEnabled(e.target.checked)}
-              />
-              <span>Mina Vision Intelligence</span>
-            </label>
-
-            <select
-              value={stylePresetKey}
-              onChange={(e) => setStylePresetKey(e.target.value)}
-              style={{
-                fontSize: 12,
-                border: "none",
-                borderBottom: "1px solid rgba(8,10,0,0.25)",
-                background: "transparent",
-                padding: "2px 0",
-              }}
-            >
-              <option value="">No preset</option>
-              <option value="soft-desert-editorial">
-                Soft Desert Editorial
-              </option>
-              <option value="chrome-neon-night">Chrome Neon Night</option>
-              <option value="bathroom-ritual">Bathroom Ritual</option>
-            </select>
-          </div>
-
-          {/* Mode content */}
-          {mode === "still" ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <div>
-                <div style={{ fontSize: 12, opacity: 0.7 }}>Step 1</div>
-                <div style={{ fontSize: 16, fontWeight: 600 }}>
-                  Product & references
+      <main className="mina-main">
+        {activeTab === "playground" ? (
+          <div className="mina-layout">
+            {/* LEFT SIDE – controls */}
+            <div className="mina-left">
+              {/* Connection */}
+              <section className="mina-section">
+                <div className="section-title">
+                  <span className="step-dot step-done" />
+                  <span>Connection</span>
                 </div>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <label style={{ fontSize: 13 }}>
-                  Product image URL
-                  <input
-                    type="text"
-                    value={productImageUrl}
-                    onChange={(e) => setProductImageUrl(e.target.value)}
-                    placeholder="https://… main product image"
-                    style={{
-                      width: "100%",
-                      border: "none",
-                      borderBottom: "1px solid rgba(8,10,0,0.25)",
-                      background: "transparent",
-                      padding: "4px 0",
-                      fontSize: 13,
-                    }}
-                  />
-                </label>
-
-                <label style={{ fontSize: 13 }}>
-                  Style reference URL 1
-                  <input
-                    type="text"
-                    value={styleUrl1}
-                    onChange={(e) => setStyleUrl1(e.target.value)}
-                    placeholder="https://… editorial mood"
-                    style={{
-                      width: "100%",
-                      border: "none",
-                      borderBottom: "1px solid rgba(8,10,0,0.25)",
-                      background: "transparent",
-                      padding: "4px 0",
-                      fontSize: 13,
-                    }}
-                  />
-                </label>
-
-                <label style={{ fontSize: 13 }}>
-                  Style reference URL 2 (optional)
-                  <input
-                    type="text"
-                    value={styleUrl2}
-                    onChange={(e) => setStyleUrl2(e.target.value)}
-                    placeholder="https://… second mood"
-                    style={{
-                      width: "100%",
-                      border: "none",
-                      borderBottom: "1px solid rgba(8,10,0,0.25)",
-                      background: "transparent",
-                      padding: "4px 0",
-                      fontSize: 13,
-                    }}
-                  />
-                </label>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div>
-                  <div style={{ fontSize: 12, opacity: 0.7 }}>Step 2</div>
-                  <div style={{ fontSize: 16, fontWeight: 600 }}>
-                    Brand brief
-                  </div>
-                </div>
-
-                <textarea
-                  value={brief}
-                  onChange={(e) => setBrief(e.target.value)}
-                  placeholder="Tell Mina what you want to create. Brand context, mood, story…"
-                  rows={4}
-                  style={{
-                    width: "100%",
-                    border: "1px solid rgba(8,10,0,0.15)",
-                    background: "rgba(255,255,255,0.4)",
-                    padding: 8,
-                    fontSize: 13,
-                    resize: "vertical",
-                  }}
-                />
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 12,
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <label style={{ fontSize: 13 }}>
-                    Tone
-                    <input
-                      type="text"
-                      value={tone}
-                      onChange={(e) => setTone(e.target.value)}
-                      style={{
-                        border: "none",
-                        borderBottom: "1px solid rgba(8,10,0,0.25)",
-                        background: "transparent",
-                        padding: "4px 0",
-                        fontSize: 13,
-                        marginLeft: 8,
-                      }}
-                    />
-                  </label>
-
-                  <label style={{ fontSize: 13 }}>
-                    Format
-                    <select
-                      value={platform}
-                      onChange={(e) => setPlatform(e.target.value)}
-                      style={{
-                        border: "none",
-                        borderBottom: "1px solid rgba(8,10,0,0.25)",
-                        background: "transparent",
-                        padding: "4px 0",
-                        fontSize: 13,
-                        marginLeft: 4,
-                      }}
-                    >
-                      <option value="tiktok">TikTok / Reels (9:16)</option>
-                      <option value="instagram-post">Instagram post (4:5)</option>
-                      <option value="youtube">YouTube (16:9)</option>
-                    </select>
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <button
-                  type="button"
-                  onClick={handleGenerateImage}
-                  disabled={isGeneratingImage}
-                  style={{
-                    border: "none",
-                    background: "none",
-                    cursor: "pointer",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: 0.1,
-                    opacity: isGeneratingImage ? 0.5 : 1,
-                  }}
-                >
-                  {isGeneratingImage
-                    ? "Mina is composing the frame…"
-                    : "Create still"}
-                </button>
-                {imageError && (
-                  <div style={{ fontSize: 12, color: "#A01010", marginTop: 6 }}>
-                    {imageError}
-                  </div>
-                )}
-              </div>
-
-              <div style={{ marginTop: 8 }}>
-                <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>
-                  Tell Mina what you liked
-                </div>
-                <textarea
-                  value={imageFeedback}
-                  onChange={(e) => setImageFeedback(e.target.value)}
-                  placeholder="“I like the simplicity of the backdrop, but the light is too strong…”"
-                  rows={2}
-                  style={{
-                    width: "100%",
-                    border: "1px solid rgba(8,10,0,0.15)",
-                    background: "rgba(255,255,255,0.3)",
-                    padding: 6,
-                    fontSize: 12,
-                    resize: "vertical",
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={handleLikeImage}
-                  style={{
-                    marginTop: 4,
-                    border: "none",
-                    background: "none",
-                    cursor: "pointer",
-                    fontSize: 12,
-                    opacity: 0.8,
-                  }}
-                >
-                  ❤️ Save this to Mina Vision
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <div>
-                <div style={{ fontSize: 12, opacity: 0.7 }}>Step 1</div>
-                <div style={{ fontSize: 16, fontWeight: 600 }}>
-                  Reference frame
-                </div>
-              </div>
-
-              <label style={{ fontSize: 13 }}>
-                Still to animate (URL)
-                <input
-                  type="text"
-                  value={motionReferenceUrl}
-                  onChange={(e) => setMotionReferenceUrl(e.target.value)}
-                  placeholder="Leave empty to use the last generated still"
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    borderBottom: "1px solid rgba(8,10,0,0.25)",
-                    background: "transparent",
-                    padding: "4px 0",
-                    fontSize: 13,
-                  }}
-                />
-              </label>
-
-              <div>
-                <div style={{ fontSize: 12, opacity: 0.7 }}>Step 2</div>
-                <div style={{ fontSize: 16, fontWeight: 600 }}>
-                  Motion idea
-                </div>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <label style={{ fontSize: 13 }}>
-                    Tone
-                    <input
-                      type="text"
-                      value={motionTone}
-                      onChange={(e) => setMotionTone(e.target.value)}
-                      style={{
-                        border: "none",
-                        borderBottom: "1px solid rgba(8,10,0,0.25)",
-                        background: "transparent",
-                        padding: "4px 0",
-                        fontSize: 13,
-                        marginLeft: 8,
-                      }}
-                    />
-                  </label>
-
-                  <label style={{ fontSize: 13 }}>
-                    Format
-                    <select
-                      value={motionPlatform}
-                      onChange={(e) => setMotionPlatform(e.target.value)}
-                      style={{
-                        border: "none",
-                        borderBottom: "1px solid rgba(8,10,0,0.25)",
-                        background: "transparent",
-                        padding: "4px 0",
-                        fontSize: 13,
-                        marginLeft: 4,
-                      }}
-                    >
-                      <option value="tiktok">TikTok / Reels</option>
-                      <option value="youtube">YouTube horizontal</option>
-                    </select>
-                  </label>
-
-                  <label style={{ fontSize: 13 }}>
-                    Duration (s)
-                    <input
-                      type="number"
-                      min={1}
-                      max={10}
-                      value={durationSeconds}
-                      onChange={(e) =>
-                        setDurationSeconds(
-                          Math.min(10, Math.max(1, Number(e.target.value) || 5))
-                        )
-                      }
-                      style={{
-                        width: 48,
-                        marginLeft: 8,
-                        border: "none",
-                        borderBottom: "1px solid rgba(8,10,0,0.25)",
-                        background: "transparent",
-                        padding: "4px 0",
-                        fontSize: 13,
-                      }}
-                    />
-                  </label>
-                </div>
-
-                <textarea
-                  value={motionDescription}
-                  onChange={(e) => setMotionDescription(e.target.value)}
-                  placeholder="Mina will suggest a motion idea if you press “Suggest motion idea”"
-                  rows={3}
-                  style={{
-                    width: "100%",
-                    border: "1px solid rgba(8,10,0,0.15)",
-                    background: "rgba(255,255,255,0.4)",
-                    padding: 8,
-                    fontSize: 13,
-                  }}
-                />
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 16,
-                    marginTop: 4,
-                    alignItems: "center",
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={handleSuggestMotion}
-                    disabled={isSuggestingMotion}
-                    style={{
-                      border: "none",
-                      background: "none",
-                      cursor: "pointer",
-                      fontSize: 13,
-                      opacity: isSuggestingMotion ? 0.5 : 0.9,
-                    }}
-                  >
-                    💭{" "}
-                    {isSuggestingMotion
-                      ? "Mina is reading the frame…"
-                      : "Suggest motion idea"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleGenerateMotion}
-                    disabled={isGeneratingMotion}
-                    style={{
-                      border: "none",
-                      background: "none",
-                      cursor: "pointer",
-                      fontSize: 14,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: 0.1,
-                      opacity: isGeneratingMotion ? 0.5 : 1,
-                    }}
-                  >
-                    {isGeneratingMotion
-                      ? "Mina is animating…"
-                      : "Create motion"}
-                  </button>
-                </div>
-
-                {motionError && (
-                  <div style={{ fontSize: 12, color: "#A01010", marginTop: 6 }}>
-                    {motionError}
-                  </div>
-                )}
-              </div>
-
-              <div style={{ marginTop: 8 }}>
-                <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>
-                  Tell Mina what you liked in the clip
-                </div>
-                <textarea
-                  value={motionFeedback}
-                  onChange={(e) => setMotionFeedback(e.target.value)}
-                  placeholder="“I like the slow camera move, but I want less shake…”"
-                  rows={2}
-                  style={{
-                    width: "100%",
-                    border: "1px solid rgba(8,10,0,0.15)",
-                    background: "rgba(255,255,255,0.3)",
-                    padding: 6,
-                    fontSize: 12,
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={handleLikeMotion}
-                  style={{
-                    marginTop: 4,
-                    border: "none",
-                    background: "none",
-                    cursor: "pointer",
-                    fontSize: 12,
-                    opacity: 0.8,
-                  }}
-                >
-                  ❤️ Save this motion to Mina Vision
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* RIGHT – preview + history */}
-        <div
-          style={{
-            width: "50%",
-            display: "flex",
-            flexDirection: "column",
-            padding: "24px 24px 32px",
-            gap: 16,
-          }}
-        >
-          {/* Preview */}
-          <div
-            style={{
-              flex: 1,
-              borderRadius: 16,
-              overflow: "hidden",
-              background:
-                "radial-gradient(circle at top, #F6F4E5 0, #E2E0CF 40%, #D6D3C0 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              position: "relative",
-            }}
-          >
-            {!currentImageUrl && !currentVideoUrl ? (
-              <div
-                style={{
-                  fontSize: 13,
-                  opacity: 0.7,
-                  textAlign: "center",
-                  padding: 24,
-                  maxWidth: 260,
-                }}
-              >
-                Your stills and motion will appear here. Start with a product
-                image and a brief on the left, and let Mina compose the frame.
-              </div>
-            ) : mode === "motion" && currentVideoUrl ? (
-              <video
-                src={currentVideoUrl}
-                controls
-                style={{
-                  maxWidth: "100%",
-                  maxHeight: "100%",
-                  display: "block",
-                }}
-              />
-            ) : currentImageUrl ? (
-              <img
-                src={currentImageUrl}
-                alt="Mina editorial"
-                style={{
-                  maxWidth: "100%",
-                  maxHeight: "100%",
-                  objectFit: "contain",
-                  display: "block",
-                }}
-              />
-            ) : null}
-          </div>
-
-          {/* Simple history strip */}
-          <div>
-            <div
-              style={{
-                fontSize: 12,
-                opacity: 0.7,
-                marginBottom: 4,
-              }}
-            >
-              Recent generations
-            </div>
-            {history.length === 0 ? (
-              <div style={{ fontSize: 12, opacity: 0.5 }}>
-                Nothing yet. Mina will remember the last stills and clips you
-                create here.
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  overflowX: "auto",
-                  paddingBottom: 4,
-                }}
-              >
-                {history.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      if (item.kind === "image") {
-                        setMode("still");
-                        setCurrentImageUrl(item.url);
-                        setCurrentImagePrompt(item.prompt);
-                      } else {
-                        setMode("motion");
-                        setCurrentVideoUrl(item.url);
-                        setCurrentVideoPrompt(item.prompt);
-                      }
-                    }}
-                    title={item.prompt}
-                    style={{
-                      border: "none",
-                      padding: 0,
-                      borderRadius: 8,
-                      overflow: "hidden",
-                      minWidth: 64,
-                      minHeight: 64,
-                      background: "#D6D3C0",
-                      cursor: "pointer",
-                      position: "relative",
-                    }}
-                  >
-                    {item.kind === "image" ? (
-                      <img
-                        src={item.url}
-                        alt="thumb"
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                          display: "block",
-                        }}
-                      />
+                <div className="section-body">
+                  <div className="status-row">
+                    <span className="status-label">API</span>
+                    {checkingHealth ? (
+                      <span className="status-chip">Checking…</span>
+                    ) : health?.ok ? (
+                      <span className="status-chip ok">Online</span>
                     ) : (
-                      <>
-                        <video
-                          src={item.url}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            display: "block",
-                          }}
-                          muted
-                        />
-                        <div
-                          style={{
-                            position: "absolute",
-                            bottom: 4,
-                            right: 4,
-                            fontSize: 10,
-                            backgroundColor: "rgba(8,10,0,0.7)",
-                            color: "#EEEED2",
-                            padding: "2px 4px",
-                            borderRadius: 999,
-                          }}
-                        >
-                          Motion
-                        </div>
-                      </>
+                      <span className="status-chip error">Error</span>
                     )}
-                  </button>
-                ))}
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={handleCheckHealth}
+                    >
+                      refresh
+                    </button>
+                  </div>
+                  {healthError && (
+                    <div className="status-error">{healthError}</div>
+                  )}
+
+                  <div className="status-row">
+                    <span className="status-label">Credits</span>
+                    {loadingCredits ? (
+                      <span className="status-chip">Loading…</span>
+                    ) : credits ? (
+                      <span className="status-chip ok">
+                        {credits.balance} Machta
+                      </span>
+                    ) : (
+                      <span className="status-chip">—</span>
+                    )}
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={handleLoadCredits}
+                    >
+                      refresh
+                    </button>
+                    <button
+                      type="button"
+                      className="link-button subtle"
+                      onClick={handleDevAddCredits}
+                    >
+                      dev +9,999,99
+                    </button>
+                  </div>
+                  {creditsError && (
+                    <div className="status-error">{creditsError}</div>
+                  )}
+                  {sessionError && (
+                    <div className="status-error">{sessionError}</div>
+                  )}
+                </div>
+              </section>
+
+              {/* Still generation */}
+              <section className="mina-section">
+                <div className="section-title">
+                  <span className="step-dot" />
+                  <span>Still life</span>
+                </div>
+                <div className="section-body">
+                  <label className="field">
+                    <div className="field-label">Product image URL</div>
+                    <input
+                      className="field-input"
+                      type="text"
+                      placeholder="https://… main product image"
+                      value={productImageUrl}
+                      onChange={(e) => setProductImageUrl(e.target.value)}
+                    />
+                  </label>
+
+                  <label className="field">
+                    <div className="field-label">
+                      Style references (comma separated URLs)
+                    </div>
+                    <input
+                      className="field-input"
+                      type="text"
+                      placeholder="https://… , https://…"
+                      value={styleImageUrl}
+                      onChange={(e) => setStyleImageUrl(e.target.value)}
+                    />
+                  </label>
+
+                  <label className="field">
+                    <div className="field-label">Brief</div>
+                    <textarea
+                      className="field-textarea"
+                      placeholder="Tell Mina what you want to create…"
+                      value={brief}
+                      onChange={(e) => setBrief(e.target.value)}
+                    />
+                  </label>
+
+                  <div className="field-row">
+                    <label className="field field-inline">
+                      <div className="field-label">Tone</div>
+                      <input
+                        className="field-input"
+                        type="text"
+                        placeholder="Poetic"
+                        value={tone}
+                        onChange={(e) => setTone(e.target.value)}
+                      />
+                    </label>
+
+                    <label className="field field-inline">
+                      <div className="field-label">Platform</div>
+                      <select
+                        className="field-input"
+                        value={platform}
+                        onChange={(e) => setPlatform(e.target.value)}
+                      >
+                        <option value="tiktok">TikTok / Reels (9:16)</option>
+                        <option value="instagram">Instagram Post (4:5)</option>
+                        <option value="youtube">YouTube (16:9)</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="field-row">
+                    <label className="field field-inline">
+                      <div className="field-label">Style preset</div>
+                      <select
+                        className="field-input"
+                        value={stylePresetKey}
+                        onChange={(e) => setStylePresetKey(e.target.value)}
+                      >
+                        <option value="">None</option>
+                        <option value="soft-desert-editorial">
+                          Soft Desert Editorial
+                        </option>
+                        <option value="chrome-neon-night">
+                          Chrome Neon Night
+                        </option>
+                        <option value="bathroom-ritual">
+                          Bathroom Ritual
+                        </option>
+                      </select>
+                    </label>
+
+                    <label className="field-toggle">
+                      <input
+                        type="checkbox"
+                        checked={minaVisionEnabled}
+                        onChange={(e) => setMinaVisionEnabled(e.target.checked)}
+                      />
+                      <span
+                        className={
+                          minaVisionEnabled
+                            ? "toggle-label on"
+                            : "toggle-label off"
+                        }
+                      >
+                        Mina Vision Intelligence
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="section-actions">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={handleGenerateImage}
+                      disabled={isGeneratingImage || creatingSession}
+                    >
+                      {isGeneratingImage ? "Composing still…" : "Create still"}
+                    </button>
+                    {generateError && (
+                      <div className="error-text">{generateError}</div>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              {/* Motion */}
+              <section className="mina-section">
+                <div className="section-title">
+                  <span className="step-dot" />
+                  <span>Motion</span>
+                </div>
+                <div className="section-body">
+                  <div className="hint">
+                    Mina will read the last still, then suggest and create short
+                    motion (up to ~10s).
+                  </div>
+
+                  <label className="field">
+                    <div className="field-label">
+                      Motion idea (Mina writes first, then you can edit)
+                    </div>
+                    <textarea
+                      className="field-textarea"
+                      placeholder="Slow editorial camera drift with soft breeze and moving shadows…"
+                      value={motionDescription}
+                      onChange={(e) => setMotionDescription(e.target.value)}
+                    />
+                  </label>
+
+                  <div className="section-actions">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={handleSuggestMotion}
+                      disabled={isSuggestingMotion || !lastImageUrl}
+                    >
+                      {isSuggestingMotion ? "Thinking motion…" : "Suggest motion"}
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={handleGenerateMotion}
+                      disabled={isGeneratingMotion}
+                    >
+                      {isGeneratingMotion ? "Rendering motion…" : "Create motion"}
+                    </button>
+                  </div>
+
+                  {motionError && (
+                    <div className="error-text">{motionError}</div>
+                  )}
+                </div>
+              </section>
+
+              {/* Feedback */}
+              <section className="mina-section">
+                <div className="section-title">
+                  <span className="step-dot" />
+                  <span>Tell Mina what you liked</span>
+                </div>
+                <div className="section-body">
+                  <label className="field">
+                    <div className="field-label">
+                      Speak to me (what you like / dislike)
+                    </div>
+                    <textarea
+                      className="field-textarea"
+                      placeholder="“I love the soft breeze and minimal backdrop, but the light is too harsh.”"
+                      value={likeComment}
+                      onChange={(e) => setLikeComment(e.target.value)}
+                    />
+                  </label>
+                  <div className="section-actions">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={handleSendLike}
+                      disabled={likeSending}
+                    >
+                      {likeSending
+                        ? "Saving to Mina Vision…"
+                        : "Save feedback + like"}
+                    </button>
+                    {likeMessage && (
+                      <div className="hint small">{likeMessage}</div>
+                    )}
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            {/* RIGHT SIDE – output */}
+            <div className="mina-right">
+              <div className="output-shell">
+                {!lastImageUrl && !lastVideoUrl ? (
+                  <div className="output-placeholder">
+                    <p>Mina will show your stills and motions here.</p>
+                    <p className="hint">
+                      Start by pasting a product image URL on the left.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="output-media">
+                      {lastVideoUrl ? (
+                        <video
+                          src={lastVideoUrl}
+                          controls
+                          autoPlay
+                          loop
+                          playsInline
+                        />
+                      ) : lastImageUrl ? (
+                        <img src={lastImageUrl} alt="Mina still" />
+                      ) : null}
+                    </div>
+                    <div className="output-meta">
+                      <div className="output-tag-row">
+                        <span className="output-tag">
+                          {lastVideoUrl ? "Motion" : "Still"}
+                        </span>
+                        <span className="output-tag subtle">
+                          {platform.toUpperCase()}
+                        </span>
+                      </div>
+                      {lastPrompt && (
+                        <p className="output-prompt">{lastPrompt}</p>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
-            )}
+            </div>
           </div>
-        </div>
+        ) : (
+          // =====================
+          // PROFILE TAB
+          // =====================
+          <div className="profile-layout">
+            <section className="mina-section wide">
+              <div className="section-title">
+                <span className="step-dot step-done" />
+                <span>Profile & balance</span>
+              </div>
+              <div className="section-body profile-body">
+                <div>
+                  <div className="profile-label">Mock customer id</div>
+                  <div className="profile-value">{MOCK_CUSTOMER_ID}</div>
+                </div>
+                <div>
+                  <div className="profile-label">Credits</div>
+                  <div className="profile-value">
+                    {credits ? `${credits.balance} Machta` : "—"}
+                  </div>
+                </div>
+                <div>
+                  <div className="profile-label">
+                    History in this browser only
+                  </div>
+                  <div className="profile-value">
+                    {history.length} generations
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="mina-section wide">
+              <div className="section-title">
+                <span className="step-dot" />
+                <span>Gallery (local)</span>
+              </div>
+              <div className="section-body">
+                {history.length === 0 ? (
+                  <div className="hint">
+                    Generate stills or motions in the Playground and they will
+                    appear here.
+                  </div>
+                ) : (
+                  <div className="gallery-grid">
+                    {history.map((item) => (
+                      <div className="gallery-item" key={item.id}>
+                        <div className="gallery-media">
+                          {item.kind === "motion" ? (
+                            <video src={item.url} playsInline loop muted />
+                          ) : (
+                            <img src={item.url} alt={item.kind} />
+                          )}
+                        </div>
+                        <div className="gallery-meta">
+                          <span className="gallery-tag">{item.kind}</span>
+                          <span className="gallery-date">
+                            {new Date(item.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
       </main>
     </div>
   );
-};
+}
 
 export default App;
