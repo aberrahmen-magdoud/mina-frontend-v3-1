@@ -77,7 +77,7 @@ const canvas = document.createElement("canvas");
 const ctx = canvas.getContext("2d");
 if (!ctx) return "#DDD9CC";
 
-```
+
 const sourceWidth = img.naturalWidth || img.width;
 const sourceHeight = img.naturalHeight || img.height;
 if (!sourceWidth || !sourceHeight) return "#DDD9CC";
