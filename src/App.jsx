@@ -119,7 +119,6 @@ r = Math.round(r / count);
 g = Math.round(g / count);
 b = Math.round(b / count);
 
-// Mix toward a light neutral so the background is never too dark
 const mix = (c: number) => Math.round((c + 235) / 2);
 const mr = mix(r);
 const mg = mix(g);
@@ -224,7 +223,7 @@ window.localStorage.setItem("mina.customerId", trimmed);
 }
 }, [customerId]);
 
-// Health check on mount
+// Health check
 useEffect(() => {
 const run = async () => {
 try {
@@ -371,20 +370,20 @@ break;
 []
 );
 
-// Global paste handler to paste URLs into active upload field
+// Global paste handler – use `any` type to avoid TS build issues
 useEffect(() => {
-const handler = (e: ClipboardEvent) => {
-const text = e.clipboardData?.getData("text/plain") || "";
+const handler = (e: any) => {
+const text =
+(e.clipboardData && e.clipboardData.getData("text/plain")) || "";
 if (!text || !isLikelyUrl(text)) return;
-// If we get here, treat it as URL paste for current upload field
 e.preventDefault();
 applyUrlToField(activeUploadField, text);
 };
 
 ```
-window.addEventListener("paste", handler);
+window.addEventListener("paste", handler as any);
 return () => {
-  window.removeEventListener("paste", handler);
+  window.removeEventListener("paste", handler as any);
 };
 ```
 
@@ -414,7 +413,6 @@ const dt = e.dataTransfer;
 if (!dt) return;
 
 if (dt.files && dt.files.length > 0) {
-  // For now, only URLs are supported end-to-end
   setUploadError(
     "Local image files will be supported later. For now, drop or paste an image URL."
   );
@@ -530,7 +528,6 @@ try {
     setSessionId(data.sessionId);
   }
 
-  // Refresh credits after a successful generation
   refreshCredits();
 } catch (err: any) {
   console.error("Error generating editorial still:", err);
@@ -883,9 +880,6 @@ style={{ backgroundColor: healthDotColor }}
                     src={productUrl}
                     alt=""
                     className="mina-thumb"
-                    onError={() => {
-                      // Avoid endless broken image loops
-                    }}
                   />
                 </div>
               )}
@@ -1326,7 +1320,9 @@ style={{ backgroundColor: healthDotColor }}
                 disabled={!motionResult || motionLikeSending}
                 onClick={handleLikeMotion}
               >
-                {motionLikeSending ? "Sending feedback…" : "♥ more like this motion"}
+                {motionLikeSending
+                  ? "Sending feedback…"
+                  : "♥ more like this motion"}
               </button>
             </div>
             <div className="mina-field-underline" />
