@@ -17,8 +17,17 @@ height: 100%;
 body {
 font-family: "Schibsted Grotesk", system-ui, -apple-system, BlinkMacSystemFont,
 "SF Pro Text", "Segoe UI", sans-serif;
-background-color: #eee ed2;
+background-color: #eeeED2;
 color: #080a00;
+}
+
+/* Root */
+
+.mina-root {
+min-height: 100vh;
+display: flex;
+flex-direction: column;
+background-color: #eeeED2;
 }
 
 /* Reset-ish */
@@ -42,15 +51,6 @@ font-family: inherit;
 border: none;
 outline: none;
 background: transparent;
-}
-
-/* ROOT LAYOUT */
-
-.mina-root {
-min-height: 100vh;
-display: flex;
-flex-direction: column;
-background-color: #eee ed2;
 }
 
 /* HEADER */
@@ -84,7 +84,7 @@ width: 24px;
 height: 24px;
 border-radius: 999px;
 background-color: #080a00;
-color: #eee ed2;
+color: #eeeED2;
 font-size: 13px;
 font-weight: 700;
 letter-spacing: 0.08em;
@@ -459,26 +459,21 @@ display: block;
 object-fit: cover;
 }
 
-/* portrait: taller, restricted height */
 .mina-right-image--portrait {
 max-height: 45vh;
 width: auto;
 max-width: 80%;
 }
 
-/* landscape: wider, restricted width */
 .mina-right-image--landscape {
 max-width: 70%;
 height: auto;
 }
 
-/* square: centered */
 .mina-right-image--square {
 max-width: 60%;
 max-height: 60vh;
 }
-
-/* video */
 
 .mina-right-video {
 max-width: 70%;
@@ -515,8 +510,6 @@ padding-top: 4px;
 resize: none;
 }
 
-/* history thumbs */
-
 .mina-history-strip {
 margin-top: 8px;
 display: flex;
@@ -534,7 +527,7 @@ height: 40px;
 object-fit: cover;
 }
 
-/* RESPONSIVE BREAKPOINT */
+/* RESPONSIVE */
 
 @media (max-width: 900px) {
 .mina-main {
