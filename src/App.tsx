@@ -1,983 +1,528 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 const API_BASE_URL =
-  (import.meta.env.VITE_MINA_API_BASE_URL as string | undefined) ?? "";
+import.meta.env.VITE_MINA_API_BASE_URL ??
+"[https://mina-editorial-ai-api.onrender.com](https://mina-editorial-ai-api.onrender.com)"; // fallback if env var missing
 
-// ------------- Types -------------
-
-type View = "login" | "studio" | "profile" | "control";
-
-type MinaUser = {
-  customerId: string;
-  email?: string;
-  name?: string;
+type HealthPayload = {
+ok: boolean;
+service?: string;
+time?: string;
 };
 
-type CreditsMeta = {
-  imageCost: number;
-  motionCost: number;
+type CreditsPayload = {
+ok: boolean;
+customerId: string;
+balance: number;
+meta?: {
+imageCost: number;
+motionCost: number;
+};
 };
 
-type CreditsState = {
-  balance: number;
-  meta: CreditsMeta;
-  loading: boolean;
-  error: string | null;
+type Mode = "still" | "motion";
+
+type GalleryItem = {
+url: string;
+createdAt: string;
 };
 
-type GenerationKind = "image" | "motion";
-
-type Generation = {
-  id: string;
-  kind: GenerationKind;
-  imageUrl?: string | null;
-  videoUrl?: string | null;
-  prompt: string;
-  createdAt: string;
-};
-
-// ------------- Storage helpers -------------
-
-const STORAGE_USER_KEY = "mina:user";
-
-function loadUserFromStorage(): MinaUser | null {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_USER_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as MinaUser;
-  } catch {
-    return null;
-  }
-}
-
-function saveUserToStorage(user: MinaUser | null) {
-  try {
-    if (!user) {
-      window.localStorage.removeItem(STORAGE_USER_KEY);
-    } else {
-      window.localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(user));
-    }
-  } catch {
-    // ignore
-  }
-}
-
-// ------------- Main App -------------
+const DEFAULT_CUSTOMER_ID = "8766256447571"; // you can change this to any Shopify customer.id
 
 const App: React.FC = () => {
-  const [apiOnline, setApiOnline] = useState<boolean | null>(null);
-  const [apiServerTime, setApiServerTime] = useState<string | null>(null);
+const [mode, setMode] = useState<Mode>("still");
 
-  const [user, setUser] = useState<MinaUser | null>(() => {
-    if (typeof window === "undefined") return null;
-    return loadUserFromStorage();
+// API status
+const [health, setHealth] = useState<HealthPayload | null>(null);
+const [checkingHealth, setCheckingHealth] = useState(false);
+const [healthError, setHealthError] = useState<string | null>(null);
+
+// Customer + credits
+const [customerId, setCustomerId] = useState<string>(DEFAULT_CUSTOMER_ID);
+const [credits, setCredits] = useState<CreditsPayload | null>(null);
+const [checkingCredits, setCheckingCredits] = useState(false);
+const [creditsError, setCreditsError] = useState<string | null>(null);
+
+// Still form
+const [productImageUrl, setProductImageUrl] = useState("");
+const [referencesUrl, setReferencesUrl] = useState("");
+const [brief, setBrief] = useState("");
+const [tone, setTone] = useState("");
+const [platform, setPlatform] = useState("tiktok");
+const [minaVision, setMinaVision] = useState(true);
+
+const [isGeneratingStill, setIsGeneratingStill] = useState(false);
+const [generationError, setGenerationError] = useState<string | null>(null);
+
+// Gallery / latest image
+const [gallery, setGallery] = useState<GalleryItem[]>([]);
+const [activeIndex, setActiveIndex] = useState(0);
+const [latestPrompt, setLatestPrompt] = useState<string | null>(null);
+
+// ---- Derived state for “Notion-like” steps ----
+
+const steps = useMemo(
+() => ({
+description: brief.trim().length > 0,
+format: !!platform,
+style: tone.trim().length > 0, // we treat tone as "style feeling"
+product: productImageUrl.trim().length > 0,
+refs: referencesUrl.trim().length > 0,
+vision: minaVision,
+}),
+[brief, platform, tone, productImageUrl, referencesUrl, minaVision]
+);
+
+// ---- API helpers ----
+
+async function checkHealth() {
+if (!API_BASE_URL) {
+setHealthError("Missing VITE_MINA_API_BASE_URL env var.");
+return;
+}
+
+```
+try {
+  setCheckingHealth(true);
+  setHealthError(null);
+  const res = await fetch(`${API_BASE_URL}/health`);
+  const data: HealthPayload = await res.json();
+  setHealth(data);
+} catch (err: any) {
+  setHealthError(err?.message || "Failed to reach Mina API.");
+} finally {
+  setCheckingHealth(false);
+}
+```
+
+}
+
+async function fetchCredits(id: string) {
+if (!API_BASE_URL) return;
+if (!id.trim()) return;
+
+```
+try {
+  setCheckingCredits(true);
+  setCreditsError(null);
+  const url = new URL(`${API_BASE_URL}/credits/balance`);
+  url.searchParams.set("customerId", id.trim());
+
+  const res = await fetch(url.toString());
+  const data = (await res.json()) as CreditsPayload & {
+    meta?: { imageCost: number; motionCost: number };
+  };
+
+  setCredits({
+    ok: data.ok,
+    customerId: data.customerId,
+    balance: data.balance,
+    meta: data.meta,
+  });
+} catch (err: any) {
+  setCreditsError(err?.message || "Could not fetch credits.");
+} finally {
+  setCheckingCredits(false);
+}
+```
+
+}
+
+// Dev helper: give this customer big credits
+async function grantDevCredits() {
+if (!API_BASE_URL) return;
+
+```
+try {
+  setCreditsError(null);
+  const res = await fetch(`${API_BASE_URL}/credits/add`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      customerId: customerId.trim() || DEFAULT_CUSTOMER_ID,
+      amount: 9_999_999,
+      reason: "dev-topup",
+      source: "frontend-dev",
+    }),
   });
 
-  const [view, setView] = useState<View>(() =>
-    typeof window === "undefined" ? "login" : loadUserFromStorage() ? "studio" : "login"
-  );
+  const data = await res.json();
+  if (!data.ok) {
+    throw new Error(data.message || "Top-up failed");
+  }
 
-  const [credits, setCredits] = useState<CreditsState>({
-    balance: 0,
-    meta: { imageCost: 1, motionCost: 5 },
-    loading: false,
-    error: null,
+  // Refresh credits after top-up
+  await fetchCredits(customerId.trim() || DEFAULT_CUSTOMER_ID);
+} catch (err: any) {
+  setCreditsError(
+    err?.message || "Dev top-up failed. Check /credits/add endpoint."
+  );
+}
+```
+
+}
+
+async function createStill() {
+if (!API_BASE_URL) return;
+
+```
+setGenerationError(null);
+
+if (!brief.trim() && !productImageUrl.trim()) {
+  setGenerationError("Give Mina at least a brief or a product image URL.");
+  return;
+}
+
+try {
+  setIsGeneratingStill(true);
+
+  const payload = {
+    productImageUrl: productImageUrl.trim() || undefined,
+    styleImageUrls: referencesUrl
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    brief: brief.trim(),
+    tone: tone.trim(),
+    platform,
+    minaVisionEnabled: minaVision,
+    customerId: customerId.trim() || DEFAULT_CUSTOMER_ID,
+  };
+
+  const res = await fetch(`${API_BASE_URL}/editorial/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
 
-  const [generations, setGenerations] = useState<Generation[]>([]);
+  const data = await res.json();
 
-  // ---- Health check on mount ----
-  useEffect(() => {
-    if (!API_BASE_URL) {
-      setApiOnline(false);
-      return;
-    }
+  if (!data.ok) {
+    throw new Error(data.message || "Generation failed.");
+  }
 
-    const check = async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/health`);
-        const data = await res.json();
-        setApiOnline(res.ok && data.ok === true);
-        if (data.time) setApiServerTime(data.time);
-      } catch {
-        setApiOnline(false);
-      }
-    };
-    check();
-  }, []);
+  const url: string | null = data.imageUrl || null;
+  const urls: string[] = Array.isArray(data.imageUrls)
+    ? data.imageUrls
+    : url
+    ? [url]
+    : [];
 
-  // ---- Credits ----
-  const refreshCredits = async (customerId?: string) => {
-    if (!API_BASE_URL || !customerId) return;
+  if (!urls.length) {
+    throw new Error("Mina responded but no image URL found.");
+  }
 
-    setCredits((prev) => ({ ...prev, loading: true, error: null }));
-    try {
-      const res = await fetch(
-        `${API_BASE_URL}/credits/balance?customerId=${encodeURIComponent(
-          customerId
-        )}`
-      );
-      const data = await res.json();
-      if (!res.ok || data.ok === false) {
-        throw new Error(data.message || "Failed to load credits");
-      }
+  const now = new Date().toISOString();
+  const newItems: GalleryItem[] = urls.map((u) => ({
+    url: u,
+    createdAt: now,
+  }));
 
-      const meta: CreditsMeta = {
-        imageCost: Number(data.meta?.imageCost ?? 1),
-        motionCost: Number(data.meta?.motionCost ?? 5),
-      };
+  setGallery((prev) => [...newItems, ...prev]);
+  setActiveIndex(0);
+  setLatestPrompt(data.prompt || null);
 
-      setCredits({
-        balance: Number(data.balance ?? 0),
-        meta,
-        loading: false,
-        error: null,
-      });
-    } catch (err: any) {
-      setCredits((prev) => ({
-        ...prev,
-        loading: false,
-        error: err?.message || "Error loading credits",
-      }));
-    }
-  };
+  // refresh credits after spending
+  await fetchCredits(customerId.trim() || DEFAULT_CUSTOMER_ID);
+} catch (err: any) {
+  setGenerationError(err?.message || "Something went wrong.");
+} finally {
+  setIsGeneratingStill(false);
+}
+```
 
-  // Refresh credits whenever we have a user
-  useEffect(() => {
-    if (user?.customerId) {
-      refreshCredits(user.customerId);
-    }
-  }, [user?.customerId]);
+}
 
-  // ---- User login / logout ----
-  const handleLogin = (u: MinaUser, balanceOverride?: number) => {
-    setUser(u);
-    saveUserToStorage(u);
-    if (typeof balanceOverride === "number") {
-      setCredits((prev) => ({ ...prev, balance: balanceOverride }));
-    } else {
-      refreshCredits(u.customerId);
-    }
-    setView("studio");
-  };
+useEffect(() => {
+checkHealth();
+fetchCredits(DEFAULT_CUSTOMER_ID);
+}, []);
 
-  const handleLogout = () => {
-    setUser(null);
-    saveUserToStorage(null);
-    setView("login");
-    setGenerations([]);
-  };
+const activeImage = gallery[activeIndex] || null;
 
-  const handleAddGeneration = (gen: Generation) => {
-    setGenerations((prev) => [gen, ...prev]);
-  };
+return ( <div className="mina-root"> <header className="mina-header"> <div className="mina-header-left"> <div className="mina-logo-wordmark"> <span className="mina-logo-dot" /> <span className="mina-logo-text">Mina Editorial AI</span> <span className="mina-logo-tag">Falta Studio</span> </div>
 
-  const lastImageGeneration = useMemo(
-    () =>
-      generations.find((g) => g.kind === "image" && g.imageUrl) ||
-      null,
-    [generations]
-  );
+```
+      <nav className="mina-nav">
+        <button
+          className={`mina-nav-tab ${
+            mode === "still" ? "is-active" : ""
+          }`}
+          onClick={() => setMode("still")}
+        >
+          Still life images
+        </button>
+        <button
+          className={`mina-nav-tab ${
+            mode === "motion" ? "is-active" : ""
+          }`}
+          onClick={() => setMode("motion")}
+        >
+          Animate this
+        </button>
+      </nav>
+    </div>
 
-  // ---- Render ----
+    <div className="mina-header-right">
+      <div className="mina-status-pill">
+        <span className={`mina-status-dot ${health?.ok ? "ok" : "off"}`} />
+        <span className="mina-status-label">API</span>
+        <span className="mina-status-value">
+          {checkingHealth
+            ? "Checking..."
+            : health?.ok
+            ? "Online"
+            : "Offline"}
+        </span>
+        {health?.time && (
+          <span className="mina-status-time">
+            {new Date(health.time).toLocaleString()}
+          </span>
+        )}
+      </div>
 
-  return (
-    <div className="mina-app-root">
-      {/* Top bar */}
-      <header className="mina-header">
-        <div className="mina-header-left">
-          <div className="mina-logo-dot" />
-          <div>
-            <div className="mina-heading">Mina Editorial AI</div>
-            <div className="mina-subheading">Falta Studio · Beta</div>
+      <div className="mina-credits">
+        <div className="mina-credits-top">
+          <span className="mina-credits-label">Credits</span>
+          <span className="mina-credits-value">
+            {checkingCredits
+              ? "—"
+              : typeof credits?.balance === "number"
+              ? credits.balance.toLocaleString()
+              : "0"}
+          </span>
+        </div>
+        <div className="mina-credits-sub">
+          <span>
+            {credits?.meta?.imageCost ?? 1} img ·{" "}
+            {credits?.meta?.motionCost ?? 5} motion
+          </span>
+          <button
+            type="button"
+            className="mina-credits-dev"
+            onClick={grantDevCredits}
+          >
+            Dev: 9,999,999 → this user
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main className="mina-main">
+    {/* LEFT: Notion-like form */}
+    <section className="mina-pane mina-pane-left">
+      <div className="mina-left-inner">
+        <div className="mina-customer-row">
+          <label className="mina-customer-label">Customer ID</label>
+          <div className="mina-customer-input-row">
+            <input
+              className="mina-input mina-input-underlined"
+              value={customerId}
+              onChange={(e) => setCustomerId(e.target.value)}
+              onBlur={() =>
+                fetchCredits(customerId.trim() || DEFAULT_CUSTOMER_ID)
+              }
+            />
+            <button
+              type="button"
+              className="mina-small-link"
+              onClick={() =>
+                fetchCredits(customerId.trim() || DEFAULT_CUSTOMER_ID)
+              }
+            >
+              Refresh credits
+            </button>
           </div>
         </div>
 
-        <div className="mina-header-center">
-          <nav className="mina-nav">
-            {user ? (
-              <>
-                <button
-                  className={view === "studio" ? "nav-item active" : "nav-item"}
-                  onClick={() => setView("studio")}
-                >
-                  Studio
-                </button>
-                <button
-                  className={view === "profile" ? "nav-item active" : "nav-item"}
-                  onClick={() => setView("profile")}
-                >
-                  Profile
-                </button>
-                <button
-                  className={view === "control" ? "nav-item active" : "nav-item"}
-                  onClick={() => setView("control")}
-                >
-                  Control room
-                </button>
-              </>
-            ) : (
-              <button
-                className={view === "login" ? "nav-item active" : "nav-item"}
-                onClick={() => setView("login")}
-              >
-                Login
-              </button>
-            )}
-          </nav>
+        <div className="mina-steps">
+          {/* Step 1: description */}
+          <StepRow label="Describe how you want your photo to feel." done={steps.description}>
+            <textarea
+              className="mina-textarea"
+              placeholder="Soft desert ritual, warm light, minimal props..."
+              value={brief}
+              onChange={(e) => setBrief(e.target.value)}
+            />
+          </StepRow>
+
+          {/* Step 2: format */}
+          <StepRow label="Choose the format." done={steps.format}>
+            <select
+              className="mina-select"
+              value={platform}
+              onChange={(e) => setPlatform(e.target.value)}
+            >
+              <option value="tiktok">TikTok / Reels · 9:16</option>
+              <option value="square">Square · 1:1</option>
+              <option value="youtube">YouTube · 16:9</option>
+            </select>
+          </StepRow>
+
+          {/* Step 3: tone / style */}
+          <StepRow
+            label="Describe the editorial style / tone."
+            done={steps.style}
+          >
+            <input
+              className="mina-input mina-input-underlined"
+              placeholder="Calm, sensual, clinical..."
+              value={tone}
+              onChange={(e) => setTone(e.target.value)}
+            />
+          </StepRow>
+
+          {/* Step 4: product image */}
+          <StepRow
+            label="+ upload / paste your product image URL."
+            done={steps.product}
+          >
+            <input
+              className="mina-input mina-input-underlined"
+              placeholder="https://… (drag & drop later)"
+              value={productImageUrl}
+              onChange={(e) => setProductImageUrl(e.target.value)}
+            />
+          </StepRow>
+
+          {/* Step 5: references */}
+          <StepRow
+            label="+ upload / paste style reference URLs (comma separated)."
+            done={steps.refs}
+          >
+            <input
+              className="mina-input mina-input-underlined"
+              placeholder="https://ref-1…, https://ref-2…"
+              value={referencesUrl}
+              onChange={(e) => setReferencesUrl(e.target.value)}
+            />
+          </StepRow>
+
+          {/* Step 6: Mina Vision */}
+          <StepRow label="Mina Vision Intelligence." done={steps.vision}>
+            <ToggleLine
+              checked={minaVision}
+              onChange={setMinaVision}
+              label={minaVision ? "ON" : "OFF"}
+            />
+          </StepRow>
         </div>
 
-        <div className="mina-header-right">
-          <ApiStatusBadge online={apiOnline} time={apiServerTime} />
-          {user && (
-            <>
-              <CreditsBadge credits={credits} />
-              <button className="nav-item subtle" onClick={handleLogout}>
-                Log out
-              </button>
-            </>
+        <div className="mina-actions">
+          <button
+            type="button"
+            className="mina-primary-link"
+            onClick={createStill}
+            disabled={isGeneratingStill}
+          >
+            {isGeneratingStill ? "Creating…" : "Create still"}
+          </button>
+          {generationError && (
+            <div className="mina-error-text">{generationError}</div>
+          )}
+          {creditsError && (
+            <div className="mina-error-text">{creditsError}</div>
+          )}
+          {healthError && (
+            <div className="mina-error-text">{healthError}</div>
           )}
         </div>
-      </header>
+      </div>
+    </section>
 
-      {/* Main content */}
-      {!user && view !== "control" && (
-        <LoginView
-          online={apiOnline}
-          onLogin={handleLogin}
-          credits={credits}
-        />
-      )}
-
-      {user && view === "studio" && (
-        <StudioView
-          user={user}
-          credits={credits}
-          onRefreshCredits={() => refreshCredits(user.customerId)}
-          onAddGeneration={handleAddGeneration}
-          lastImage={lastImageGeneration}
-        />
-      )}
-
-      {user && view === "profile" && (
-        <ProfileView user={user} generations={generations} />
-      )}
-
-      {view === "control" && (
-        <ControlRoom
-          apiBaseUrl={API_BASE_URL}
-          healthOnline={apiOnline}
-          healthTime={apiServerTime}
-        />
-      )}
-
-      {!user && view === "control" && (
-        <div className="mina-control-hint">
-          Tip: control room is mostly for you (admin) to debug API + credits.
+    {/* RIGHT: image frame */}
+    <section className="mina-pane mina-pane-right">
+      <div className="mina-right-inner">
+        <div className="mina-right-frame">
+          {activeImage ? (
+            <img
+              src={activeImage.url}
+              alt="Mina latest still"
+              className="mina-still-image"
+            />
+          ) : (
+            <div className="mina-placeholder">
+              <div className="mina-placeholder-title">Latest still</div>
+              <div className="mina-placeholder-text">
+                When you create a still, it will appear here in a full-bleed
+                editorial frame.
+              </div>
+            </div>
+          )}
         </div>
-      )}
-    </div>
-  );
+
+        <div className="mina-right-bottom">
+          <div className="mina-carousel-dots">
+            {gallery.length > 1 &&
+              gallery.map((item, idx) => (
+                <button
+                  key={item.createdAt + idx}
+                  className={`mina-dot ${
+                    idx === activeIndex ? "is-active" : ""
+                  }`}
+                  onClick={() => setActiveIndex(idx)}
+                />
+              ))}
+          </div>
+
+          <div className="mina-prompt-box">
+            {latestPrompt ? (
+              <>
+                <div className="mina-prompt-label">
+                  What Mina asked the model:
+                </div>
+                <div className="mina-prompt-text">{latestPrompt}</div>
+              </>
+            ) : (
+              <div className="mina-prompt-empty">
+                Speak to me later about what you like and dislike about my
+                generations. I will remember.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+```
+
+);
+};
+
+// -------- Small helper components (kept in this same file) --------
+
+interface StepRowProps {
+label: string;
+done?: boolean;
+children: React.ReactNode;
+}
+
+const StepRow: React.FC<StepRowProps> = ({ label, done, children }) => {
+return ( <div className="mina-step-row">
+<div className={`mina-step-line ${done ? "is-done" : ""}`} /> <div className="mina-step-body"> <div className="mina-step-label">{label}</div> <div className="mina-step-control">{children}</div> </div> </div>
+);
+};
+
+interface ToggleLineProps {
+checked: boolean;
+onChange: (val: boolean) => void;
+label: string;
+}
+
+const ToggleLine: React.FC<ToggleLineProps> = ({
+checked,
+onChange,
+label,
+}) => {
+return (
+<button
+type="button"
+className={`mina-toggle ${checked ? "is-on" : "is-off"}`}
+onClick={() => onChange(!checked)}
+> <span className="mina-toggle-pill"> <span className="mina-toggle-knob" /> </span> <span className="mina-toggle-label">{label}</span> </button>
+);
 };
 
 export default App;
-
-// ------------- Small components -------------
-
-const ApiStatusBadge: React.FC<{
-  online: boolean | null;
-  time: string | null;
-}> = ({ online, time }) => {
-  const label =
-    online === null ? "Checking…" : online ? "Online" : "Offline";
-
-  return (
-    <div className="pill pill-outline">
-      <span
-        className={`status-dot ${online ? "ok" : online === null ? "idle" : "bad"}`}
-      />
-      <span>API: {label}</span>
-      {online && time && <span className="pill-meta">{time}</span>}
-    </div>
-  );
-};
-
-const CreditsBadge: React.FC<{ credits: CreditsState }> = ({ credits }) => {
-  return (
-    <div className="pill pill-solid">
-      <span className="pill-title">Credits</span>
-      {credits.loading ? (
-        <span>…</span>
-      ) : (
-        <span>{credits.balance}</span>
-      )}
-      <span className="pill-meta">
-        img {credits.meta.imageCost} · motion {credits.meta.motionCost}
-      </span>
-    </div>
-  );
-};
-
-// ------------- Login view -------------
-
-type LoginProps = {
-  online: boolean | null;
-  onLogin: (user: MinaUser, balanceOverride?: number) => void;
-  credits: CreditsState;
-};
-
-const LoginView: React.FC<LoginProps> = ({ online, onLogin, credits }) => {
-  const [customerId, setCustomerId] = useState("");
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customerId.trim()) {
-      setError("Paste your Shopify customer.id");
-      return;
-    }
-    if (!API_BASE_URL) {
-      setError("Missing VITE_MINA_API_BASE_URL in frontend.");
-      return;
-    }
-
-    setError(null);
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `${API_BASE_URL}/credits/balance?customerId=${encodeURIComponent(
-          customerId.trim()
-        )}`
-      );
-      const data = await res.json();
-      if (!res.ok || data.ok === false) {
-        throw new Error(
-          data.message || "Could not check credits for this customer."
-        );
-      }
-      const balance = Number(data.balance ?? 0);
-      const user: MinaUser = {
-        customerId: customerId.trim(),
-        email: email.trim() || undefined,
-        name: name.trim() || undefined,
-      };
-      onLogin(user, balance);
-    } catch (err: any) {
-      setError(err?.message || "Login failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <main className="mina-main login-main">
-      <section className="mina-login-card">
-        <h1 className="title-lg">Welcome to Mina studio</h1>
-        <p className="body-sm">
-          Paste your <strong>Shopify customer.id</strong> to connect your
-          Machta credits. For now this is a lightweight login just for you.
-        </p>
-
-        <form onSubmit={handleSubmit} className="field-stack">
-          <label className="field-label">
-            Shopify customer.id
-            <input
-              className="field-input"
-              value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-              placeholder="e.g. 8766256447571"
-            />
-          </label>
-
-          <label className="field-label">
-            Email (optional)
-            <input
-              className="field-input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Used for later profile."
-            />
-          </label>
-
-          <label className="field-label">
-            Name (optional)
-            <input
-              className="field-input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="How Mina should call you."
-            />
-          </label>
-
-          {error && <div className="error-text">{error}</div>}
-
-          <button
-            type="submit"
-            className="text-button primary"
-            disabled={loading || !customerId.trim()}
-          >
-            {loading ? "Checking credits…" : "Enter Mina studio"}
-          </button>
-        </form>
-
-        <div className="login-meta">
-          <div>
-            API status:{" "}
-            {online === null
-              ? "Checking…"
-              : online
-              ? "Online"
-              : "Offline – check backend"}
-          </div>
-          <div>
-            Current img cost: {credits.meta.imageCost} · motion cost:{" "}
-            {credits.meta.motionCost}
-          </div>
-        </div>
-      </section>
-    </main>
-  );
-};
-
-// ------------- Studio view (50/50 layout) -------------
-
-type StudioProps = {
-  user: MinaUser;
-  credits: CreditsState;
-  onRefreshCredits: () => void;
-  onAddGeneration: (gen: Generation) => void;
-  lastImage: Generation | null;
-};
-
-const StudioView: React.FC<StudioProps> = ({
-  user,
-  credits,
-  onRefreshCredits,
-  onAddGeneration,
-  lastImage,
-}) => {
-  const [mode, setMode] = useState<"still" | "motion">("still");
-
-  // Still
-  const [productImageUrl, setProductImageUrl] = useState("");
-  const [styleRefs, setStyleRefs] = useState("");
-  const [brief, setBrief] = useState("");
-  const [tone, setTone] = useState("");
-  const [platform, setPlatform] = useState<"tiktok" | "instagram" | "youtube">(
-    "tiktok"
-  );
-  const [minaVision, setMinaVision] = useState(true);
-  const [stillLoading, setStillLoading] = useState(false);
-  const [stillError, setStillError] = useState<string | null>(null);
-  const [stillUrl, setStillUrl] = useState<string | null>(null);
-
-  // Motion
-  const [motionText, setMotionText] = useState("");
-  const [motionLoading, setMotionLoading] = useState(false);
-  const [motionError, setMotionError] = useState<string | null>(null);
-  const [motionUrl, setMotionUrl] = useState<string | null>(null);
-
-  const styleImageUrls = useMemo(
-    () =>
-      styleRefs
-        .split(/[\n,]+/)
-        .map((s) => s.trim())
-        .filter(Boolean),
-    [styleRefs]
-  );
-
-  const handleGenerateStill = async () => {
-    if (!API_BASE_URL) return;
-    if (!brief && !productImageUrl) {
-      setStillError("Give Mina at least a product image or a short brief.");
-      return;
-    }
-    setStillError(null);
-    setStillLoading(true);
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/editorial/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerId: user.customerId,
-          productImageUrl: productImageUrl || undefined,
-          styleImageUrls,
-          brief,
-          tone,
-          platform,
-          minaVisionEnabled: minaVision,
-          stylePresetKey: null,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.ok === false) {
-        throw new Error(data.message || "Generation failed");
-      }
-
-      const url: string | null = data.imageUrl || null;
-      setStillUrl(url);
-
-      const gen: Generation = {
-        id: data.generationId || `gen_${Date.now()}`,
-        kind: "image",
-        imageUrl: url,
-        videoUrl: null,
-        prompt: data.prompt || brief || "",
-        createdAt: new Date().toISOString(),
-      };
-      onAddGeneration(gen);
-      onRefreshCredits();
-    } catch (err: any) {
-      setStillError(err?.message || "Error generating still");
-    } finally {
-      setStillLoading(false);
-    }
-  };
-
-  const handleGenerateMotion = async () => {
-    if (!API_BASE_URL) return;
-    const reference = lastImage?.imageUrl || stillUrl;
-    if (!reference) {
-      setMotionError("Mina needs a still image first.");
-      return;
-    }
-    if (!motionText.trim()) {
-      setMotionError("Describe the motion or use the suggest button (later).");
-      return;
-    }
-
-    setMotionError(null);
-    setMotionLoading(true);
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/motion/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerId: user.customerId,
-          lastImageUrl: reference,
-          motionDescription: motionText,
-          tone,
-          platform,
-          minaVisionEnabled: minaVision,
-          stylePresetKey: null,
-          durationSeconds: 5,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.ok === false) {
-        throw new Error(data.message || "Motion generation failed");
-      }
-
-      const url: string | null = data.videoUrl || null;
-      setMotionUrl(url);
-
-      const gen: Generation = {
-        id: data.generationId || `motion_${Date.now()}`,
-        kind: "motion",
-        imageUrl: reference,
-        videoUrl: url,
-        prompt: data.prompt || motionText,
-        createdAt: new Date().toISOString(),
-      };
-      onAddGeneration(gen);
-      onRefreshCredits();
-    } catch (err: any) {
-      setMotionError(err?.message || "Error generating motion");
-    } finally {
-      setMotionLoading(false);
-    }
-  };
-
-  const rightBgClass = mode === "still" ? "mina-right still" : "mina-right motion";
-
-  return (
-    <main className="mina-main studio-main">
-      <div className="studio-shell">
-        {/* LEFT – controls */}
-        <section className="mina-left">
-          <div className="left-inner">
-            <div className="mode-tabs">
-              <button
-                className={mode === "still" ? "tab active" : "tab"}
-                onClick={() => setMode("still")}
-              >
-                Still
-              </button>
-              <button
-                className={mode === "motion" ? "tab active" : "tab"}
-                onClick={() => setMode("motion")}
-              >
-                Motion
-              </button>
-            </div>
-
-            <div className="user-line">
-              <span className="body-xs">
-                Signed in as{" "}
-                <strong>{user.name || user.email || user.customerId}</strong>
-              </span>
-            </div>
-
-            {mode === "still" && (
-              <>
-                <h2 className="title-md">Editorial still</h2>
-                <p className="body-sm">
-                  Product image, 1–3 references, a short brief. Mina takes care
-                  of the composition.
-                </p>
-
-                <div className="field-stack">
-                  <label className="field-label">
-                    Product image URL
-                    <input
-                      className="field-input subtle"
-                      value={productImageUrl}
-                      onChange={(e) => setProductImageUrl(e.target.value)}
-                      placeholder="https://… (drag & drop later)"
-                    />
-                  </label>
-
-                  <label className="field-label">
-                    Reference image URLs (one per line or comma)
-                    <textarea
-                      className="field-input subtle textarea"
-                      value={styleRefs}
-                      onChange={(e) => setStyleRefs(e.target.value)}
-                      placeholder="Mood, surface, light…"
-                      rows={3}
-                    />
-                  </label>
-
-                  <label className="field-label">
-                    Brief
-                    <textarea
-                      className="field-input textarea"
-                      value={brief}
-                      onChange={(e) => setBrief(e.target.value)}
-                      placeholder="Soft desert ritual, warm light, minimal props…"
-                      rows={3}
-                    />
-                  </label>
-
-                  <div className="inline-fields">
-                    <label className="field-label narrow">
-                      Tone
-                      <input
-                        className="field-input subtle"
-                        value={tone}
-                        onChange={(e) => setTone(e.target.value)}
-                        placeholder="Calm, sensual, clinical…"
-                      />
-                    </label>
-
-                    <label className="field-label narrow">
-                      Format
-                      <select
-                        className="field-input subtle"
-                        value={platform}
-                        onChange={(e) =>
-                          setPlatform(e.target.value as typeof platform)
-                        }
-                      >
-                        <option value="tiktok">TikTok / Reels 9:16</option>
-                        <option value="instagram">Instagram 4:5</option>
-                        <option value="youtube">YouTube 16:9</option>
-                      </select>
-                    </label>
-                  </div>
-
-                  <label className="toggle-line">
-                    <input
-                      type="checkbox"
-                      checked={minaVision}
-                      onChange={(e) => setMinaVision(e.target.checked)}
-                    />
-                    <span className={minaVision ? "toggle-label on" : "toggle-label off"}>
-                      Mina Vision intelligence
-                    </span>
-                  </label>
-
-                  {stillError && <div className="error-text">{stillError}</div>}
-
-                  <button
-                    type="button"
-                    className="text-button primary"
-                    disabled={stillLoading}
-                    onClick={handleGenerateStill}
-                  >
-                    {stillLoading ? "Creating still…" : "Create still"}
-                  </button>
-                </div>
-              </>
-            )}
-
-            {mode === "motion" && (
-              <>
-                <h2 className="title-md">Motion from still</h2>
-                <p className="body-sm">
-                  Mina reads your last still and turns it into a short ASMR loop.
-                </p>
-
-                <div className="motion-ref">
-                  <span className="body-xs">Reference still</span>
-                  {lastImage?.imageUrl || stillUrl ? (
-                    <img
-                      src={lastImage?.imageUrl || stillUrl || ""}
-                      alt="Reference"
-                      className="motion-ref-thumb"
-                    />
-                  ) : (
-                    <span className="body-xs dim">
-                      No still yet – generate one first.
-                    </span>
-                  )}
-                </div>
-
-                <div className="field-stack">
-                  <label className="field-label">
-                    Motion idea
-                    <textarea
-                      className="field-input textarea"
-                      value={motionText}
-                      onChange={(e) => setMotionText(e.target.value)}
-                      placeholder="Slow camera drift, soft steam breathing around the product…"
-                      rows={3}
-                    />
-                  </label>
-
-                  {motionError && <div className="error-text">{motionError}</div>}
-
-                  <button
-                    type="button"
-                    className="text-button primary"
-                    disabled={motionLoading}
-                    onClick={handleGenerateMotion}
-                  >
-                    {motionLoading ? "Animating…" : "Create motion"}
-                  </button>
-                </div>
-              </>
-            )}
-
-            <div className="credits-note body-xs">
-              Balance: {credits.balance} Machta credits · img{" "}
-              {credits.meta.imageCost}, motion {credits.meta.motionCost}.
-            </div>
-          </div>
-        </section>
-
-        {/* RIGHT – output */}
-        <section className={rightBgClass}>
-          <div className="right-inner">
-            {mode === "still" ? (
-              <>
-                <div className="right-label body-xs">Latest still</div>
-                {stillUrl ? (
-                  <div className="still-frame">
-                    <img src={stillUrl} alt="Mina still" className="still-img" />
-                  </div>
-                ) : (
-                  <div className="empty-state body-sm">
-                    When you create a still, it will appear here in a full-bleed
-                    editorial frame.
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="right-label body-xs">Latest motion</div>
-                {motionUrl ? (
-                  <div className="still-frame">
-                    <video
-                      src={motionUrl}
-                      className="still-img"
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                    />
-                  </div>
-                ) : (
-                  <div className="empty-state body-sm">
-                    Once Mina animates your still, the video will play here.
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </section>
-      </div>
-    </main>
-  );
-};
-
-// ------------- Profile view (grid) -------------
-
-type ProfileProps = {
-  user: MinaUser;
-  generations: Generation[];
-};
-
-const ProfileView: React.FC<ProfileProps> = ({ user, generations }) => {
-  return (
-    <main className="mina-main profile-main">
-      <section className="profile-header">
-        <h1 className="title-md">
-          {user.name ? `${user.name}'s profile` : "Your profile"}
-        </h1>
-        <p className="body-sm">
-          Simple history of this browser session. Later we’ll plug this into a
-          real DB + Mina Vision log.
-        </p>
-      </section>
-
-      <section className="profile-grid">
-        {generations.length === 0 && (
-          <div className="body-sm dim">
-            No generations yet in this session. Create a still or motion in the
-            Studio first.
-          </div>
-        )}
-
-        {generations.map((g) => (
-          <article key={g.id} className="profile-tile">
-            <div className="tile-media">
-              {g.kind === "motion" && g.videoUrl ? (
-                <video
-                  src={g.videoUrl}
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  className="tile-media-el"
-                />
-              ) : g.imageUrl ? (
-                <img
-                  src={g.imageUrl}
-                  alt={g.kind}
-                  className="tile-media-el"
-                />
-              ) : (
-                <div className="tile-placeholder body-xs dim">
-                  Missing media
-                </div>
-              )}
-            </div>
-            <div className="tile-meta body-xs">
-              <span>{g.kind === "motion" ? "Motion" : "Still"}</span>
-              <span className="tile-date">
-                {new Date(g.createdAt).toLocaleString()}
-              </span>
-            </div>
-          </article>
-        ))}
-      </section>
-    </main>
-  );
-};
-
-// ------------- Control room (existing idea) -------------
-
-type ControlProps = {
-  apiBaseUrl: string;
-  healthOnline: boolean | null;
-  healthTime: string | null;
-};
-
-const ControlRoom: React.FC<ControlProps> = ({
-  apiBaseUrl,
-  healthOnline,
-  healthTime,
-}) => {
-  const [customerId, setCustomerId] = useState("");
-  const [result, setResult] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const handleCheck = async () => {
-    if (!apiBaseUrl || !customerId.trim()) return;
-    setLoading(true);
-    setResult(null);
-    try {
-      const res = await fetch(
-        `${apiBaseUrl}/credits/balance?customerId=${encodeURIComponent(
-          customerId.trim()
-        )}`
-      );
-      const data = await res.json();
-      setResult(JSON.stringify(data, null, 2));
-    } catch (err: any) {
-      setResult(err?.message || "Error checking credits");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <main className="mina-main control-main">
-      <section className="control-card">
-        <h1 className="title-md">Mina control room</h1>
-        <p className="body-sm">
-          Quick way to talk to your Mina API before we ship the full admin
-          dashboard.
-        </p>
-
-        <div className="control-row">
-          <div className="body-xs dim">API base URL</div>
-          <div className="body-xs mono">{apiBaseUrl || "not set"}</div>
-        </div>
-
-        <div className="control-row">
-          <div className="body-xs dim">Health</div>
-          <div className="body-xs">
-            {healthOnline === null
-              ? "checking…"
-              : healthOnline
-              ? `✅ online (${healthTime || "no time"})`
-              : "❌ offline"}
-          </div>
-        </div>
-
-        <div className="control-divider" />
-
-        <label className="field-label">
-          Check credits for customer.id
-          <input
-            className="field-input"
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            placeholder="Paste Shopify customer.id"
-          />
-        </label>
-
-        <button
-          className="text-button primary"
-          onClick={handleCheck}
-          disabled={loading || !customerId.trim()}
-        >
-          {loading ? "Checking…" : "Check credits"}
-        </button>
-
-        {result && (
-          <pre className="control-output body-xs mono">{result}</pre>
-        )}
-      </section>
-
-      <section className="control-notes body-xs">
-        <h2 className="body-sm">What’s wired now</h2>
-        <ul>
-          <li>Health endpoint</li>
-          <li>Credits balance</li>
-          <li>
-            Frontend points to API via{" "}
-            <code>VITE_MINA_API_BASE_URL</code>.
-          </li>
-        </ul>
-      </section>
-    </main>
-  );
-};
