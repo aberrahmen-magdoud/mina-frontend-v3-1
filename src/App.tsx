@@ -1245,50 +1245,75 @@ const saveBillingSettings = async () => {
                     </div>
                   </div>
                   <div className="auto-topup-row">
-                    <div className="profile-label">Auto top-up</div>
-                    <div className="field-toggle">
+                  <div className="profile-label">Auto top-up</div>
+                
+                  <div className="field-toggle">
+                    <input
+                      type="checkbox"
+                      checked={autoTopupEnabled}
+                      onChange={(e) => setAutoTopupEnabled(e.target.checked)}
+                    />
+                    <span
+                      className={classNames(
+                        "toggle-label",
+                        autoTopupEnabled ? "on" : "off"
+                      )}
+                    >
+                      {autoTopupEnabled ? "Enabled" : "Disabled"}
+                    </span>
+                  </div>
+                
+                  <div className="auto-topup-grid">
+                    <div className="field">
+                      <div className="field-label">
+                        Monthly limit <span className="field-unit">(packs)</span>
+                      </div>
                       <input
-                        type="checkbox"
-                        checked={autoTopupEnabled}
-                        onChange={(e) =>
-                          setAutoTopupEnabled(e.target.checked)
-                        }
+                        className="field-input"
+                        type="number"
+                        min={0}
+                        value={autoTopupLimit}
+                        onChange={(e) => setAutoTopupLimit(e.target.value)}
                       />
-                      <span
-                        className={classNames(
-                          "toggle-label",
-                          autoTopupEnabled ? "on" : "off"
-                        )}
+                    </div>
+                
+                    <div className="field">
+                      <div className="field-label">Pack</div>
+                      <select
+                        className="field-input"
+                        value={autoTopupPack}
+                        onChange={(e) => setAutoTopupPack(e.target.value)}
                       >
-                        Enable auto top-up like OpenAI API
-                      </span>
+                        <option value="MINA-50">Mina 50 Matcha</option>
+                      </select>
                     </div>
-                    <div className="auto-topup-grid">
-                      <div className="field">
-                        <div className="field-label">
-                          Monthly limit{" "}
-                          <span className="field-unit">(USD)</span>
-                        </div>
-                        <input
-                          className="field-input"
-                          type="number"
-                          min={10}
-                          value={autoTopupLimit}
-                          onChange={(e) => setAutoTopupLimit(e.target.value)}
-                        />
-                      </div>
-                      <div className="field">
-                        <div className="field-label">Pack</div>
-                        <select
-                          className="field-input"
-                          value={autoTopupPack}
-                          onChange={(e) => setAutoTopupPack(e.target.value)}
-                        >
-                          <option value="MINA-50">Mina 50 Machta</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="profile-hint">
+                  </div>
+                
+                  <div className="field-row" style={{ marginTop: 8 }}>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={saveBillingSettings}
+                      disabled={billingSaving || billingLoading}
+                    >
+                      {billingSaving ? "Saving…" : "Save auto top-up"}
+                    </button>
+                
+                    {billingLoading && (
+                      <div className="profile-hint">Loading settings…</div>
+                    )}
+                
+                    {billingError && (
+                      <div className="status-error">{billingError}</div>
+                    )}
+                  </div>
+                
+                  <div className="profile-hint">
+                    For now Mina only stores this preference. Later it will control
+                    real auto-purchases via Shopify/Stripe.
+                  </div>
+                </div>
+
                       UI only for now. Later: real Stripe + Shopify billing
                       limits.
                     </div>
