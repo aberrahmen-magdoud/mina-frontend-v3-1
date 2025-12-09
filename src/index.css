@@ -1,23 +1,10 @@
-/* MINA – only two colors:
+/* Mina – super simple theme
    - background: #EEEED2
    - text:       #080A00
-   Everything else is just opacity of the text color.
 */
 
 :root {
-  --mina-bg: #EEEED2;
-  --mina-text: #080A00;
-  --mina-border-soft: rgba(8, 10, 0, 0.16);
-  --mina-border-strong: rgba(8, 10, 0, 0.32);
-  --mina-muted: rgba(8, 10, 0, 0.6);
-}
-
-/* Reset */
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
+  color-scheme: light;
 }
 
 html,
@@ -25,318 +12,33 @@ body,
 #root {
   margin: 0;
   padding: 0;
-  height: 100%;
-  background-color: var(--mina-bg);
-  color: var(--mina-text);
+  background-color: #EEEED2;
+  color: #080A00;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
     "Segoe UI", sans-serif;
 }
 
-/* Kill any leftover dark backgrounds */
-
-body,
-#root,
-.mina-root,
-.mina-main,
-.mina-layout,
-.mina-left,
-.mina-right {
-  background-color: var(--mina-bg);
+/* Make sure main app container is also beige */
+.App {
+  min-height: 100vh;
+  background-color: #EEEED2;
+  color: #080A00;
 }
 
-/* Header */
-
-.mina-header,
-header {
-  background-color: var(--mina-bg);
-  border-bottom: 1px solid var(--mina-border-soft);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
+/* Generic reset */
+* {
+  box-sizing: border-box;
 }
 
-.mina-logo {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-/* Tabs + credits */
-
-.mina-tabs {
-  display: inline-flex;
-  gap: 4px;
-  border-radius: 999px;
-  padding: 2px;
-  border: 1px solid var(--mina-border-soft);
-}
-
-.tab {
-  border: none;
-  background: transparent;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  cursor: pointer;
-  color: var(--mina-muted);
-}
-
-.tab.active {
-  background-color: rgba(8, 10, 0, 0.06);
-  color: var(--mina-text);
-}
-
-.mina-credits-badge {
-  border-radius: 999px;
-  border: 1px solid var(--mina-border-soft);
-  padding: 4px 10px;
-  font-size: 12px;
-}
-
-/* Main layout */
-
-.mina-main {
-  display: flex;
-  justify-content: center;
-  padding: 16px;
-}
-
-.mina-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-  gap: 16px;
-  width: 100%;
-  max-width: 1400px;
-}
-
-/* Sections / cards */
-
-.mina-section,
-.output-shell,
-.profile-layout,
-.admin-layout {
-  background-color: var(--mina-bg);
-  border: 1px solid var(--mina-border-soft);
-  padding: 12px 14px;
-}
-
-.section-title {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  margin-bottom: 4px;
-}
-
-.step-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  border: 1px solid var(--mina-border-strong);
-}
-
-.step-dot.step-done {
-  background-color: rgba(8, 10, 0, 0.85);
-}
-
-/* Fields */
-
-.field,
-.field-inline {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-}
-
-.field-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.field-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: var(--mina-muted);
-}
-
-.field-unit {
-  font-size: 10px;
-  color: var(--mina-muted);
-}
-
-.field-input,
-.field-textarea,
+button,
+input,
+textarea,
 select {
-  border-radius: 0;
-  border: 1px solid var(--mina-border-soft);
-  padding: 7px 9px;
-  font-size: 13px;
-  background-color: var(--mina-bg);
-  color: var(--mina-text);
-  outline: none;
+  background-color: #f8f5e6;
+  color: #080A00;
+  border: 1px solid rgba(8, 10, 0, 0.25);
 }
 
-.field-textarea {
-  min-height: 70px;
-  resize: vertical;
-}
-
-.field-input:focus-visible,
-.field-textarea:focus-visible,
-select:focus-visible {
-  border-color: var(--mina-border-strong);
-}
-
-/* Toggle */
-
-.field-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.field-toggle input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-
-.toggle-label {
-  color: var(--mina-muted);
-}
-
-.toggle-label.on {
-  color: var(--mina-text);
-}
-
-/* Buttons */
-
-button {
-  font-family: inherit;
-}
-
-.primary-button,
-.secondary-button {
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 12px;
-  border: 1px solid var(--mina-text);
-  cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.primary-button {
-  background-color: rgba(8, 10, 0, 0.9);
-  color: var(--mina-bg);
-}
-
-.secondary-button {
-  background-color: transparent;
-  color: var(--mina-text);
-}
-
-button:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-/* Hints + status */
-
-.hint,
-.profile-hint {
-  font-size: 11px;
-  color: var(--mina-muted);
-}
-
-.status-error {
-  font-size: 11px;
-  color: rgba(8, 10, 0, 0.8);
-}
-
-/* Output (stills / motion) */
-
-.output-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.output-media {
-  border: 1px solid var(--mina-border-soft);
-  background-color: rgba(8, 10, 0, 0.04);
-  min-height: 260px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.output-media img,
-.output-media video {
-  max-width: 100%;
-  max-height: 100%;
-}
-
-.output-placeholder {
-  font-size: 13px;
-  color: var(--mina-muted);
-  text-align: center;
-}
-
-/* Auto top-up */
-
-.auto-topup-row {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.auto-topup-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px 10px;
-}
-
-/* Generic customer pills */
-
-.customer-pill,
-.customer-input {
-  border-radius: 999px;
-  border: 1px solid var(--mina-border-soft);
-  padding: 4px 8px;
-  font-size: 11px;
-  background-color: var(--mina-bg);
-}
-
-/* Profile / admin columns */
-
-.profile-layout,
-.admin-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.profile-body,
-.admin-columns {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px 14px;
-}
-
-/* Responsive */
-
-@media (max-width: 960px) {
-  .mina-main {
-    padding: 10px;
-  }
-
-  .mina-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
+a {
+  color: #080A00;
 }
