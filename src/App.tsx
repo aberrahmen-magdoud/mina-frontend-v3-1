@@ -349,6 +349,56 @@ const [billingError, setBillingError] = useState(null);
       setHistoryLoading(false);
     }
   };
+const fetchBillingSettings = async (cid: string) => {
+  if (!API_BASE_URL) return;
+  try {
+    setBillingLoading(true);
+    setBillingError(null);
+    const res = await fetch(
+      `${API_BASE_URL}/billing/settings?customerId=${encodeURIComponent(cid)}`
+    );
+    if (!res.ok) {
+      throw new Error(`Billing error: ${res.status}`);
+    }
+    const data = (await res.json()) as {
+      enabled?: boolean;
+      monthlyLimitPacks?: number;
+    };
+    setAutoTopupEnabled(Boolean(data.enabled));
+    setAutoTopupLimit(String(data.monthlyLimitPacks ?? 0));
+  } catch (err: any) {
+    setBillingError(err?.message || "Failed to load billing settings.");
+  } finally {
+    setBillingLoading(false);
+  }
+};
+
+const saveBillingSettings = async () => {
+  if (!customerId || !API_BASE_URL) return;
+  try {
+    setBillingSaving(true);
+    setBillingError(null);
+    const res = await fetch(`${API_BASE_URL}/billing/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerId,
+        enabled: autoTopupEnabled,
+        monthlyLimitPacks: Number(autoTopupLimit || "0"),
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(`Billing save error: ${res.status}`);
+    }
+    const data = await res.json();
+    setAutoTopupEnabled(Boolean(data.enabled));
+    setAutoTopupLimit(String(data.monthlyLimitPacks ?? 0));
+  } catch (err: any) {
+    setBillingError(err?.message || "Failed to save billing settings.");
+  } finally {
+    setBillingSaving(false);
+  }
+};
 
   const fetchAdminOverview = async () => {
     if (!isAdmin || !ADMIN_KEY) return;
