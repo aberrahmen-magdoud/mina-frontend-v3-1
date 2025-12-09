@@ -407,6 +407,101 @@ const saveBillingSettings = async () => {
     setBillingSaving(false);
   }
 };
+  const loadAdminData = async (secret: string) => {
+  if (!API_BASE_URL || !secret) return;
+  try {
+    setAdminLoading(true);
+    setAdminError(null);
+    const headers = { "x-admin-secret": secret };
+
+    const [summaryRes, customersRes] = await Promise.all([
+      fetch(`${API_BASE_URL}/admin/summary`, { headers }),
+      fetch(`${API_BASE_URL}/admin/customers`, { headers }),
+    ]);
+
+    if (!summaryRes.ok) throw new Error("Admin summary failed");
+    if (!customersRes.ok) throw new Error("Admin customers failed");
+
+    const summary = (await summaryRes.json()) as AdminSummary;
+    const customersJson = await customersRes.json();
+    const customers: AdminCustomer[] =
+      customersJson.customers ?? customersJson;
+
+    setAdminSummary(summary);
+    setAdminCustomers(customers);
+    setAdminMode(true);
+  } catch (err: any) {
+    console.error(err);
+    setAdminError(
+      err?.message || "Failed to load admin data. Check secret."
+    );
+    setAdminMode(false);
+  } finally {
+    setAdminLoading(false);
+  }
+};
+
+const handleAdminEnter = async () => {
+  if (!adminSecret) return;
+  window.localStorage.setItem(ADMIN_SECRET_STORAGE_KEY, adminSecret);
+  await loadAdminData(adminSecret);
+};
+
+const handleAdminAdjust = async (targetCustomerId: string) => {
+  if (!API_BASE_URL || !adminSecret) return;
+  const raw = adminAdjust[targetCustomerId];
+  const delta = Number(raw);
+  if (!Number.isFinite(delta) || delta === 0) return;
+
+  try {
+    setAdminLoading(true);
+    setAdminError(null);
+    const res = await fetch(`${API_BASE_URL}/admin/credits/adjust`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-secret": adminSecret,
+      },
+      body: JSON.stringify({ customerId: targetCustomerId, delta }),
+    });
+
+    if (!res.ok) throw new Error("Admin adjust failed");
+
+    const data = (await res.json()) as {
+      customerId: string;
+      balance: number;
+    };
+
+    // update list
+    setAdminCustomers((prev) =>
+      prev.map((c) =>
+        c.customerId === data.customerId
+          ? { ...c, balance: data.balance }
+          : c
+      )
+    );
+
+    // clear input
+    setAdminAdjust((prev) => ({ ...prev, [targetCustomerId]: "" }));
+
+    // refresh credits if this is the currently-viewed customer
+    if (customerId && String(customerId) === String(data.customerId)) {
+      await handleFetchCredits();
+    }
+  } catch (err: any) {
+    console.error(err);
+    setAdminError(err?.message || "Failed to adjust credits.");
+  } finally {
+    setAdminLoading(false);
+  }
+};
+useEffect(() => {
+  const stored = window.localStorage.getItem(ADMIN_SECRET_STORAGE_KEY);
+  if (stored) {
+    setAdminSecret(stored);
+    // don't auto-enter admin mode; you can click the button when you want
+  }
+}, []);
 
   const fetchAdminOverview = async () => {
     if (!isAdmin || !ADMIN_KEY) return;
