@@ -164,22 +164,19 @@ function getInitialCustomerId(): string {
       const params = new URLSearchParams(window.location.search);
       const fromUrl = params.get("customerId");
 
+      // If Shopify passes ?customerId=... → auto sign-in
       if (fromUrl && fromUrl.trim().length > 0) {
         return fromUrl.trim();
       }
-
-      const stored = window.localStorage.getItem("minaCustomerId");
-      if (stored && stored.trim().length > 0) {
-        return stored.trim();
-      }
     }
   } catch {
-    // ignore client storage errors
+    // ignore
   }
 
-  // no id yet → show login
+  // No customer in URL → force login screen
   return "";
 }
+
 
 function formatTime(ts?: string) {
   if (!ts) return "";
