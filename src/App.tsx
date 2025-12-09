@@ -1459,6 +1459,167 @@ useEffect(() => {
                 </div>
               </div>
             </section>
+            <section className="mina-section wide">
+              <div className="section-title">ADMIN · CREDITS & CUSTOMERS</div>
+              <div className="section-body">
+                <div className="field-row" style={{ alignItems: "flex-end" }}>
+                  <div className="field" style={{ maxWidth: 260 }}>
+                    <div className="field-label">Admin secret</div>
+                    <input
+                      className="field-input"
+                      type="password"
+                      value={adminSecret}
+                      onChange={(e) => setAdminSecret(e.target.value)}
+                    />
+                  </div>
+            
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={handleAdminEnter}
+                    disabled={!adminSecret || adminLoading}
+                  >
+                    {adminMode ? "Refresh admin data" : "Enter admin mode"}
+                  </button>
+                </div>
+            
+                {adminError && (
+                  <div className="status-error" style={{ marginTop: 6 }}>
+                    {adminError}
+                  </div>
+                )}
+            
+                {adminMode && (
+                  <>
+                    {adminSummary && (
+                      <div style={{ marginTop: 8, fontSize: 13 }}>
+                        <div>Total customers: {adminSummary.totalCustomers}</div>
+                        <div>Total credits: {adminSummary.totalCredits}</div>
+                        <div>
+                          Auto top-up on: {adminSummary.autoTopupOn} customers
+                        </div>
+                      </div>
+                    )}
+            
+                    <div style={{ marginTop: 12, fontSize: 13 }}>
+                      <div className="field-label" style={{ marginBottom: 4 }}>
+                        Customers
+                      </div>
+                      <div
+                        style={{
+                          maxHeight: 260,
+                          overflow: "auto",
+                          border: "1px solid rgba(8,10,0,0.18)",
+                          backgroundColor: "#EEEED2",
+                        }}
+                      >
+                        <table
+                          style={{
+                            width: "100%",
+                            borderCollapse: "collapse",
+                            fontSize: 12,
+                          }}
+                        >
+                          <thead>
+                            <tr>
+                              <th
+                                style={{
+                                  textAlign: "left",
+                                  padding: "4px 6px",
+                                  borderBottom: "1px solid rgba(8,10,0,0.18)",
+                                }}
+                              >
+                                Customer ID
+                              </th>
+                              <th
+                                style={{
+                                  textAlign: "right",
+                                  padding: "4px 6px",
+                                  borderBottom: "1px solid rgba(8,10,0,0.18)",
+                                }}
+                              >
+                                Balance
+                              </th>
+                              <th
+                                style={{
+                                  textAlign: "right",
+                                  padding: "4px 6px",
+                                  borderBottom: "1px solid rgba(8,10,0,0.18)",
+                                }}
+                              >
+                                Adjust
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {adminCustomers.map((c) => (
+                              <tr key={c.customerId}>
+                                <td
+                                  style={{
+                                    padding: "4px 6px",
+                                    borderBottom: "1px solid rgba(8,10,0,0.08)",
+                                  }}
+                                >
+                                  {c.customerId}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "4px 6px",
+                                    textAlign: "right",
+                                    borderBottom: "1px solid rgba(8,10,0,0.08)",
+                                  }}
+                                >
+                                  {c.balance}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "4px 6px",
+                                    textAlign: "right",
+                                    borderBottom: "1px solid rgba(8,10,0,0.08)",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  <input
+                                    type="number"
+                                    style={{ width: 70, marginRight: 4 }}
+                                    value={adminAdjust[c.customerId] ?? ""}
+                                    onChange={(e) =>
+                                      setAdminAdjust((prev) => ({
+                                        ...prev,
+                                        [c.customerId]: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                  <button
+                                    type="button"
+                                    className="secondary-button"
+                                    style={{ padding: "4px 8px", fontSize: 11 }}
+                                    onClick={() => handleAdminAdjust(c.customerId)}
+                                    disabled={adminLoading}
+                                  >
+                                    Apply
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                            {adminCustomers.length === 0 && (
+                              <tr>
+                                <td
+                                  colSpan={3}
+                                  style={{ padding: "6px", textAlign: "center" }}
+                                >
+                                  No customers yet.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </section>
 
             <section className="mina-section wide">
               <div className="section-title">
