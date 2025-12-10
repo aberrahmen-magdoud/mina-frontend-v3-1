@@ -661,48 +661,120 @@ button:disabled {
   gap: 16px;
 }
 
+/* top-left info, low attention */
+
 .mina-auth-logo {
-  font-size: 11px;
+  font-size: 12px;
+  opacity: 0.6;
 }
 
 .mina-auth-title {
-  font-size: 22px;
-  margin: 4px 0;
+  font-size: 12px;
+  margin: 2px 0 4px;
+  opacity: 0.6;
 }
 
 .mina-auth-text {
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.4;
   margin: 0;
   max-width: 340px;
+  color: rgba(8, 10, 0, 0.3);
 }
 
-/* auth actions */
+/* hero + actions */
 
 .mina-auth-actions {
   margin-top: 20px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
-/* fade blocks (in / out, push content) */
+/* hero button “Login with Google” */
+
+.mina-auth-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* main hero size */
+
+.mina-auth-main {
+  font-size: 22px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.mina-auth-main:hover {
+  opacity: 1;
+}
+
+.mina-auth-main:active {
+  opacity: 0.6;
+}
+
+/* when email mode is open → smaller, secondary */
+
+.mina-auth-main.small {
+  font-size: 15px;
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+.mina-auth-main.small:hover {
+  opacity: 0.9;
+}
+
+.mina-auth-main.small:active {
+  opacity: 0.5;
+}
+
+/* secondary text buttons */
+
+.mina-auth-link.secondary {
+  font-weight: 400;
+  opacity: 0.75;
+  font-size: 13px;
+}
+
+.mina-auth-link.secondary:hover {
+  opacity: 0.9;
+}
+
+.mina-auth-link.secondary:active {
+  opacity: 0.5;
+}
+
+/* fade blocks (smooth, from bottom, push content) */
 
 .fade-block {
-  transition: opacity 0.18s ease-out, max-height 0.18s ease-out,
-    transform 0.18s ease-out, margin-top 0.18s ease-out;
+  transition:
+    opacity 0.35s ease-out,
+    max-height 0.35s ease-out,
+    transform 0.35s ease-out,
+    margin-top 0.35s ease-out;
   opacity: 1;
-  max-height: 300px;
+  max-height: 400px;
   transform: translateY(0);
+  margin-top: 8px;
 }
 
 .fade-block.hidden {
   opacity: 0;
   max-height: 0;
-  transform: translateY(-4px);
+  transform: translateY(10px);
+  margin-top: 0;
   overflow: hidden;
   pointer-events: none;
-  margin-top: 0 !important;
 }
 
 /* email flow */
@@ -710,37 +782,46 @@ button:disabled {
 .mina-auth-or {
   margin-top: 12px;
   font-size: 13px;
+  color: rgba(8, 10, 0, 0.3);
 }
 
+/* email input block */
+
 .mina-auth-form {
-  margin-top: 8px;
+  margin-top: 4px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .mina-auth-label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
 }
+
+/* big, borderless field – only placeholder text */
 
 .mina-auth-input {
-  border: 1px solid var(--mina-border-soft);
-  padding: 8px 10px;
-  font-size: 15px;
+  border: none;
+  padding: 8px 0;
+  font-size: 18px;
   background: transparent;
   outline: none;
-}
-
-.mina-auth-input:focus {
-  border-color: var(--mina-border-strong);
+  color: var(--mina-text);
 }
 
 .mina-auth-input::placeholder {
-  opacity: 0.2;
+  opacity: 0.4;
   font-weight: 600;
+}
+
+/* “Sign in” button below, same text style rules as hero */
+
+.mina-auth-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: rgba(8, 10, 0, 0.3);
+  max-width: 340px;
 }
 
 .mina-auth-error {
@@ -749,9 +830,19 @@ button:disabled {
   color: var(--mina-text);
 }
 
-.mina-auth-hint {
-  margin-top: 10px;
-  font-size: 11px;
-  color: var(--mina-muted);
-  max-width: 340px;
+/* check-email view */
+
+@media (max-width: 960px) {
+  .mina-auth-shell {
+    flex-direction: column;
+  }
+
+  .mina-auth-left {
+    border-right: none;
+    border-bottom: 1px solid var(--mina-border-soft);
+  }
+
+  .mina-auth-right {
+    height: 260px;
+  }
 }
