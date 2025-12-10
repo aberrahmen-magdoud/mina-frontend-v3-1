@@ -153,19 +153,19 @@ export function AuthGate({ children }: AuthGateProps) {
 
   if (initializing) {
     return (
-        <div className="mina-auth-shell">
-          <div className="mina-auth-left">
-            <div className="mina-auth-brand">
-              <img
-                src="https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Minalogo.svg?v=1765367006"
-                alt="Mina"
-              />
-            </div>
-            <div className="mina-auth-card">
-            <p className="mina-auth-text">Loading…</p>
-          </div>
-          <div className="mina-auth-footer">Total users: 0</div>
-        </div>
+        <div className="mina-auth-left">
+  <div className="mina-auth-brand">
+    <img
+      src="https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Minalogo.svg?v=1765367006"
+      alt="Mina"
+    />
+  </div>
+  <div className="mina-auth-card">
+    <p className="mina-auth-text">Loading…</p>
+  </div>
+  <div className="mina-auth-footer">Total users: 0</div>
+</div>
+
         <div className="mina-auth-right" />
       </div>
     );
@@ -182,10 +182,18 @@ export function AuthGate({ children }: AuthGateProps) {
   // back appears in email mode (when there is text) and in check-email
   const showBack = (emailMode && hasEmail) || otpSent;
 
-  return (
-    <div className="mina-auth-shell">
-      <div className="mina-auth-left">
-        <div className="mina-auth-card">
+ 
+   return (
+  <div className="mina-auth-shell">
+    <div className="mina-auth-left">
+      <div className="mina-auth-brand">
+        <img
+          src="https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Minalogo.svg?v=1765367006"
+          alt="Mina"
+        />
+      </div>
+      <div className="mina-auth-card">
+
           {/* back icon */}
           <div
             className={
