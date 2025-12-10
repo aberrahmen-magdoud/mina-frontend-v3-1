@@ -1,5 +1,5 @@
 :root {
-  --mina-bg: #EEEED2;
+  --mina-bg: #EEEEE2;
   --mina-text: #080A00;
   --mina-border-soft: rgba(8, 10, 0, 0.16);
   --mina-border-strong: rgba(8, 10, 0, 0.32);
@@ -269,11 +269,135 @@ select {
   opacity: 0.9;
 }
 
+.mina-auth-link.secondary:active {/* auth layout 50 / 50 */
+
+.mina-auth-shell {
+  height: 100vh;
+  display: flex;
+  background: var(--mina-bg);
+  color: var(--mina-text);
+}
+
+.mina-auth-left,
+.mina-auth-right {
+  flex: 1;
+  min-width: 0;
+}
+
+.mina-auth-left {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 40px;
+  border-right: 1px solid var(--mina-border-soft);
+  overflow-y: auto;
+}
+
+.mina-auth-right {
+  background-image: url("https://cdn.shopify.com/s/files/1/0678/9254/3571/files/g-form-121277-appearance.imageUrl-mijzwt6a-cropped.jpg?v=1764402871");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.mina-auth-card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* used only in check-email / loading */
+
+.mina-auth-title {
+  font-size: 18px;
+  margin: 0 0 4px;
+}
+
+.mina-auth-text {
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0;
+  max-width: 340px;
+  color: rgba(8, 10, 0, 0.3);
+}
+
+/* actions */
+
+.mina-auth-actions {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* text buttons */
+
+.mina-auth-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* hero line: “Login with Google” */
+
+.mina-auth-main {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  opacity: 0.9;
+  text-decoration: underline;
+}
+
+.mina-auth-main:hover {
+  opacity: 1;
+}
+
+.mina-auth-main:active {
+  opacity: 0.6;
+}
+
+/* smaller main (sign in / open email) */
+
+.mina-auth-main.small {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  opacity: 0.85;
+}
+
+.mina-auth-main.small:hover {
+  opacity: 1;
+}
+
+.mina-auth-main.small:active {
+  opacity: 0.6;
+}
+
+/* secondary text (Use email instead, etc) – no underline */
+
+.mina-auth-link.secondary {
+  text-decoration: none;
+  font-weight: 400;
+  opacity: 0.75;
+  font-size: 14px;
+}
+
+.mina-auth-link.secondary:hover {
+  opacity: 0.9;
+}
+
 .mina-auth-link.secondary:active {
   opacity: 0.5;
 }
 
-/* back icon button (no text) */
+/* back icon button – appears only in flows */
 
 .mina-auth-back {
   display: inline-flex;
@@ -300,7 +424,7 @@ select {
   opacity: 0.5;
 }
 
-/* fade blocks – slower, smoother, slide from bottom */
+/* fade blocks – everything fades in/out, slides a bit */
 
 .fade-block {
   transition:
@@ -323,15 +447,13 @@ select {
   pointer-events: none;
 }
 
-/* email flow */
+/* small delay variant (for things that come slightly later) */
 
-.mina-auth-or {
-  margin-top: 12px;
-  font-size: 13px;
-  color: rgba(8, 10, 0, 0.3);
+.fade-block.delay {
+  transition-delay: 0.12s, 0.12s, 0.12s, 0.12s;
 }
 
-/* email input block */
+/* email flow */
 
 .mina-auth-form {
   margin-top: 4px;
@@ -345,23 +467,25 @@ select {
   flex-direction: column;
 }
 
-/* big, borderless field – only placeholder text initially */
+/* main typing size – same weight/size as hero */
 
 .mina-auth-input {
   border: none;
   padding: 8px 0;
-  font-size: 18px;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   background: transparent;
   outline: none;
   color: var(--mina-text);
 }
 
 .mina-auth-input::placeholder {
-  opacity: 0.4;
+  color: rgba(8, 10, 0, 0.3);
   font-weight: 600;
 }
 
-/* hint – tiny, low attention, only when typing */
+/* hint */
 
 .mina-auth-hint {
   margin-top: 8px;
@@ -392,56 +516,4 @@ select {
     height: 260px;
   }
 }
-/* --- MINA auth overrides --- */
 
-/* slower, smoother fade / slide */
-.fade-block {
-  transition:
-    opacity 0.6s ease-out,
-    max-height 0.6s ease-out,
-    transform 0.6s ease-out,
-    margin-top 0.6s ease-out;
-  opacity: 1;
-  max-height: 400px;
-  transform: translateY(0);
-  margin-top: 8px;
-}
-
-.fade-block.hidden {
-  opacity: 0;
-  max-height: 0;
-  transform: translateY(12px);
-  margin-top: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-/* delayed version: appears slightly after the thing above */
-.fade-block.delay {
-  transition-delay: 0.1s, 0.1s, 0.1s, 0.1s;
-}
-
-/* secondary buttons without underline */
-.mina-auth-link.secondary {
-  text-decoration: none;
-  font-weight: 400;
-  opacity: 0.75;
-  font-size: 13px;
-}
-
-/* main typing size = same as login with google */
-.mina-auth-input {
-  border: none;
-  padding: 8px 0;
-  font-size: 22px;
-  font-weight: 600;
-  background: transparent;
-  outline: none;
-  color: var(--mina-text);
-}
-
-/* placeholder: same black at 0.3 opacity */
-.mina-auth-input::placeholder {
-  color: rgba(8, 10, 0, 0.3);
-  font-weight: 600;
-}
