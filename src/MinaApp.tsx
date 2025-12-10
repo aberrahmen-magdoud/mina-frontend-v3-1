@@ -2,10 +2,13 @@
 // 1. Imports & environment
 // ==============================================
 import React, { useEffect, useState } from "react";
-import { supabase } from "./lib/supabaseClient"; 
+import { supabase } from "./lib/supabaseClient";
 
 const API_BASE_URL =
-  import.meta.env.VITE_MINA_API_BASE_URL ||
+  import.meta.env.VITE_MINA_API_BASE_URL || "";
+
+const TOPUP_URL =
+  import.meta.env.VITE_MINA_TOPUP_URL ||
   "https://www.faltastudio.com/checkouts/cn/hWN6EhbqQW5KrdIuBO3j5HKV/en-ae?_r=AQAB9NY_ccOV_da3y7VmTxJU-dDoLEOCdhP9sg2YlvDwLQQ";
 
 const ADMIN_KEY = import.meta.env.VITE_MINA_ADMIN_KEY || "";
@@ -153,13 +156,13 @@ type MotionItem = {
   createdAt: string;
 };
 
-  // ==============================================
+// ==============================================
 // 3. Helpers
 // ==============================================
 
 const devCustomerId = "8766256447571";
 
-function getInitialCustomerId(initialCustomerId: string): string {
+function getInitialCustomerId(initialCustomerId?: string): string {
   try {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
@@ -169,12 +172,16 @@ function getInitialCustomerId(initialCustomerId: string): string {
       if (fromUrl && fromUrl.trim().length > 0) {
         return fromUrl.trim();
       }
+
+      const stored = window.localStorage.getItem("minaCustomerId");
+      if (stored && stored.trim().length > 0) {
+        return stored.trim();
+      }
     }
   } catch {
     // ignore
   }
 
-  // Fallback to the id coming from Supabase
   if (initialCustomerId && initialCustomerId.trim().length > 0) {
     return initialCustomerId.trim();
   }
@@ -182,7 +189,6 @@ function getInitialCustomerId(initialCustomerId: string): string {
   // Last resort: no id
   return "";
 }
-
 
 function formatTime(ts?: string) {
   if (!ts) return "";
@@ -199,30 +205,27 @@ function classNames(
 ) {
   return parts.filter(Boolean).join(" ");
 }
+
 type MinaAppProps = {
-  initialCustomerId: string;
-  onSignOut?: () => void;
+  initialCustomerId?: string;
 };
 
 // ==============================================
 // 4. App component
 // ==============================================
-function MinaApp({ initialCustomerId, onSignOut }: MinaAppProps) {
+function MinaApp({ initialCustomerId }: MinaAppProps) {
   // --------------------------------------------
   // 4.1 Basic tab + customer
   // --------------------------------------------
-  
-    const [activeTab, setActiveTab] = useState<
-      "playground" | "profile" | "admin"
-    >("playground");
-    
-    const [customerId] = useState(() =>
-      getInitialCustomerId(initialCustomerId)
-    );
-    
-    const isAdmin = Boolean(ADMIN_KEY && customerId === devCustomerId);
+  const [activeTab, setActiveTab] = useState<
+    "playground" | "profile" | "admin"
+  >("playground");
 
+  const [customerId, setCustomerId] = useState(() =>
+    getInitialCustomerId(initialCustomerId)
+  );
 
+  const isAdmin = Boolean(ADMIN_KEY && customerId === devCustomerId);
 
   // --------------------------------------------
   // 4.2 Core state: health, credits, session
@@ -302,30 +305,28 @@ function MinaApp({ initialCustomerId, onSignOut }: MinaAppProps) {
   // --------------------------------------------
   // 4.7 Effects – persist customer & admin secret
   // --------------------------------------------
-      useEffect(() => {
-        try {
-          if (typeof window !== "undefined") {
-            window.localStorage.setItem("minaCustomerId", customerId);
-          }
-        } catch {
-          // ignore
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("minaCustomerId", customerId);
+      }
+    } catch {
+      // ignore
+    }
+  }, [customerId]);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const stored = window.localStorage.getItem(ADMIN_SECRET_STORAGE_KEY);
+        if (stored) {
+          setAdminSecret(stored);
         }
-      }, [customerId]);
-    
-      useEffect(() => {
-        try {
-          if (typeof window !== "undefined") {
-            const stored = window.localStorage.getItem(ADMIN_SECRET_STORAGE_KEY);
-            if (stored) {
-              setAdminSecret(stored);
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }, []);
-    
-     
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // ============================================
   // 5. Step “done” flags
@@ -337,116 +338,116 @@ function MinaApp({ initialCustomerId, onSignOut }: MinaAppProps) {
   const step3Done = Boolean(brief.trim().length);
   const step4Done = stillItems.length > 0;
   const step5Done = motionItems.length > 0;
-   
 
   // ============================================
-// 6. API helpers – core
-// ============================================
-
-const handleCheckHealth = async () => {
-  try {
-    setCheckingHealth(true);
-    setHealthError(null);
-    const res = await fetch(`${API_BASE_URL}/health`);
-    if (!res.ok) {
-      throw new Error(`Health error: ${res.status}`);
+  // 6. API helpers – core
+  // ============================================
+  const handleCheckHealth = async () => {
+    if (!API_BASE_URL) {
+      setHealthError("Missing API base URL (VITE_MINA_API_BASE_URL).");
+      return;
     }
-    const data = (await res.json()) as HealthPayload;
-    setHealth(data);
-  } catch (err: any) {
-    setHealthError(err?.message || "Failed to reach Mina API.");
-  } finally {
-    setCheckingHealth(false);
-  }
-};
-
-const handleFetchCredits = async () => {
-  const trimmedId = customerId?.trim();
-  if (!trimmedId) {
-    setCredits(null);
-    return;
-  }
-
-  try {
-    setCreditsLoading(true);
-    setCreditsError(null);
-    const res = await fetch(
-      `${API_BASE_URL}/credits/balance?customerId=${encodeURIComponent(
-        trimmedId
-      )}`
-    );
-    if (!res.ok) {
-      throw new Error(`Credits error: ${res.status}`);
+    try {
+      setCheckingHealth(true);
+      setHealthError(null);
+      const res = await fetch(`${API_BASE_URL}/health`);
+      if (!res.ok) {
+        throw new Error(`Health error: ${res.status}`);
+      }
+      const data = (await res.json()) as HealthPayload;
+      setHealth(data);
+    } catch (err: any) {
+      setHealthError(err?.message || "Failed to reach Mina API.");
+    } finally {
+      setCheckingHealth(false);
     }
-    const data = (await res.json()) as CreditsBalance;
-    setCredits(data);
-  } catch (err: any) {
-    setCreditsError(err?.message || "Failed to load credits.");
-  } finally {
-    setCreditsLoading(false);
-  }
-};
+  };
 
-const handleStartSession = async () => {
-  const trimmedId = customerId?.trim();
-  if (!trimmedId) {
-    return;
-  }
-
-  try {
-    setSessionStarting(true);
-    setSessionError(null);
-    const res = await fetch(`${API_BASE_URL}/sessions/start`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        customerId: trimmedId,
-        platform,
-        title: "Mina Editorial Session",
-      }),
-    });
-    if (!res.ok) {
-      throw new Error(`Session error: ${res.status}`);
+  const handleFetchCredits = async () => {
+    const trimmedId = customerId?.trim();
+    if (!trimmedId || !API_BASE_URL) {
+      setCredits(null);
+      return;
     }
-    const data = await res.json();
-    if (data?.session?.id) {
-      setSessionId(data.session.id);
-    } else {
-      throw new Error("Missing session id in response.");
+
+    try {
+      setCreditsLoading(true);
+      setCreditsError(null);
+      const res = await fetch(
+        `${API_BASE_URL}/credits/balance?customerId=${encodeURIComponent(
+          trimmedId
+        )}`
+      );
+      if (!res.ok) {
+        throw new Error(`Credits error: ${res.status}`);
+      }
+      const data = (await res.json()) as CreditsBalance;
+      setCredits(data);
+    } catch (err: any) {
+      setCreditsError(err?.message || "Failed to load credits.");
+    } finally {
+      setCreditsLoading(false);
     }
-  } catch (err: any) {
-    setSessionError(err?.message || "Failed to start session.");
-  } finally {
-    setSessionStarting(false);
-  }
-};
+  };
 
-const fetchHistory = async (cid: string) => {
-  const trimmedId = cid?.trim();
-  if (!trimmedId) {
-    setHistory(null);
-    return;
-  }
-
-  try {
-    setHistoryLoading(true);
-    setHistoryError(null);
-    const res = await fetch(
-      `${API_BASE_URL}/history/customer/${encodeURIComponent(trimmedId)}`
-    );
-    if (!res.ok) {
-      throw new Error(`History error: ${res.status}`);
+  const handleStartSession = async () => {
+    const trimmedId = customerId?.trim();
+    if (!trimmedId || !API_BASE_URL) {
+      return;
     }
-    const data = (await res.json()) as CustomerHistory;
-    setHistory(data);
-  } catch (err: any) {
-    setHistoryError(err?.message || "Failed to load history.");
-  } finally {
-    setHistoryLoading(false);
-  }
-};
 
+    try {
+      setSessionStarting(true);
+      setSessionError(null);
+      const res = await fetch(`${API_BASE_URL}/sessions/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId: trimmedId,
+          platform,
+          title: "Mina Editorial Session",
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(`Session error: ${res.status}`);
+      }
+      const data = await res.json();
+      if (data?.session?.id) {
+        setSessionId(data.session.id);
+      } else {
+        throw new Error("Missing session id in response.");
+      }
+    } catch (err: any) {
+      setSessionError(err?.message || "Failed to start session.");
+    } finally {
+      setSessionStarting(false);
+    }
+  };
 
+  const fetchHistory = async (cid: string) => {
+    const trimmedId = cid?.trim();
+    if (!trimmedId || !API_BASE_URL) {
+      setHistory(null);
+      return;
+    }
+
+    try {
+      setHistoryLoading(true);
+      setHistoryError(null);
+      const res = await fetch(
+        `${API_BASE_URL}/history/customer/${encodeURIComponent(trimmedId)}`
+      );
+      if (!res.ok) {
+        throw new Error(`History error: ${res.status}`);
+      }
+      const data = (await res.json()) as CustomerHistory;
+      setHistory(data);
+    } catch (err: any) {
+      setHistoryError(err?.message || "Failed to load history.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   // ============================================
   // 7. API helpers – billing & admin
@@ -540,7 +541,13 @@ const fetchHistory = async (cid: string) => {
 
   const handleAdminEnter = async () => {
     if (!adminSecret) return;
-    window.localStorage.setItem(ADMIN_SECRET_STORAGE_KEY, adminSecret);
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(ADMIN_SECRET_STORAGE_KEY, adminSecret);
+      }
+    } catch {
+      // ignore
+    }
     await loadAdminData(adminSecret);
   };
 
@@ -591,7 +598,7 @@ const fetchHistory = async (cid: string) => {
   };
 
   const fetchAdminOverview = async () => {
-    if (!isAdmin || !ADMIN_KEY) return;
+    if (!isAdmin || !ADMIN_KEY || !API_BASE_URL) return;
     try {
       setAdminLoading(true);
       setAdminError(null);
@@ -612,39 +619,41 @@ const fetchHistory = async (cid: string) => {
     }
   };
 
-      // ============================================
-    // 8. Bootstrap on first load + when customer changes
-    // ============================================
-    
-    useEffect(() => {
-      const bootstrap = async () => {
-        await handleCheckHealth();
-    
-        const trimmed = customerId?.trim();
-        if (!trimmed) {
-          // not logged in yet → only health
-          return;
-        }
-    
-        await handleFetchCredits();
-        await handleStartSession();
-        await fetchHistory(trimmed);
-        await fetchBillingSettings(trimmed);
-    
-        if (isAdmin) {
-          await fetchAdminOverview();
-        }
-      };
-    
-      void bootstrap();
-    
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [customerId, isAdmin]);
+  // ============================================
+  // 8. Bootstrap on first load + when customer changes
+  // ============================================
+  useEffect(() => {
+    const bootstrap = async () => {
+      await handleCheckHealth();
+
+      const trimmed = customerId?.trim();
+      if (!trimmed) {
+        // not logged in yet → only health
+        return;
+      }
+
+      await handleFetchCredits();
+      await handleStartSession();
+      await fetchHistory(trimmed);
+      await fetchBillingSettings(trimmed);
+
+      if (isAdmin) {
+        await fetchAdminOverview();
+      }
+    };
+
+    void bootstrap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId, isAdmin]);
 
   // ============================================
   // 9. API helpers – stills & motions
   // ============================================
   const handleGenerateStill = async () => {
+    if (!API_BASE_URL) {
+      setStillError("Missing API base URL (VITE_MINA_API_BASE_URL).");
+      return;
+    }
     try {
       setStillGenerating(true);
       setStillError(null);
@@ -722,7 +731,7 @@ const fetchHistory = async (cid: string) => {
   };
 
   const handleSuggestMotion = async () => {
-    if (!stillItems.length) return;
+    if (!stillItems.length || !API_BASE_URL) return;
     const currentStill = stillItems[stillIndex] || stillItems[0];
     if (!currentStill) return;
 
@@ -762,6 +771,11 @@ const fetchHistory = async (cid: string) => {
   };
 
   const handleGenerateMotion = async () => {
+    if (!API_BASE_URL) {
+      setMotionError("Missing API base URL (VITE_MINA_API_BASE_URL).");
+      return;
+    }
+
     if (!stillItems.length) {
       setMotionError("Generate at least one still image first.");
       return;
@@ -848,6 +862,7 @@ const fetchHistory = async (cid: string) => {
   };
 
   const handleLike = async (type: "image" | "motion") => {
+    if (!API_BASE_URL) return;
     try {
       const isImage = type === "image";
       const item = isImage
@@ -882,80 +897,75 @@ const fetchHistory = async (cid: string) => {
       // ignore like errors
     }
   };
+
   const handleLogout = async () => {
-  // 1) Tell Supabase to end the auth session
-  try {
-    await supabase.auth.signOut();
-  } catch {
-    // ignore Supabase errors, we'll still clear local state
-  }
-
-  // 2) Clear Mina’s own state & URL params
-  setCustomerId("");
-  setLoginInput("");
-
-  try {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("minaCustomerId");
-
-      const params = new URLSearchParams(window.location.search);
-      params.delete("customerId");
-      const newUrl =
-        window.location.pathname +
-        (params.toString() ? "?" + params.toString() : "");
-      window.history.replaceState({}, "", newUrl);
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // ignore Supabase errors
     }
-  } catch {
-    // ignore
-  }
 
-  setSessionId(null);
-  setStillItems([]);
-  setStillIndex(0);
-  setMotionItems([]);
-  setMotionIndex(0);
-  setHistory(null);
-  setCredits(null);
-};
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem("minaCustomerId");
 
+        const params = new URLSearchParams(window.location.search);
+        params.delete("customerId");
+        const newUrl =
+          window.location.pathname +
+          (params.toString() ? "?" + params.toString() : "");
+        window.history.replaceState({}, "", newUrl);
+      }
+    } catch {
+      // ignore
+    }
+
+    setCustomerId("");
+    setSessionId(null);
+    setStillItems([]);
+    setStillIndex(0);
+    setMotionItems([]);
+    setMotionIndex(0);
+    setHistory(null);
+    setCredits(null);
+  };
 
   // ============================================
   // 10. Derived values
   // ============================================
-  
   const currentStill = stillItems[stillIndex] || null;
   const currentMotion = motionItems[motionIndex] || null;
-  
+
   const imageCost = credits?.meta?.imageCost ?? 1;
   const motionCost = credits?.meta?.motionCost ?? 5;
-  
+
   const hasCreditsForStill = credits ? credits.balance >= imageCost : true;
   const hasCreditsForMotion = credits ? credits.balance >= motionCost : true;
-  
+
   const canGenerateStill =
     !stillGenerating &&
     !!sessionId &&
     !!productImageUrl.trim() &&
     !!brief.trim() &&
     hasCreditsForStill;
-  
+
   const canGenerateMotion =
     !motionGenerating &&
     !!sessionId &&
     !!currentStill &&
     !!motionDescription.trim() &&
     hasCreditsForMotion;
-  
+
   const creditsLabel = (() => {
     if (creditsLoading) return "Credits: …";
     if (creditsError) return "Credits error";
-  
+
     const baseDetail = `img ${imageCost} · motion ${motionCost}`;
-  
+
     if (!credits) {
       return `Credits: — (${baseDetail})`;
     }
-  
+
     const base = `Credits: ${credits.balance}`;
     if (credits.balance <= 0) {
       return `${base} (add more to generate) · ${baseDetail}`;
@@ -965,19 +975,17 @@ const fetchHistory = async (cid: string) => {
     }
     return `${base} (${baseDetail})`;
   })();
-  
+
   const isConnected = Boolean(health?.ok);
-  
+
   const historyStills: ApiGeneration[] =
     history?.generations.filter((g) => g.type === "image") ?? [];
   const historyMotions: ApiGeneration[] =
     history?.generations.filter((g) => g.type === "motion") ?? [];
 
-
-   // ============================================
+  // ============================================
   // 11. JSX
   // ============================================
-
   return (
     <div className="mina-root">
       {/* 11.1 Header / tabs / credits badge */}
@@ -1002,7 +1010,10 @@ const fetchHistory = async (cid: string) => {
             </button>
             {isAdmin && (
               <button
-                className={classNames("tab", activeTab === "admin" && "active")}
+                className={classNames(
+                  "tab",
+                  activeTab === "admin" && "active"
+                )}
                 onClick={() => setActiveTab("admin")}
               >
                 Admin
@@ -1021,21 +1032,26 @@ const fetchHistory = async (cid: string) => {
               fontSize: 12,
             }}
           >
-            <span style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span
+              style={{
+                maxWidth: 160,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
               {customerId}
             </span>
             <button
-                type="button"
-                className="link-button subtle"
-                onClick={onSignOut}
-              >
-                Sign out
-              </button>
-
+              type="button"
+              className="link-button subtle"
+              onClick={handleLogout}
+            >
+              Sign out
+            </button>
           </div>
         </div>
       </header>
-
 
       {/* 11.2 Main content area (tabs body) */}
       <main className="mina-main">
@@ -1236,42 +1252,43 @@ const fetchHistory = async (cid: string) => {
                         onChange={(e) => setPlatform(e.target.value)}
                       >
                         <option value="tiktok">TikTok / Reels (9:16)</option>
-                        <option value="instagram">Instagram post (4:5)</option>
+                        <option value="instagram">
+                          Instagram post (4:5)
+                        </option>
                         <option value="youtube">YouTube (16:9)</option>
                       </select>
                     </div>
                   </div>
 
-                                      <div className="section-actions">
-                      <button
-                        className="primary-button"
-                        onClick={handleGenerateStill}
-                        disabled={!canGenerateStill}
-                      >
-                        {stillGenerating
-                          ? "Creating still…"
-                          : `Create still (−${imageCost} credits)`}
-                      </button>
-                      {stillError && (
-                        <div className="error-text">
-                          {stillError}
-                          {TOPUP_URL && (
-                            <>
-                              {" "}
-                              ·{" "}
-                              <a
-                                href={TOPUP_URL}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                Buy credits
-                              </a>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
+                  <div className="section-actions">
+                    <button
+                      className="primary-button"
+                      onClick={handleGenerateStill}
+                      disabled={!canGenerateStill}
+                    >
+                      {stillGenerating
+                        ? "Creating still…"
+                        : `Create still (−${imageCost} credits)`}
+                    </button>
+                    {stillError && (
+                      <div className="error-text">
+                        {stillError}
+                        {TOPUP_URL && (
+                          <>
+                            {" "}
+                            ·{" "}
+                            <a
+                              href={TOPUP_URL}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Buy credits
+                            </a>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </section>
 
@@ -1327,7 +1344,7 @@ const fetchHistory = async (cid: string) => {
                     />
                   </div>
 
-                    {motionError && (
+                  {motionError && (
                     <div className="status-error">
                       {motionError}
                       {TOPUP_URL && (
@@ -1348,7 +1365,6 @@ const fetchHistory = async (cid: string) => {
                   {motionSuggestError && (
                     <div className="status-error">{motionSuggestError}</div>
                   )}
-
                 </div>
               </section>
             </div>
@@ -1536,7 +1552,7 @@ const fetchHistory = async (cid: string) => {
         {activeTab === "profile" && (
           <div className="profile-layout">
             {/* 11.2.2.1 Profile – account, credits, auto top-up, history */}
-                        <section className="mina-section wide">
+            <section className="mina-section wide">
               <div className="section-title">
                 <span className="step-dot step-done" />
                 <span>Profile · Account & billing</span>
@@ -1562,7 +1578,6 @@ const fetchHistory = async (cid: string) => {
                 </div>
 
                 <div className="profile-body">
-
                   <div>
                     <div className="profile-label">Shopify customer id</div>
                     <div className="profile-value">{customerId}</div>
@@ -1570,7 +1585,8 @@ const fetchHistory = async (cid: string) => {
                       You can link from Shopify like:
                       <br />
                       <code>
-                        https://mina.yourdomain.com?customerId=&#123;&#123; customer.id &#125;&#125;
+                        https://mina.yourdomain.com?customerId=
+                        {"{{ customer.id }}"}
                       </code>
                     </div>
                   </div>
@@ -2055,4 +2071,3 @@ const fetchHistory = async (cid: string) => {
 }
 
 export default MinaApp;
-
