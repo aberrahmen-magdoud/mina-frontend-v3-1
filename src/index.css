@@ -1,13 +1,12 @@
 :root {
-  /* MAIN PALETTE – change here only */
-  --mina-bg: #eeeED2; /* your “white” */
-  --mina-text: #080a00; /* your “black” */
+  --mina-bg: #EEEED2;
+  --mina-text: #080A00;
   --mina-border-soft: rgba(8, 10, 0, 0.16);
   --mina-border-strong: rgba(8, 10, 0, 0.32);
   --mina-muted: rgba(8, 10, 0, 0.6);
 }
 
-/* Reset / base */
+/* reset / base */
 
 *,
 *::before,
@@ -55,7 +54,7 @@ select {
   border-radius: 0;
 }
 
-/* ========== App shell ========== */
+/* app shell */
 
 .mina-root {
   min-height: 100%;
@@ -65,7 +64,7 @@ select {
   color: var(--mina-text);
 }
 
-/* Header */
+/* header */
 
 .mina-header {
   display: flex;
@@ -77,10 +76,10 @@ select {
 
 .mina-logo {
   font-size: 12px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  line-height: 1;
+  letter-spacing: 0.12em;
 }
+
+/* right header */
 
 .mina-header-right {
   display: flex;
@@ -89,7 +88,7 @@ select {
   font-size: 12px;
 }
 
-/* Status pill in header */
+/* status */
 
 .status-row {
   display: flex;
@@ -99,18 +98,14 @@ select {
 }
 
 .status-label {
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--mina-muted);
 }
 
 .status-chip {
   padding: 2px 6px;
   border: 1px solid var(--mina-border-soft);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
+  font-size: 11px;
 }
 
 .status-chip.ok {
@@ -121,46 +116,46 @@ select {
   border-color: var(--mina-border-strong);
 }
 
-/* Tabs */
+/* tabs */
 
 .mina-tabs {
   display: inline-flex;
-  border: 1px solid var(--mina-border-soft);
-  padding: 2px;
-  gap: 2px;
+  border-bottom: 1px solid var(--mina-border-soft);
+  gap: 12px;
+  padding-bottom: 2px;
 }
 
 .tab {
-  padding: 5px 10px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
   border: none;
-  background: transparent;
+  padding: 0;
+  margin: 0;
+  background: none;
   cursor: pointer;
+  font-size: 12px;
+  opacity: 0.6;
 }
 
 .tab.active {
-  background: var(--mina-text);
-  color: var(--mina-bg);
+  opacity: 1;
+  border-bottom: 1px solid var(--mina-text);
 }
 
-/* Credits badge */
+/* credits */
 
 .mina-credits-badge {
   font-size: 11px;
-  padding: 4px 8px;
+  padding: 2px 6px;
   border: 1px solid var(--mina-border-soft);
 }
 
-/* ========== Main 50/50 layout ========== */
+/* main layout 50 / 50 */
 
 .mina-main {
   flex: 1;
   display: flex;
   justify-content: center;
   padding: 16px;
-  overflow: hidden; /* scroll inside columns */
+  overflow: hidden;
 }
 
 .mina-layout {
@@ -181,11 +176,11 @@ select {
   padding-bottom: 16px;
 }
 
-/* Sections */
+/* sections */
 
 .mina-section {
   border: 1px solid var(--mina-border-soft);
-  padding: 10px 12px;
+  padding: 12px 14px;
   background: var(--mina-bg);
   display: flex;
   flex-direction: column;
@@ -199,10 +194,8 @@ select {
 .section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
 }
 
 .section-body {
@@ -213,17 +206,16 @@ select {
 }
 
 .step-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  border: 1px solid var(--mina-text);
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--mina-border-strong);
 }
 
 .step-dot.step-done {
   background: var(--mina-text);
 }
 
-/* Fields */
+/* fields */
 
 .field {
   display: flex;
@@ -245,8 +237,7 @@ select {
 
 .field-label {
   font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
+  color: var(--mina-muted);
 }
 
 .field-unit {
@@ -257,7 +248,8 @@ select {
 
 .field-input,
 .field-textarea,
-.customer-input {
+.customer-input,
+select {
   border: 1px solid var(--mina-border-soft);
   padding: 6px 8px;
   font-size: 13px;
@@ -267,7 +259,8 @@ select {
 
 .field-input:focus,
 .field-textarea:focus,
-.customer-input:focus {
+.customer-input:focus,
+select:focus {
   border-color: var(--mina-border-strong);
 }
 
@@ -292,73 +285,82 @@ select {
 
 .toggle-label {
   font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-.toggle-label.on {
-  font-weight: 500;
-}
-
-/* Buttons */
-
-button {
-  cursor: pointer;
-  border-radius: 0;
-  border: 1px solid transparent;
-  background: transparent;
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.primary-button {
-  border-color: var(--mina-text);
-  background: var(--mina-text);
-  color: var(--mina-bg);
-  padding: 7px 12px;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-}
-
-.secondary-button {
-  border-color: var(--mina-border-soft);
-  padding: 7px 12px;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-}
-
-.section-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  margin-top: 6px;
-}
-
-/* Link-style buttons */
-
-.link-button {
-  border: none;
-  padding: 0;
-  background: none;
-  font-size: 12px;
-  text-transform: none;
-  letter-spacing: 0;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-
-.link-button.subtle {
   color: var(--mina-muted);
 }
 
-/* Text helpers */
+.toggle-label.on {
+  color: var(--mina-text);
+}
+
+/* button system – text only, no boxes */
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.primary-button,
+.secondary-button,
+.link-button,
+.mina-auth-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+/* primary = bold, 0.9 → 1 → 0.6 */
+
+.primary-button,
+.mina-auth-link.primary {
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.primary-button:hover,
+.mina-auth-link.primary:hover {
+  opacity: 1;
+}
+
+.primary-button:active,
+.mina-auth-link.primary:active {
+  opacity: 0.6;
+}
+
+/* secondary = regular, 0.75 → 0.9 → 0.5 */
+
+.secondary-button,
+.link-button,
+.mina-auth-link.secondary {
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+.secondary-button:hover,
+.link-button:hover,
+.mina-auth-link.secondary:hover {
+  opacity: 0.9;
+}
+
+.secondary-button:active,
+.link-button:active,
+.mina-auth-link.secondary:active {
+  opacity: 0.5;
+}
+
+/* text helpers */
 
 .hint {
   font-size: 12px;
@@ -376,11 +378,10 @@ button:disabled {
   color: var(--mina-text);
 }
 
-/* Outputs */
+/* outputs */
 
 .output-shell {
   border: 1px solid var(--mina-border-soft);
-  min-height: 160px;
   display: flex;
   flex-direction: column;
 }
@@ -425,8 +426,6 @@ button:disabled {
 .output-tag {
   border: 1px solid var(--mina-border-soft);
   padding: 2px 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
   font-size: 10px;
 }
 
@@ -441,7 +440,15 @@ button:disabled {
   white-space: pre-wrap;
 }
 
-/* Auto top-up */
+.section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+/* auto top-up */
 
 .auto-topup-row {
   display: flex;
@@ -465,11 +472,7 @@ button:disabled {
   font-size: 12px;
 }
 
-.customer-input {
-  min-width: 160px;
-}
-
-/* Profile & admin */
+/* profile & admin */
 
 .profile-layout,
 .admin-layout {
@@ -487,8 +490,7 @@ button:disabled {
 
 .profile-label {
   font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
+  color: var(--mina-muted);
 }
 
 .profile-value {
@@ -529,7 +531,7 @@ button:disabled {
   gap: 16px;
 }
 
-/* Gallery */
+/* gallery */
 
 .gallery-grid {
   margin-top: 8px;
@@ -572,12 +574,7 @@ button:disabled {
 }
 
 .gallery-tag {
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
   font-size: 10px;
-}
-
-.gallery-tag.subtle {
   color: var(--mina-muted);
 }
 
@@ -586,11 +583,11 @@ button:disabled {
   color: var(--mina-muted);
 }
 
-/* Responsive */
+/* responsive */
 
 @media (max-width: 960px) {
   body {
-    overflow: auto; /* allow normal scroll on small screens */
+    overflow: auto;
   }
 
   .mina-main {
@@ -625,7 +622,7 @@ button:disabled {
   }
 }
 
-/* ========== Mina auth page ========== */
+/* auth layout 50 / 50 */
 
 .mina-auth-shell {
   height: 100vh;
@@ -666,14 +663,11 @@ button:disabled {
 
 .mina-auth-logo {
   font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
 }
 
 .mina-auth-title {
   font-size: 22px;
-  font-weight: 500;
-  margin: 0;
+  margin: 4px 0;
 }
 
 .mina-auth-text {
@@ -683,9 +677,39 @@ button:disabled {
   max-width: 340px;
 }
 
+/* auth actions */
+
+.mina-auth-actions {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* fade blocks (in / out, push content) */
+
+.fade-block {
+  transition: opacity 0.18s ease-out, max-height 0.18s ease-out,
+    transform 0.18s ease-out, margin-top 0.18s ease-out;
+  opacity: 1;
+  max-height: 300px;
+  transform: translateY(0);
+}
+
+.fade-block.hidden {
+  opacity: 0;
+  max-height: 0;
+  transform: translateY(-4px);
+  overflow: hidden;
+  pointer-events: none;
+  margin-top: 0 !important;
+}
+
+/* email flow */
+
 .mina-auth-or {
+  margin-top: 12px;
   font-size: 13px;
-  margin: 16px 0 0;
 }
 
 .mina-auth-form {
@@ -696,18 +720,16 @@ button:disabled {
 }
 
 .mina-auth-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  font-size: 13px;
 }
 
 .mina-auth-input {
   border: 1px solid var(--mina-border-soft);
-  padding: 6px 8px;
-  font-size: 13px;
+  padding: 8px 10px;
+  font-size: 15px;
   background: transparent;
   outline: none;
 }
@@ -716,43 +738,9 @@ button:disabled {
   border-color: var(--mina-border-strong);
 }
 
-.mina-auth-actions {
-  margin-top: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.mina-auth-btn {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--mina-border-soft);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  text-align: center;
-  background: transparent;
-  cursor: pointer;
-}
-
-.mina-auth-btn.primary {
-  border-color: var(--mina-text);
-  background: var(--mina-text);
-  color: var(--mina-bg);
-}
-
-.mina-auth-btn.secondary {
-  border-color: var(--mina-border-soft);
-}
-
-.mina-auth-btn.ghost {
-  border: none;
-  padding: 0;
-  text-align: left;
-  text-transform: none;
-  letter-spacing: 0;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+.mina-auth-input::placeholder {
+  opacity: 0.2;
+  font-weight: 600;
 }
 
 .mina-auth-error {
@@ -762,7 +750,7 @@ button:disabled {
 }
 
 .mina-auth-hint {
-  margin-top: 8px;
+  margin-top: 10px;
   font-size: 11px;
   color: var(--mina-muted);
   max-width: 340px;
