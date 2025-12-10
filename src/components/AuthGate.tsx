@@ -24,7 +24,7 @@ function openInboxFor(email: string | null) {
 
   if (domain === "gmail.com") {
     window.open("https://mail.google.com", "_blank");
-    return;
+    ;
   }
 
   if (["outlook.com", "hotmail.com", "live.com"].includes(domain)) {
@@ -153,9 +153,15 @@ export function AuthGate({ children }: AuthGateProps) {
 
   if (initializing) {
     return (
-      <div className="mina-auth-shell">
-        <div className="mina-auth-left">
-          <div className="mina-auth-card">
+        <div className="mina-auth-shell">
+          <div className="mina-auth-left">
+            <div className="mina-auth-brand">
+              <img
+                src="https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Minalogo.svg?v=1765367006"
+                alt="Mina"
+              />
+            </div>
+            <div className="mina-auth-card">
             <p className="mina-auth-text">Loading…</p>
           </div>
           <div className="mina-auth-footer">Total users: 0</div>
