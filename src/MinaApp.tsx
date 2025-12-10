@@ -882,33 +882,42 @@ const fetchHistory = async (cid: string) => {
       // ignore like errors
     }
   };
-  const handleLogout = () => {
-    setCustomerId("");
-    setLoginInput("");
+  const handleLogout = async () => {
+  // 1) Tell Supabase to end the auth session
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // ignore Supabase errors, we'll still clear local state
+  }
 
-    try {
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem("minaCustomerId");
+  // 2) Clear Mina’s own state & URL params
+  setCustomerId("");
+  setLoginInput("");
 
-        const params = new URLSearchParams(window.location.search);
-        params.delete("customerId");
-        const newUrl =
-          window.location.pathname +
-          (params.toString() ? "?" + params.toString() : "");
-        window.history.replaceState({}, "", newUrl);
-      }
-    } catch {
-      // ignore
+  try {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("minaCustomerId");
+
+      const params = new URLSearchParams(window.location.search);
+      params.delete("customerId");
+      const newUrl =
+        window.location.pathname +
+        (params.toString() ? "?" + params.toString() : "");
+      window.history.replaceState({}, "", newUrl);
     }
+  } catch {
+    // ignore
+  }
 
-    setSessionId(null);
-    setStillItems([]);
-    setStillIndex(0);
-    setMotionItems([]);
-    setMotionIndex(0);
-    setHistory(null);
-    setCredits(null);
-  };
+  setSessionId(null);
+  setStillItems([]);
+  setStillIndex(0);
+  setMotionItems([]);
+  setMotionIndex(0);
+  setHistory(null);
+  setCredits(null);
+};
+
 
   // ============================================
   // 10. Derived values
