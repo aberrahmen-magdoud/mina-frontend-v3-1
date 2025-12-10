@@ -408,8 +408,8 @@ export function AuthGate({ children }: AuthGateProps) {
 
         <div className="mina-auth-footer">
           {totalUsers !== null
-            ? `${formatUserCount(totalUsers)} creatives using Mina`
-            : "creatives using Mina"}
+            ? `${formatUserCount(totalUsers)} curators using Mina`
+            : "curators using Mina"}
         </div>
       </div>
       <div className="mina-auth-right" />
