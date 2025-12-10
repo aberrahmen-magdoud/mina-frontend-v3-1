@@ -330,15 +330,21 @@ select {
   left: 0;
   top: 50%;
   width: 100%;
-  transform: translateY(-50%);
+  /* slight slide up when appearing, no layout jump */
+  transform: translateY(-40%);
   opacity: 1;
-  transition: opacity 0.45s ease-out;
+  transition:
+    opacity 0.45s ease-out,
+    transform 0.45s ease-out;
 }
 
 .fade-overlay.hidden {
   opacity: 0;
+  /* start a bit lower so it moves up as it appears */
+  transform: translateY(-30%);
   pointer-events: none;
 }
+
 
 /* email form */
 
