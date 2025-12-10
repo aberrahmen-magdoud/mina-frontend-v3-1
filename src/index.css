@@ -1,597 +1,6 @@
-:root {
-  --mina-bg: #F2F0DF;
-  --mina-text: #080A00;
-  --mina-border-soft: rgba(8, 10, 0, 0.16);
-  --mina-border-strong: rgba(8, 10, 0, 0.32);
-  --mina-muted: rgba(8, 10, 0, 0.6);
-  /* Mina global animation timings */
-  --mina-anim-fade: 0.35s;
-  --mina-anim-slide: 0.55s;
-}
-
-/* reset */
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
-  height: 100%;
-}
-
-body {
-  margin: 0;
-  background: var(--mina-bg);
-  color: var(--mina-text);
-  font-family: "Schibsted Grotesk", system-ui, -apple-system, BlinkMacSystemFont,
-    "SF Pro Text", sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-
-a {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  text-decoration-thickness: 1px;
-}
-
-button,
-input,
-textarea,
-select {
-  font: inherit;
-  color: inherit;
-  background: transparent;
-  border-radius: 0;
-}
-
-img,
-video {
-  max-width: 100%;
-  height: auto;
-  display: block;
-}
-
-/* app shell */
-
-.mina-root {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--mina-bg);
-  color: var(--mina-text);
-}
-
-/* header */
-
-.mina-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--mina-border-soft);
-}
-
-.mina-logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  letter-spacing: 0.14em;
-}
-
-.mina-logo img {
-  height: 18px;
-  display: block;
-}
-
-.mina-header-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  font-size: 12px;
-}
-
-/* tabs + credits */
-
-.mina-tabs {
-  display: inline-flex;
-  gap: 10px;
-  border-bottom: 1px solid var(--mina-border-soft);
-  padding-bottom: 2px;
-}
-
-.tab {
-  border: none;
-  background: none;
-  padding: 0;
-  margin: 0;
-  cursor: pointer;
-  font-size: 13px;
-  opacity: 0.7;
-}
-
-.tab.active {
-  opacity: 1;
-  border-bottom: 1px solid var(--mina-text);
-}
-
-.mina-credits-badge {
-  font-size: 11px;
-  padding: 2px 6px;
-  border: 1px solid var(--mina-border-soft);
-}
-
-/* status chip */
-
-.status-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-}
-
-.status-label {
-  color: var(--mina-muted);
-}
-
-.status-chip {
-  padding: 2px 6px;
-  border: 1px solid var(--mina-border-soft);
-}
-
-.status-chip.ok {
-  border-color: var(--mina-border-strong);
-}
-
-.status-chip.error {
-  border-color: var(--mina-border-strong);
-}
-
-/* main layout */
-
-.mina-main {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  padding: 16px;
-}
-
-.mina-layout {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  width: 100%;
-  max-width: 1440px;
-}
-
-.mina-left,
-.mina-right {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-height: calc(100vh - 72px);
-  overflow-y: auto;
-  padding-bottom: 16px;
-}
-
-/* sections */
-
-.mina-section {
-  border: 1px solid var(--mina-border-soft);
-  padding: 12px 14px;
-  background: var(--mina-bg);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.mina-section.wide {
-  grid-column: 1 / -1;
-}
-
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-}
-
-.section-body {
-  font-size: 13px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.section-actions {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.step-dot {
-  width: 8px;
-  height: 8px;
-  border: 1px solid var(--mina-border-strong);
-}
-
-.step-dot.step-done {
-  background: var(--mina-text);
-}
-
-/* fields */
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-}
-
-.field-inline {
-  flex: 1;
-}
-
-.field-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.field-label {
-  font-size: 11px;
-  color: var(--mina-muted);
-}
-
-.field-input,
-.field-textarea,
-.customer-input,
-select {
-  border: 1px solid var(--mina-border-soft);
-  padding: 6px 8px;
-  font-size: 13px;
-  outline: none;
-}
-
-.field-input:focus,
-.field-textarea:focus,
-.customer-input:focus,
-select:focus {
-  border-color: var(--mina-border-strong);
-}
-
-.field-textarea {
-  resize: vertical;
-  min-height: 80px;
-  line-height: 1.4;
-}
-
-.field-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.field-toggle input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-}
-
-.field-unit {
-  font-size: 11px;
-  color: var(--mina-muted);
-}
-
-.toggle-label {
-  font-size: 12px;
-  color: var(--mina-muted);
-}
-
-.toggle-label.on {
-  color: var(--mina-text);
-}
-
-/* buttons */
-
-button {
-  cursor: pointer;
-  border: none;
-  background: none;
-  padding: 0;
-}
-
-button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.primary-button,
-.secondary-button,
-.link-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: none;
-  background: none;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  text-decoration-thickness: 1px;
-}
-
-/* primary text buttons */
-
-.primary-button {
-  font-weight: 600;
-  opacity: 0.9;
-}
-
-.primary-button:hover {
-  opacity: 1;
-}
-
-.primary-button:active {
-  opacity: 0.6;
-}
-
-/* secondary */
-
-.secondary-button,
-.link-button {
-  font-weight: 400;
-  opacity: 0.75;
-}
-
-.secondary-button:hover,
-.link-button:hover {
-  opacity: 0.9;
-}
-
-.secondary-button:active,
-.link-button:active {
-  opacity: 0.5;
-}
-
-/* text helpers */
-
-.hint {
-  font-size: 12px;
-  color: var(--mina-muted);
-}
-
-.hint.small {
-  font-size: 11px;
-}
-
-.error-text,
-.status-error {
-  font-size: 12px;
-}
-
-/* outputs */
-
-.output-shell {
-  border: 1px solid var(--mina-border-soft);
-  display: flex;
-  flex-direction: column;
-}
-
-.output-media {
-  border-bottom: 1px solid var(--mina-border-soft);
-  background: rgba(8, 10, 0, 0.03);
-  padding: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-}
-
-.output-placeholder {
-  padding: 16px;
-  font-size: 12px;
-  color: var(--mina-muted);
-}
-
-.output-meta {
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.output-tag-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.output-tag {
-  border: 1px solid var(--mina-border-soft);
-  padding: 2px 6px;
-  font-size: 10px;
-}
-
-.output-tag.subtle {
-  border-color: rgba(8, 10, 0, 0.12);
-  color: var(--mina-muted);
-}
-
-.output-prompt {
-  font-size: 12px;
-  white-space: pre-wrap;
-}
-
-/* auto top-up */
-
-.auto-topup-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.auto-topup-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px 10px;
-}
-
-.customer-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--mina-border-soft);
-  padding: 4px 8px;
-  font-size: 12px;
-}
-
-/* profile & admin */
-
-.profile-layout,
-.admin-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.profile-body,
-.admin-columns {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px 14px;
-}
-
-.admin-column {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-}
-
-.profile-label {
-  font-size: 11px;
-  color: var(--mina-muted);
-}
-
-.profile-value {
-  font-size: 13px;
-}
-
-.profile-hint {
-  font-size: 11px;
-  color: var(--mina-muted);
-  margin-top: 4px;
-}
-
-.credits-list {
-  list-style: none;
-  margin: 4px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-}
-
-.credits-delta {
-  width: 42px;
-  display: inline-block;
-}
-
-.credits-reason {
-  flex: 1;
-}
-
-.credits-time {
-  white-space: nowrap;
-  color: var(--mina-muted);
-}
-
-/* gallery */
-
-.gallery-grid {
-  margin-top: 8px;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-}
-
-.gallery-item {
-  border: 1px solid var(--mina-border-soft);
-  display: flex;
-  flex-direction: column;
-}
-
-.gallery-media {
-  border-bottom: 1px solid var(--mina-border-soft);
-  background: rgba(8, 10, 0, 0.03);
-  padding: 8px;
-  min-height: 140px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.gallery-meta {
-  padding: 6px 8px;
-}
-
-.gallery-meta-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 11px;
-}
-
-.gallery-tag {
-  font-size: 10px;
-  color: var(--mina-muted);
-}
-
-.gallery-date {
-  font-size: 11px;
-  color: var(--mina-muted);
-}
-
-/* responsive main */
-
-@media (max-width: 960px) {
-  .mina-main {
-    padding: 10px;
-  }
-
-  .mina-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .mina-left,
-  .mina-right {
-    max-height: none;
-  }
-
-  .mina-section.wide {
-    grid-column: auto;
-  }
-}
-
-/* legacy auth helpers (no-op but safe if still used anywhere) */
-.mina-auth-btn,
-.mina-auth-logo,
-.mina-auth-separator,
-.primary,
-.ghost {
-}
-
 /* --- Mina animation presets --- */
 
-/* Mina fading effect */
+/* Mina fading effect: use .mina-fade or .fade-block */
 .mina-fade,
 .fade-block {
   transition: opacity var(--mina-anim-fade) ease-out;
@@ -609,28 +18,19 @@ button:disabled {
   transition-delay: 0.12s;
 }
 
-/* Mina slide effect – baseline is centered, hidden is slightly lower
-   so intro comes from bottom to the place. */
-.mina-slide,
-.fade-overlay.mina-slide {
-  opacity: 1;
-  transform: translateY(-50%);
+/* Optional generic slide effect */
+.mina-slide {
   transition:
     opacity var(--mina-anim-slide) ease-out,
     transform var(--mina-anim-slide) ease-out;
+  opacity: 1;
+  transform: translateY(0);
 }
 
-.mina-slide.hidden,
-.fade-overlay.mina-slide.hidden {
+.mina-slide.hidden {
   opacity: 0;
-  transform: translateY(calc(-50% + 16px)); /* below center */
+  transform: translateY(-12px);
   pointer-events: none;
-}
-
-/* delayed slide-in (used on email panel so it waits for hero to almost finish) */
-.mina-slide-delay,
-.fade-overlay.mina-slide-delay {
-  transition-delay: 0.25s;
 }
 
 /* auth layout 50 / 50 */
@@ -651,7 +51,7 @@ button:disabled {
 .mina-auth-left {
   position: relative;
   display: flex;
-  align-items: center; /* center vertically */
+  align-items: center;
   justify-content: center;
   padding: 32px 40px;
   border-right: 1px solid var(--mina-border-soft);
@@ -798,20 +198,76 @@ button:disabled {
   opacity: 0.5;
 }
 
-/* stack so hero + email share same center */
+/* stack: one clean baseline for all hero states */
 
 .mina-auth-stack {
   margin-top: 4px;
   position: relative;
-  height: 130px;
+  height: 72px; /* controls hero baseline, same for all states */
 }
 
-.fade-overlay {
+/* panels: one visible at a time, aligned to top */
+
+.fade-overlay.auth-panel {
   position: absolute;
   left: 0;
-  top: 50%;
+  top: 0;
   width: 100%;
-  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* base transitions for hero panels */
+
+.auth-panel {
+  transition:
+    opacity var(--mina-anim-fade) ease-out,
+    transform var(--mina-anim-slide) ease-out;
+}
+
+/* GOOGLE PANEL
+   - visible: on the line
+   - hidden: slides slightly up and fades out
+*/
+
+.auth-panel--google.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.auth-panel--google.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-12px);
+}
+
+/* EMAIL PANEL
+   - hidden: sits below the line
+   - visible: moves up to the line AFTER google is almost gone
+*/
+
+.auth-panel--email.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(12px); /* below baseline */
+}
+
+.auth-panel--email.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0); /* exactly same place as google */
+  transition-delay: var(--mina-anim-slide); /* wait so no overlap */
+}
+
+/* CHECK EMAIL PANEL
+   - just fade on the same line
+*/
+
+.auth-panel--check.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 /* email form */
