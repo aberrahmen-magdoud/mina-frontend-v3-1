@@ -55,6 +55,9 @@ export function AuthGate({ children }: AuthGateProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Google opening state (text only, no disable)
+  const [googleOpening, setGoogleOpening] = useState(false);
+
   const [bypassForNow] = useState(false);
 
   // load session
@@ -136,6 +139,7 @@ export function AuthGate({ children }: AuthGateProps) {
 
   const handleGoogleLogin = async () => {
     setError(null);
+    setGoogleOpening(true);
     try {
       const { error: supaError } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -144,8 +148,10 @@ export function AuthGate({ children }: AuthGateProps) {
         },
       });
       if (supaError) throw supaError;
+      // on success we leave the page, no need to reset
     } catch (err: any) {
       setError(err?.message || "Failed to start Google login.");
+      setGoogleOpening(false);
     }
   };
 
@@ -177,12 +183,12 @@ export function AuthGate({ children }: AuthGateProps) {
     <div className="mina-auth-shell">
       <div className="mina-auth-left">
         <div className="mina-auth-card">
-          {/* back icon – smooth fade, fixed vertical spacing */}
+          {/* back icon – uses Mina fading effect, position is fixed */}
           <div
             className={
               showBack
-                ? "fade-block mina-auth-back-wrapper"
-                : "fade-block hidden mina-auth-back-wrapper"
+                ? "mina-fade mina-auth-back-wrapper"
+                : "mina-fade hidden mina-auth-back-wrapper"
             }
           >
             <button
@@ -216,12 +222,12 @@ export function AuthGate({ children }: AuthGateProps) {
               {/* main sign-in view */}
               <div className="mina-auth-actions">
                 <div className="mina-auth-stack">
-                  {/* Panel 1 – hero + use email (initial slide/fade in) */}
+                  {/* Panel 1 – hero + use email (Mina slide effect in) */}
                   <div
                     className={
                       emailMode
-                        ? "fade-overlay hidden initial"
-                        : "fade-overlay initial"
+                        ? "fade-overlay mina-slide initial hidden"
+                        : "fade-overlay mina-slide initial"
                     }
                   >
                     <button
@@ -229,7 +235,7 @@ export function AuthGate({ children }: AuthGateProps) {
                       className="mina-auth-link mina-auth-main"
                       onClick={handleGoogleLogin}
                     >
-                      Login with Google
+                      {googleOpening ? "Opening Google…" : "Login with Google"}
                     </button>
 
                     <div style={{ marginTop: "8px" }}>
@@ -247,12 +253,12 @@ export function AuthGate({ children }: AuthGateProps) {
                     </div>
                   </div>
 
-                  {/* Panel 2 – email field + sign in + hint (slides from bottom) */}
+                  {/* Panel 2 – email field + sign in + hint (Mina slide effect, bottom→top) */}
                   <div
                     className={
                       emailMode
-                        ? "fade-overlay email-panel"
-                        : "fade-overlay email-panel hidden"
+                        ? "fade-overlay mina-slide"
+                        : "fade-overlay mina-slide hidden"
                     }
                   >
                     <form
@@ -269,7 +275,7 @@ export function AuthGate({ children }: AuthGateProps) {
                         />
                       </label>
 
-                      {/* sign-in + hint appear together, just opacity (no movement) */}
+                      {/* sign-in + hint appear together with Mina fading effect (no movement) */}
                       <div
                         className={
                           hasEmail ? "fade-block delay" : "fade-block hidden"
