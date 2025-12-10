@@ -6,7 +6,7 @@
   --mina-muted: rgba(8, 10, 0, 0.6);
   /* Mina global animation timings */
   --mina-anim-fade: 0.35s;
-  --mina-anim-slide: 0.55s;
+  --mina-anim-slide: 0.30s;
 }
 
 /* reset */
