@@ -5,6 +5,24 @@ import { supabase } from "../lib/supabaseClient";
 type AuthGateProps = {
   children: React.ReactNode;
 };
+const API_BASE_URL =
+  import.meta.env.VITE_MINA_API_BASE_URL ||
+  "https://mina-editorial-ai-api.onrender.com";
+
+async function syncShopifyWelcome(email: string | null | undefined) {
+  const clean = (email || "").trim().toLowerCase();
+  if (!API_BASE_URL || !clean) return;
+
+  try {
+    await fetch(`${API_BASE_URL}/auth/shopify-sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: clean }),
+    });
+  } catch {
+    // soft fail – we don't block login on this
+  }
+}
 
 // Decide where "Open email app" should send the user, WITHOUT JS window.open
 function getInboxHref(email: string | null): string {
@@ -69,28 +87,22 @@ export function AuthGate({ children }: AuthGateProps) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, newSession) => {
-      setSession(newSession);
-
-      if (event === "SIGNED_OUT") {
-        setEmail("");
-        setOtpSent(false);
-        setSentTo(null);
-        setError(null);
-        setEmailMode(false);
-        setGoogleOpening(false);
+  setSession(newSession);
+  if (event === "SIGNED_IN" && newSession?.user?.email) {
+    const email = newSession.user.email;
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("minaCustomerId", email);
       }
+    } catch {
+      // ignore
+    }
 
-      if (event === "SIGNED_IN" && newSession?.user?.email) {
-        try {
-          window.localStorage.setItem(
-            "minaCustomerId",
-            newSession.user.email
-          );
-        } catch {
-          // ignore
-        }
-      }
-    });
+    // Tell backend to sync Shopify customer + Welcome matcha
+    void syncShopifyWelcome(email);
+  }
+});
+
 
     return () => {
       mounted = false;
