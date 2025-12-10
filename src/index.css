@@ -1,50 +1,156 @@
 :root {
-  --mina-bg: #EEEEE2;
   --mina-bg: #F2F0DF;
---mina-text: #080A00;
---mina-border-soft: rgba(8, 10, 0, 0.16);
---mina-border-strong: rgba(8, 10, 0, 0.32);
-@@ -27,7 +27,7 @@ body {
-font-family: "Schibsted Grotesk", system-ui, -apple-system, BlinkMacSystemFont,
-"SF Pro Text", sans-serif;
--webkit-font-smoothing: antialiased;
-  overflow: hidden; /* scroll inside columns, not whole page */
+  --mina-text: #080A00;
+  --mina-border-soft: rgba(8, 10, 0, 0.16);
+  --mina-border-strong: rgba(8, 10, 0, 0.32);
+  --mina-muted: rgba(8, 10, 0, 0.6);
+}
+
+/* reset / base */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--mina-bg);
+  color: var(--mina-text);
+  font-family: "Schibsted Grotesk", system-ui, -apple-system, BlinkMacSystemFont,
+    "SF Pro Text", sans-serif;
+  -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
 
 a {
-@@ -79,8 +79,6 @@ select {
-letter-spacing: 0.12em;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
 }
 
-/* right header */
+img,
+video {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border-radius: 0;
+}
+
+/* app shell */
+
+.mina-root {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--mina-bg);
+  color: var(--mina-text);
+}
+
+/* header */
+
+.mina-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--mina-border-soft);
+}
+
+.mina-logo {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
 
 .mina-header-right {
-display: flex;
-align-items: center;
-@@ -131,8 +129,8 @@ select {
-margin: 0;
-background: none;
-cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 16px;
   font-size: 12px;
-  opacity: 0.6;
+}
+
+/* status */
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.status-label {
+  font-size: 11px;
+  color: var(--mina-muted);
+}
+
+.status-chip {
+  padding: 2px 6px;
+  border: 1px solid var(--mina-border-soft);
+  font-size: 11px;
+}
+
+.status-chip.ok {
+  border-color: var(--mina-border-strong);
+}
+
+.status-chip.error {
+  border-color: var(--mina-border-strong);
+}
+
+/* tabs */
+
+.mina-tabs {
+  display: inline-flex;
+  border-bottom: 1px solid var(--mina-border-soft);
+  gap: 12px;
+  padding-bottom: 2px;
+}
+
+.tab {
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: none;
+  cursor: pointer;
   font-size: 13px;
   opacity: 0.7;
 }
 
 .tab.active {
-@@ -148,71 +146,167 @@ select {
-border: 1px solid var(--mina-border-soft);
+  opacity: 1;
+  border-bottom: 1px solid var(--mina-text);
 }
 
-/* auth layout 50 / 50 */
+/* credits */
+
+.mina-credits-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid var(--mina-border-soft);
+}
+
 /* main layout 50 / 50 */
 
-.mina-auth-shell {
-  height: 100vh;
 .mina-main {
   flex: 1;
-display: flex;
+  display: flex;
   justify-content: center;
   padding: 16px;
   overflow: hidden;
@@ -73,38 +179,23 @@ display: flex;
 .mina-section {
   border: 1px solid var(--mina-border-soft);
   padding: 12px 14px;
-background: var(--mina-bg);
-  color: var(--mina-text);
+  background: var(--mina-bg);
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.mina-auth-left,
-.mina-auth-right {
-  flex: 1;
-  min-width: 0;
 .mina-section.wide {
   grid-column: 1 / -1;
 }
 
-.mina-auth-left {
 .section-title {
-display: flex;
-align-items: center;
-  justify-content: center;
-  padding: 32px 40px;
-  border-right: 1px solid var(--mina-border-soft);
-  overflow-y: auto;
+  display: flex;
+  align-items: center;
   gap: 6px;
   font-size: 13px;
 }
 
-.mina-auth-right {
-  background-image: url("https://cdn.shopify.com/s/files/1/0678/9254/3571/files/g-form-121277-appearance.imageUrl-mijzwt6a-cropped.jpg?v=1764402871");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
 .section-body {
   font-size: 13px;
   display: flex;
@@ -112,9 +203,6 @@ align-items: center;
   gap: 8px;
 }
 
-.mina-auth-card {
-  width: 100%;
-  max-width: 380px;
 .step-dot {
   width: 8px;
   height: 8px;
@@ -128,20 +216,16 @@ align-items: center;
 /* fields */
 
 .field {
-display: flex;
-flex-direction: column;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
   font-size: 13px;
 }
 
-/* title / text only used in loading + check-email states */
 .field-inline {
   flex: 1;
 }
 
-.mina-auth-title {
-  font-size: 18px;
-  margin: 0 0 4px;
 .field-row {
   display: flex;
   gap: 10px;
@@ -149,7 +233,6 @@ flex-direction: column;
   align-items: flex-start;
 }
 
-.mina-auth-text {
 .field-label {
   font-size: 11px;
   color: var(--mina-muted);
@@ -167,7 +250,7 @@ flex-direction: column;
 select {
   border: 1px solid var(--mina-border-soft);
   padding: 6px 8px;
-font-size: 13px;
+  font-size: 13px;
   background: transparent;
   outline: none;
 }
@@ -182,7 +265,7 @@ select:focus {
 .field-textarea {
   resize: vertical;
   min-height: 80px;
-line-height: 1.4;
+  line-height: 1.4;
 }
 
 .field-toggle {
@@ -195,30 +278,20 @@ line-height: 1.4;
 .field-toggle input[type="checkbox"] {
   width: 14px;
   height: 14px;
-margin: 0;
-  max-width: 340px;
-  color: rgba(8, 10, 0, 0.3);
+  margin: 0;
 }
 
-/* hero + actions */
 .toggle-label {
   font-size: 12px;
   color: var(--mina-muted);
 }
 
-.mina-auth-actions {
-  margin-top: 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 .toggle-label.on {
   color: var(--mina-text);
 }
 
-/* text buttons – base */
 /* buttons */
 
-.mina-auth-link {
 button {
   cursor: pointer;
   border: none;
@@ -234,65 +307,52 @@ button:disabled {
 .primary-button,
 .secondary-button,
 .link-button {
-display: inline-flex;
-align-items: center;
-gap: 4px;
-@@ -222,54 +316,291 @@ select {
-text-decoration: underline;
-text-decoration-thickness: 1px;
-text-underline-offset: 2px;
-  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
 }
 
-/* main hero “Login with Google” (big) */
 /* primary text buttons */
 
-.mina-auth-main {
-  font-size: 22px;
 .primary-button {
-font-weight: 600;
-opacity: 0.9;
+  font-weight: 600;
+  opacity: 0.9;
 }
 
-.mina-auth-main:hover {
 .primary-button:hover {
-opacity: 1;
+  opacity: 1;
 }
 
-.mina-auth-main:active {
 .primary-button:active {
-opacity: 0.6;
+  opacity: 0.6;
 }
 
-/* smaller version used for secondary actions (sign in, open email) */
 /* secondary text buttons */
 
-.mina-auth-main.small {
-  font-size: 15px;
 .secondary-button,
 .link-button {
-font-weight: 400;
-opacity: 0.75;
-}
-
-.mina-auth-main.small:hover {
-.secondary-button:hover,
-.link-button:hover {
-opacity: 0.9;
-}
-
-.mina-auth-main.small:active {
-.secondary-button:active,
-.link-button:active {
-opacity: 0.5;
-}
-
-/* secondary text buttons */
-/* text helpers */
-
-.mina-auth-link.secondary {
   font-weight: 400;
   opacity: 0.75;
+}
+
+.secondary-button:hover,
+.link-button:hover {
+  opacity: 0.9;
+}
+
+.secondary-button:active,
+.link-button:active {
+  opacity: 0.5;
+}
+
+/* text helpers */
+
 .hint {
   font-size: 12px;
   color: var(--mina-muted);
@@ -425,11 +485,9 @@ opacity: 0.5;
 }
 
 .profile-value {
-font-size: 13px;
+  font-size: 13px;
 }
 
-.mina-auth-link.secondary:hover {
-  opacity: 0.9;
 .profile-hint {
   font-size: 11px;
   color: var(--mina-muted);
@@ -446,7 +504,6 @@ font-size: 13px;
   font-size: 12px;
 }
 
-.mina-auth-link.secondary:active {/* auth layout 50 / 50 */
 .credits-delta {
   width: 42px;
   display: inline-block;
@@ -579,7 +636,7 @@ font-size: 13px;
   max-width: 420px;
   display: flex;
   flex-direction: column;
-  transform: translateY(-20px); /* push whole card up */
+  transform: translateY(-20px); /* move whole block up a bit */
 }
 
 /* used only in check-email / loading */
@@ -597,7 +654,7 @@ font-size: 13px;
   color: rgba(8, 10, 0, 0.3);
 }
 
-/* actions wrapper under back */
+/* actions wrapper */
 
 .mina-auth-actions {
   margin-top: 16px;
@@ -620,12 +677,12 @@ font-size: 13px;
   cursor: pointer;
 }
 
-/* hero line: “Login with Google” */
+/* hero line: Login with Google */
 
 .mina-auth-main {
   font-size: 24px;
   font-weight: 600;
-  letter-spacing: -0.01em; /* tighter */
+  letter-spacing: -0.01em;
   opacity: 0.9;
   text-decoration: underline;
 }
@@ -638,7 +695,7 @@ font-size: 13px;
   opacity: 0.6;
 }
 
-/* smaller main (sign in / open email) */
+/* smaller main (Sign in / Open email app) */
 
 .mina-auth-main.small {
   font-size: 18px;
@@ -655,7 +712,7 @@ font-size: 13px;
   opacity: 0.6;
 }
 
-/* secondary text (Use email instead, etc) – no underline */
+/* secondary text – no underline */
 
 .mina-auth-link.secondary {
   text-decoration: none;
@@ -672,7 +729,7 @@ font-size: 13px;
   opacity: 0.5;
 }
 
-/* back icon button – fades via fade-block wrapper */
+/* back icon button */
 
 .mina-auth-back {
   display: inline-flex;
@@ -699,7 +756,7 @@ font-size: 13px;
   opacity: 0.5;
 }
 
-/* fade blocks – for back, sign in, hint, check-email buttons */
+/* generic fade blocks (for back / sign in / hint / check-email buttons) */
 
 .fade-block {
   transition:
@@ -726,12 +783,12 @@ font-size: 13px;
   transition-delay: 0.12s, 0.12s, 0.12s, 0.12s;
 }
 
-/* stacked panels for hero <-> email with no jumping */
+/* stacked hero/email block to avoid jump */
 
 .mina-auth-stack {
   margin-top: 4px;
   position: relative;
-  height: 140px; /* fixes height so no jump */
+  height: 140px; /* fixed height to avoid jump */
 }
 
 .fade-overlay {
@@ -763,7 +820,7 @@ font-size: 13px;
   flex-direction: column;
 }
 
-/* main typing size – same weight/size as hero */
+/* main typing size – same as hero */
 
 .mina-auth-input {
   border: none;
@@ -812,4 +869,3 @@ font-size: 13px;
     height: 260px;
   }
 }
-
