@@ -1,26 +1,5 @@
-{
-  "name": "mina-editorial-ai",
-  "version": "1.0.0",
-  "type": "module",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "db:push": "prisma db push"
-  },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.21.1",
-    "replicate": "^0.32.0",
-    "openai": "^4.73.0",
-    "uuid": "^9.0.1",
-    "@prisma/client": "^6.0.0",
-    "prisma": "^6.0.0"
-  }
-}
-{
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  }
+"scripts": {
+  "dev": "vite",
+  "build": "vite build",
+  "preview": "vite preview"
 }
