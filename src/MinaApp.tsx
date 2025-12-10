@@ -990,7 +990,7 @@ function MinaApp({ initialCustomerId }: MinaAppProps) {
     <div className="mina-root">
       {/* 11.1 Header / tabs / credits badge */}
       <header className="mina-header">
-        <div className="mina-logo">MINA · Editorial AI</div>
+        <div className="mina-logo">   <img     src="https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Minalogo.svg?v=1765367006"     alt="Mina"   /> </div>
         <div className="mina-header-right">
           <div className="mina-tabs">
             <button
