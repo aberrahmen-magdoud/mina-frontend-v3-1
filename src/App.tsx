@@ -158,7 +158,7 @@ type MotionItem = {
 
 const devCustomerId = "8766256447571";
 
-function getInitialCustomerId(): string {
+function getInitialCustomerId(initialCustomerId: string): string {
   try {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
@@ -173,7 +173,12 @@ function getInitialCustomerId(): string {
     // ignore
   }
 
-  // No customer in URL → force login screen
+  // Fallback to the id coming from Supabase
+  if (initialCustomerId && initialCustomerId.trim().length > 0) {
+    return initialCustomerId.trim();
+  }
+
+  // Last resort: no id
   return "";
 }
 
@@ -193,25 +198,29 @@ function classNames(
 ) {
   return parts.filter(Boolean).join(" ");
 }
+type MinaAppProps = {
+  initialCustomerId: string;
+  onSignOut?: () => void;
+};
 
 // ==============================================
 // 4. App component
 // ==============================================
-function App() {
+function MinaApp({ initialCustomerId, onSignOut }: MinaAppProps) {
   // --------------------------------------------
   // 4.1 Basic tab + customer
   // --------------------------------------------
   
-  const [activeTab, setActiveTab] = useState<
-    "playground" | "profile" | "admin"
-  >("playground");
-  
-  const [customerId, setCustomerId] = useState(getInitialCustomerId);
-  
-  // login text field, used only on login screen
-  const [loginInput, setLoginInput] = useState(customerId || "");
-  
-  const isAdmin = Boolean(ADMIN_KEY && customerId === devCustomerId);
+    const [activeTab, setActiveTab] = useState<
+      "playground" | "profile" | "admin"
+    >("playground");
+    
+    const [customerId] = useState(() =>
+      getInitialCustomerId(initialCustomerId)
+    );
+    
+    const isAdmin = Boolean(ADMIN_KEY && customerId === devCustomerId);
+
 
 
   // --------------------------------------------
@@ -327,29 +336,7 @@ function App() {
   const step3Done = Boolean(brief.trim().length);
   const step4Done = stillItems.length > 0;
   const step5Done = motionItems.length > 0;
-    // --------------------------------------------
-    // 5.1 Login handler
-    // --------------------------------------------
-    
-    const handleLoginSubmit = () => {
-      const trimmed = loginInput.trim();
-      if (!trimmed) return;
-    
-      setCustomerId(trimmed);
-    
-      try {
-        if (typeof window !== "undefined") {
-          const params = new URLSearchParams(window.location.search);
-          params.set("customerId", trimmed);
-          const newUrl =
-            window.location.pathname + "?" + params.toString();
-          window.history.replaceState({}, "", newUrl);
-        }
-      } catch {
-        // ignore URL / history errors
-      }
-    };
-
+   
 
   // ============================================
 // 6. API helpers – core
@@ -981,49 +968,6 @@ const fetchHistory = async (cid: string) => {
   // 11. JSX
   // ============================================
 
-// if not logged in, show simple login
-if (!customerId || !customerId.trim()) {
-  return (
-    <div className="mina-main">
-      <div style={{ maxWidth: 420, margin: "40px auto" }}>
-        <section className="mina-section">
-          <div className="section-title">
-            <span className="step-dot" />
-            <span>Sign in to Mina</span>
-          </div>
-          <div className="section-body">
-            <div className="field">
-              <div className="field-label">Customer ID or email</div>
-              <input
-                className="field-input"
-                placeholder="Paste your Shopify customer id or email"
-                value={loginInput}
-                onChange={(e) => setLoginInput(e.target.value)}
-              />
-            </div>
-
-            <div className="hint small" style={{ marginTop: 4 }}>
-              Mina uses this to find your credits and history.
-            </div>
-
-            <div style={{ marginTop: 12 }}>
-              <button
-                type="button"
-                className="primary-button"
-                onClick={handleLoginSubmit}
-                disabled={!loginInput.trim()}
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        </section>
-      </div>
-    </div>
-  );
-}
-
-  
   return (
     <div className="mina-root">
       {/* 11.1 Header / tabs / credits badge */}
@@ -1071,12 +1015,13 @@ if (!customerId || !customerId.trim()) {
               {customerId}
             </span>
             <button
-              type="button"
-              className="link-button subtle"
-              onClick={handleLogout}
-            >
-              Switch
-            </button>
+                type="button"
+                className="link-button subtle"
+                onClick={onSignOut}
+              >
+                Sign out
+              </button>
+
           </div>
         </div>
       </header>
@@ -2099,5 +2044,5 @@ if (!customerId || !customerId.trim()) {
   );
 }
 
-export default App;
+export default MinaApp;
 
