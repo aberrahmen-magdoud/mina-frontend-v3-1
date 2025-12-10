@@ -172,15 +172,14 @@ export function AuthGate({ children }: AuthGateProps) {
   const hasAt = trimmed.includes("@");
   const targetEmail = sentTo || (hasEmail ? trimmed : null);
 
-  // back only when there is something to go back from:
-  // typing email OR in check-email
+  // back only when there is something to go back from
   const showBack = (emailMode && hasEmail) || otpSent;
 
   return (
     <div className="mina-auth-shell">
       <div className="mina-auth-left">
         <div className="mina-auth-card">
-          {/* back icon fades in / out */}
+          {/* back icon fades in / out, sits close to the content */}
           <div className={showBack ? "fade-block" : "fade-block hidden"}>
             <button
               type="button"
@@ -212,79 +211,84 @@ export function AuthGate({ children }: AuthGateProps) {
             <>
               {/* sign-in view */}
               <div className="mina-auth-actions">
-                {/* hero: biggest line */}
-                <div
-                  className={emailMode ? "fade-block hidden" : "fade-block"}
-                >
-                  <button
-                    type="button"
-                    className="mina-auth-link mina-auth-main"
-                    onClick={handleGoogleLogin}
+                <div className="mina-auth-stack">
+                  {/* Panel 1 – Login with Google + Use email instead */}
+                  <div
+                    className={
+                      emailMode ? "fade-overlay hidden" : "fade-overlay"
+                    }
                   >
-                    Login with Google
-                  </button>
-                </div>
-
-                {/* secondary trigger: Use email instead */}
-                <div
-                  className={
-                    emailMode ? "fade-block hidden delay" : "fade-block delay"
-                  }
-                >
-                  <button
-                    type="button"
-                    className="mina-auth-link secondary"
-                    onClick={() => setEmailMode(true)}
-                    disabled={loading}
-                  >
-                    Use email instead
-                  </button>
-                </div>
-
-                {/* email mode – appears after hero/secondary fade out */}
-                <div
-                  className={
-                    emailMode ? "fade-block delay" : "fade-block hidden"
-                  }
-                >
-                  <form onSubmit={handleEmailLogin} className="mina-auth-form">
-                    <label className="mina-auth-label">
-                      <input
-                        className="mina-auth-input"
-                        type="email"
-                        placeholder="Type email here"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                      />
-                    </label>
-
-                    {/* sign in appears once typing starts */}
-                    <div
-                      className={
-                        hasEmail ? "fade-block" : "fade-block hidden"
-                      }
+                    <button
+                      type="button"
+                      className="mina-auth-link mina-auth-main"
+                      onClick={handleGoogleLogin}
                     >
+                      Login with Google
+                    </button>
+
+                    <div style={{ marginTop: "8px" }}>
                       <button
-                        type="submit"
-                        className="mina-auth-link mina-auth-main small"
-                        disabled={loading || !hasEmail}
+                        type="button"
+                        className="mina-auth-link secondary"
+                        onClick={() => {
+                          setEmailMode(true);
+                          setError(null);
+                        }}
+                        disabled={loading}
                       >
-                        {loading ? "Sending link…" : "Sign in"}
+                        Use email instead
                       </button>
                     </div>
+                  </div>
 
-                    {/* hint appears slightly after, and only once @ is typed */}
-                    <div
-                      className={
-                        hasAt ? "fade-block delay" : "fade-block hidden"
-                      }
+                  {/* Panel 2 – email field + sign in + hint */}
+                  <div
+                    className={
+                      emailMode ? "fade-overlay" : "fade-overlay hidden"
+                    }
+                  >
+                    <form
+                      onSubmit={handleEmailLogin}
+                      className="mina-auth-form"
                     >
-                      <p className="mina-auth-hint">
-                        We’ll email you a one-time link. If this address is new,
-                        that email will also confirm your account.
-                      </p>
-                    </div>
-                  </form>
+                      <label className="mina-auth-label">
+                        <input
+                          className="mina-auth-input"
+                          type="email"
+                          placeholder="Type email here"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                        />
+                      </label>
+
+                      {/* “Sign in” appears once typing starts */}
+                      <div
+                        className={
+                          hasEmail ? "fade-block" : "fade-block hidden"
+                        }
+                      >
+                        <button
+                          type="submit"
+                          className="mina-auth-link mina-auth-main small"
+                          disabled={loading || !hasEmail}
+                        >
+                          {loading ? "Sending link…" : "Sign in"}
+                        </button>
+                      </div>
+
+                      {/* hint appears slightly after, and only once @ is typed */}
+                      <div
+                        className={
+                          hasAt ? "fade-block delay" : "fade-block hidden"
+                        }
+                      >
+                        <p className="mina-auth-hint">
+                          We’ll email you a one-time link. If this address is
+                          new, that email will also confirm your account.
+                        </p>
+                      </div>
+                    </form>
+                  </div>
                 </div>
               </div>
 
