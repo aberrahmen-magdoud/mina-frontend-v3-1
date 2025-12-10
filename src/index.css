@@ -392,3 +392,56 @@ select {
     height: 260px;
   }
 }
+/* --- MINA auth overrides --- */
+
+/* slower, smoother fade / slide */
+.fade-block {
+  transition:
+    opacity 0.6s ease-out,
+    max-height 0.6s ease-out,
+    transform 0.6s ease-out,
+    margin-top 0.6s ease-out;
+  opacity: 1;
+  max-height: 400px;
+  transform: translateY(0);
+  margin-top: 8px;
+}
+
+.fade-block.hidden {
+  opacity: 0;
+  max-height: 0;
+  transform: translateY(12px);
+  margin-top: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* delayed version: appears slightly after the thing above */
+.fade-block.delay {
+  transition-delay: 0.1s, 0.1s, 0.1s, 0.1s;
+}
+
+/* secondary buttons without underline */
+.mina-auth-link.secondary {
+  text-decoration: none;
+  font-weight: 400;
+  opacity: 0.75;
+  font-size: 13px;
+}
+
+/* main typing size = same as login with google */
+.mina-auth-input {
+  border: none;
+  padding: 8px 0;
+  font-size: 22px;
+  font-weight: 600;
+  background: transparent;
+  outline: none;
+  color: var(--mina-text);
+}
+
+/* placeholder: same black at 0.3 opacity */
+.mina-auth-input::placeholder {
+  color: rgba(8, 10, 0, 0.3);
+  font-weight: 600;
+}
