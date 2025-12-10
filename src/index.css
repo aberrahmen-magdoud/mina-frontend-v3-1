@@ -340,3 +340,64 @@ button:disabled {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ========== Mina auth page ========== */
+
+.mina-auth-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  background: radial-gradient(circle at top left, #fffbe6 0, #f4f0d8 40%, #ece5c4 100%);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    sans-serif;
+}
+
+.mina-auth-card {
+  width: 100%;
+  max-width: 560px;
+  background: rgba(252, 250, 240, 0.96);
+  border-radius: 24px;
+  padding: 28px 28px 20px;
+  box-shadow: 0 18px 40px rgba(41, 33, 0, 0.16);
+  border: 1px solid rgba(157, 145, 84, 0.18);
+}
+
+.mina-auth-header h1 {
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #181400;
+  margin: 0 0 6px;
+}
+
+.mina-auth-header p {
+  margin: 0 0 18px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #5a5631;
+}
+
+.mina-auth-footer {
+  margin-top: 16px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #7b744b;
+  text-align: center;
+}
+
+/* Tweak Supabase default look inside the card */
+.mina-auth-card .sbui-typography-title {
+  /* hide the extra "Sign in" title, we already have our own */
+  display: none;
+}
+
+.mina-auth-card .sbui-input {
+  border-radius: 999px !important;
+}
+
+.mina-auth-card button {
+  font-family: inherit;
+}
