@@ -52,7 +52,6 @@ export function AuthGate({ children }: AuthGateProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // text state: "Opening Google…"
   const [googleOpening, setGoogleOpening] = useState(false);
 
   const [bypassForNow] = useState(false);
@@ -145,7 +144,7 @@ export function AuthGate({ children }: AuthGateProps) {
         },
       });
       if (supaError) throw supaError;
-      // success -> browser leaves page
+      // browser redirects away on success
     } catch (err: any) {
       setError(err?.message || "Failed to start Google login.");
       setGoogleOpening(false);
@@ -174,14 +173,14 @@ export function AuthGate({ children }: AuthGateProps) {
   const hasEmail = trimmed.length > 0;
   const targetEmail = sentTo || (hasEmail ? trimmed : null);
 
-  // back icon visible in email mode (when typing) + check email view
+  // back appears in email mode (when there is text) and in check-email
   const showBack = (emailMode && hasEmail) || otpSent;
 
   return (
     <div className="mina-auth-shell">
       <div className="mina-auth-left">
         <div className="mina-auth-card">
-          {/* Back icon with Mina fading effect */}
+          {/* back icon */}
           <div
             className={
               showBack
@@ -194,13 +193,11 @@ export function AuthGate({ children }: AuthGateProps) {
               className="mina-auth-back"
               onClick={() => {
                 if (otpSent) {
-                  // back from "Open email app" -> email form
                   setOtpSent(false);
                   setSentTo(null);
                   setError(null);
                   setEmailMode(true);
                 } else {
-                  // back from email form -> Google hero
                   setEmailMode(false);
                   setEmail("");
                   setError(null);
@@ -218,15 +215,14 @@ export function AuthGate({ children }: AuthGateProps) {
 
           {!otpSent ? (
             <>
-              {/* Google + email choice */}
+              {/* Google hero + email form share the same baseline */}
               <div className="mina-auth-actions">
                 <div className="mina-auth-stack">
-                  {/* Panel 1 – Login with Google */}
+                  {/* Google hero panel */}
                   <div
                     className={
-                      emailMode
-                        ? "fade-overlay mina-slide hidden"
-                        : "fade-overlay mina-slide"
+                      "fade-overlay auth-panel auth-panel--google " +
+                      (emailMode ? "hidden" : "visible")
                     }
                   >
                     <button
@@ -252,12 +248,11 @@ export function AuthGate({ children }: AuthGateProps) {
                     </div>
                   </div>
 
-                  {/* Panel 2 – email form (comes from bottom, delayed so no overlap) */}
+                  {/* Email panel */}
                   <div
                     className={
-                      emailMode
-                        ? "fade-overlay mina-slide mina-slide-delay"
-                        : "fade-overlay mina-slide hidden"
+                      "fade-overlay auth-panel auth-panel--email " +
+                      (emailMode ? "visible" : "hidden")
                     }
                   >
                     <form
@@ -274,7 +269,6 @@ export function AuthGate({ children }: AuthGateProps) {
                         />
                       </label>
 
-                      {/* Sign in + hint = Mina fading effect (no movement) */}
                       <div
                         className={
                           hasEmail ? "fade-block delay" : "fade-block hidden"
@@ -308,10 +302,10 @@ export function AuthGate({ children }: AuthGateProps) {
             </>
           ) : (
             <>
-              {/* Check email view – hero aligned via same stack */}
+              {/* Check email state, same baseline */}
               <div className="mina-auth-actions">
                 <div className="mina-auth-stack">
-                  <div className="fade-overlay mina-slide">
+                  <div className="fade-overlay auth-panel auth-panel--check visible">
                     <button
                       type="button"
                       className="mina-auth-link mina-auth-main"
@@ -333,7 +327,7 @@ export function AuthGate({ children }: AuthGateProps) {
           )}
         </div>
 
-        {/* bottom-left small copy – fake number for now, hook real data later */}
+        {/* bottom-left copy */}
         <div className="mina-auth-footer">Total users: 0</div>
       </div>
       <div className="mina-auth-right" />
