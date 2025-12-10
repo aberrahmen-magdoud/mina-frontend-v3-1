@@ -3,7 +3,8 @@ import { Auth } from "@supabase/auth-ui-react";
 import { ThemeSupa } from "@supabase/auth-ui-shared";
 import type { Session } from "@supabase/supabase-js";
 
-import { supabase } from "./lib/supabaseClient";
+import { supabase } from "../lib/supabaseClient";
+
 
 interface AuthGateProps {
   children: ReactNode;
