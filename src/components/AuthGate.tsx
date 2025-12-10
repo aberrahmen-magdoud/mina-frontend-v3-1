@@ -167,23 +167,27 @@ export function AuthGate({ children }: AuthGateProps) {
     return <>{children}</>;
   }
 
-  const hasEmail = email.trim().length > 0;
-  const targetEmail = sentTo || (hasEmail ? email.trim() : null);
+  const trimmed = email.trim();
+  const hasEmail = trimmed.length > 0;
+  const hasAt = trimmed.includes("@");
+  const targetEmail = sentTo || (hasEmail ? trimmed : null);
 
-  const showBack = emailMode || otpSent;
+  // back only when there is something to go back from:
+  // typing email OR in check-email
+  const showBack = (emailMode && hasEmail) || otpSent;
 
   return (
     <div className="mina-auth-shell">
       <div className="mina-auth-left">
         <div className="mina-auth-card">
-          {/* back icon appears first in flows */}
-          {showBack && (
+          {/* back icon fades in / out */}
+          <div className={showBack ? "fade-block" : "fade-block hidden"}>
             <button
               type="button"
               className="mina-auth-back"
               onClick={() => {
                 if (otpSent) {
-                  // back from check-email → email form
+                  // back from check-email → email form with same text
                   setOtpSent(false);
                   setSentTo(null);
                   setError(null);
@@ -202,13 +206,13 @@ export function AuthGate({ children }: AuthGateProps) {
                 alt=""
               />
             </button>
-          )}
+          </div>
 
           {!otpSent ? (
             <>
               {/* sign-in view */}
               <div className="mina-auth-actions">
-                {/* hero: biggest line, fades out when email opens */}
+                {/* hero: biggest line */}
                 <div
                   className={emailMode ? "fade-block hidden" : "fade-block"}
                 >
@@ -221,9 +225,11 @@ export function AuthGate({ children }: AuthGateProps) {
                   </button>
                 </div>
 
-                {/* secondary trigger: use email instead */}
+                {/* secondary trigger: Use email instead */}
                 <div
-                  className={emailMode ? "fade-block hidden" : "fade-block"}
+                  className={
+                    emailMode ? "fade-block hidden delay" : "fade-block delay"
+                  }
                 >
                   <button
                     type="button"
@@ -235,8 +241,12 @@ export function AuthGate({ children }: AuthGateProps) {
                   </button>
                 </div>
 
-                {/* email mode: fades in, slides up into hero space */}
-                <div className={emailMode ? "fade-block" : "fade-block hidden"}>
+                {/* email mode – appears after hero/secondary fade out */}
+                <div
+                  className={
+                    emailMode ? "fade-block delay" : "fade-block hidden"
+                  }
+                >
                   <form onSubmit={handleEmailLogin} className="mina-auth-form">
                     <label className="mina-auth-label">
                       <input
@@ -248,7 +258,7 @@ export function AuthGate({ children }: AuthGateProps) {
                       />
                     </label>
 
-                    {/* “Sign in” appears first when typing */}
+                    {/* sign in appears once typing starts */}
                     <div
                       className={
                         hasEmail ? "fade-block" : "fade-block hidden"
@@ -263,15 +273,15 @@ export function AuthGate({ children }: AuthGateProps) {
                       </button>
                     </div>
 
-                    {/* then the hint, slightly delayed fade */}
+                    {/* hint appears slightly after, and only once @ is typed */}
                     <div
                       className={
-                        hasEmail ? "fade-block delay" : "fade-block hidden"
+                        hasAt ? "fade-block delay" : "fade-block hidden"
                       }
                     >
                       <p className="mina-auth-hint">
-                        We’ll email you a one-time link. If this address is
-                        new, that email will also confirm your account.
+                        We’ll email you a one-time link. If this address is new,
+                        that email will also confirm your account.
                       </p>
                     </div>
                   </form>
@@ -291,26 +301,30 @@ export function AuthGate({ children }: AuthGateProps) {
               </p>
 
               <div className="mina-auth-actions">
-                <button
-                  type="button"
-                  className="mina-auth-link mina-auth-main small"
-                  onClick={() => openInboxFor(targetEmail)}
-                >
-                  Open email app
-                </button>
+                <div className="fade-block">
+                  <button
+                    type="button"
+                    className="mina-auth-link mina-auth-main small"
+                    onClick={() => openInboxFor(targetEmail)}
+                  >
+                    Open email app
+                  </button>
+                </div>
 
-                <button
-                  type="button"
-                  className="mina-auth-link secondary"
-                  onClick={() => {
-                    setOtpSent(false);
-                    setSentTo(null);
-                    setError(null);
-                    setEmailMode(true);
-                  }}
-                >
-                  Use a different email
-                </button>
+                <div className="fade-block delay">
+                  <button
+                    type="button"
+                    className="mina-auth-link secondary"
+                    onClick={() => {
+                      setOtpSent(false);
+                      setSentTo(null);
+                      setError(null);
+                      setEmailMode(true);
+                    }}
+                  >
+                    Use a different email
+                  </button>
+                </div>
               </div>
 
               {error && <div className="mina-auth-error">{error}</div>}
