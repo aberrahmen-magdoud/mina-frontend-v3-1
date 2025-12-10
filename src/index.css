@@ -1,3 +1,548 @@
+:root {
+  --mina-bg: #EEEEE2;
+  --mina-bg: #F2F0DF;
+--mina-text: #080A00;
+--mina-border-soft: rgba(8, 10, 0, 0.16);
+--mina-border-strong: rgba(8, 10, 0, 0.32);
+@@ -27,7 +27,7 @@ body {
+font-family: "Schibsted Grotesk", system-ui, -apple-system, BlinkMacSystemFont,
+"SF Pro Text", sans-serif;
+-webkit-font-smoothing: antialiased;
+  overflow: hidden; /* scroll inside columns, not whole page */
+  overflow: hidden;
+}
+
+a {
+@@ -79,8 +79,6 @@ select {
+letter-spacing: 0.12em;
+}
+
+/* right header */
+
+.mina-header-right {
+display: flex;
+align-items: center;
+@@ -131,8 +129,8 @@ select {
+margin: 0;
+background: none;
+cursor: pointer;
+  font-size: 12px;
+  opacity: 0.6;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.tab.active {
+@@ -148,71 +146,167 @@ select {
+border: 1px solid var(--mina-border-soft);
+}
+
+/* auth layout 50 / 50 */
+/* main layout 50 / 50 */
+
+.mina-auth-shell {
+  height: 100vh;
+.mina-main {
+  flex: 1;
+display: flex;
+  justify-content: center;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.mina-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  width: 100%;
+  max-width: 1440px;
+  height: 100%;
+}
+
+.mina-left,
+.mina-right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+
+/* sections */
+
+.mina-section {
+  border: 1px solid var(--mina-border-soft);
+  padding: 12px 14px;
+background: var(--mina-bg);
+  color: var(--mina-text);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mina-auth-left,
+.mina-auth-right {
+  flex: 1;
+  min-width: 0;
+.mina-section.wide {
+  grid-column: 1 / -1;
+}
+
+.mina-auth-left {
+.section-title {
+display: flex;
+align-items: center;
+  justify-content: center;
+  padding: 32px 40px;
+  border-right: 1px solid var(--mina-border-soft);
+  overflow-y: auto;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.mina-auth-right {
+  background-image: url("https://cdn.shopify.com/s/files/1/0678/9254/3571/files/g-form-121277-appearance.imageUrl-mijzwt6a-cropped.jpg?v=1764402871");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+.section-body {
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mina-auth-card {
+  width: 100%;
+  max-width: 380px;
+.step-dot {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--mina-border-strong);
+}
+
+.step-dot.step-done {
+  background: var(--mina-text);
+}
+
+/* fields */
+
+.field {
+display: flex;
+flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+/* title / text only used in loading + check-email states */
+.field-inline {
+  flex: 1;
+}
+
+.mina-auth-title {
+  font-size: 18px;
+  margin: 0 0 4px;
+.field-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.mina-auth-text {
+.field-label {
+  font-size: 11px;
+  color: var(--mina-muted);
+}
+
+.field-unit {
+  font-size: 11px;
+  color: var(--mina-muted);
+  margin-left: 4px;
+}
+
+.field-input,
+.field-textarea,
+.customer-input,
+select {
+  border: 1px solid var(--mina-border-soft);
+  padding: 6px 8px;
+font-size: 13px;
+  background: transparent;
+  outline: none;
+}
+
+.field-input:focus,
+.field-textarea:focus,
+.customer-input:focus,
+select:focus {
+  border-color: var(--mina-border-strong);
+}
+
+.field-textarea {
+  resize: vertical;
+  min-height: 80px;
+line-height: 1.4;
+}
+
+.field-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.field-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+margin: 0;
+  max-width: 340px;
+  color: rgba(8, 10, 0, 0.3);
+}
+
+/* hero + actions */
+.toggle-label {
+  font-size: 12px;
+  color: var(--mina-muted);
+}
+
+.mina-auth-actions {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+.toggle-label.on {
+  color: var(--mina-text);
+}
+
+/* text buttons – base */
+/* buttons */
+
+.mina-auth-link {
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.primary-button,
+.secondary-button,
+.link-button {
+display: inline-flex;
+align-items: center;
+gap: 4px;
+@@ -222,54 +316,291 @@ select {
+text-decoration: underline;
+text-decoration-thickness: 1px;
+text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* main hero “Login with Google” (big) */
+/* primary text buttons */
+
+.mina-auth-main {
+  font-size: 22px;
+.primary-button {
+font-weight: 600;
+opacity: 0.9;
+}
+
+.mina-auth-main:hover {
+.primary-button:hover {
+opacity: 1;
+}
+
+.mina-auth-main:active {
+.primary-button:active {
+opacity: 0.6;
+}
+
+/* smaller version used for secondary actions (sign in, open email) */
+/* secondary text buttons */
+
+.mina-auth-main.small {
+  font-size: 15px;
+.secondary-button,
+.link-button {
+font-weight: 400;
+opacity: 0.75;
+}
+
+.mina-auth-main.small:hover {
+.secondary-button:hover,
+.link-button:hover {
+opacity: 0.9;
+}
+
+.mina-auth-main.small:active {
+.secondary-button:active,
+.link-button:active {
+opacity: 0.5;
+}
+
+/* secondary text buttons */
+/* text helpers */
+
+.mina-auth-link.secondary {
+  font-weight: 400;
+  opacity: 0.75;
+.hint {
+  font-size: 12px;
+  color: var(--mina-muted);
+}
+
+.hint.small {
+  font-size: 11px;
+}
+
+.status-error,
+.error-text {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--mina-text);
+}
+
+/* outputs */
+
+.output-shell {
+  border: 1px solid var(--mina-border-soft);
+  display: flex;
+  flex-direction: column;
+}
+
+.output-media {
+  border-bottom: 1px solid var(--mina-border-soft);
+  background: rgba(8, 10, 0, 0.03);
+  padding: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+.output-media img,
+.output-media video {
+  max-width: 100%;
+  max-height: 320px;
+}
+
+.output-placeholder {
+  padding: 16px;
+  font-size: 12px;
+  color: var(--mina-muted);
+}
+
+.output-meta {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.output-tag-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.output-tag {
+  border: 1px solid var(--mina-border-soft);
+  padding: 2px 6px;
+  font-size: 10px;
+}
+
+.output-tag.subtle {
+  border-color: rgba(8, 10, 0, 0.12);
+  color: var(--mina-muted);
+}
+
+.output-prompt {
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+/* auto top-up */
+
+.auto-topup-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.auto-topup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px 10px;
+}
+
+.customer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--mina-border-soft);
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* profile & admin */
+
+.profile-layout,
+.admin-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-body,
+.admin-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px 14px;
+}
+
+.profile-label {
+  font-size: 11px;
+  color: var(--mina-muted);
+}
+
+.profile-value {
+font-size: 13px;
+}
+
+.mina-auth-link.secondary:hover {
+  opacity: 0.9;
+.profile-hint {
+  font-size: 11px;
+  color: var(--mina-muted);
+  margin-top: 4px;
+}
+
+.credits-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.mina-auth-link.secondary:active {/* auth layout 50 / 50 */
+.credits-delta {
+  width: 42px;
+  display: inline-block;
+}
+
+.credits-reason {
+  flex: 1;
+}
+
+.credits-time {
+  white-space: nowrap;
+  color: var(--mina-muted);
+}
+
+.admin-columns {
+  gap: 16px;
+}
+
+/* gallery */
+
+.gallery-grid {
+  margin-top: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.gallery-item {
+  border: 1px solid var(--mina-border-soft);
+  display: flex;
+  flex-direction: column;
+}
+
+.gallery-media {
+  border-bottom: 1px solid var(--mina-border-soft);
+  background: rgba(8, 10, 0, 0.03);
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 140px;
+}
+
+.gallery-media img,
+.gallery-media video {
+  max-width: 100%;
+  max-height: 260px;
+}
+
+.gallery-meta {
+  padding: 6px 8px;
+}
+
+.gallery-meta-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+.gallery-tag {
+  font-size: 10px;
+  color: var(--mina-muted);
+}
+
+.gallery-date {
+  font-size: 11px;
+  color: var(--mina-muted);
+}
+
+/* responsive base */
+
+@media (max-width: 960px) {
+  body {
+    overflow: auto;
+  }
+
+  .mina-main {
+    padding: 10px;
+  }
+
+  .mina-layout {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .mina-left,
+  .mina-right {
+    overflow: visible;
+  }
+
+  .mina-section.wide {
+    grid-column: auto;
+  }
+}
+
 /* auth layout 50 / 50 */
 
 .mina-auth-shell {
@@ -267,3 +812,4 @@
     height: 260px;
   }
 }
+
