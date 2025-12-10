@@ -148,480 +148,6 @@ select {
   border: 1px solid var(--mina-border-soft);
 }
 
-/* main layout 50 / 50 */
-
-.mina-main {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  padding: 16px;
-  overflow: hidden;
-}
-
-.mina-layout {
-  display: grid;
-  grid-template-columns: 1fr 1fr; /* 50 / 50 */
-  gap: 16px;
-  width: 100%;
-  max-width: 1440px;
-  height: 100%;
-}
-
-.mina-left,
-.mina-right {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow-y: auto;
-  padding-bottom: 16px;
-}
-
-/* sections */
-
-.mina-section {
-  border: 1px solid var(--mina-border-soft);
-  padding: 12px 14px;
-  background: var(--mina-bg);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.mina-section.wide {
-  grid-column: 1 / -1;
-}
-
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.section-body {
-  font-size: 13px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.step-dot {
-  width: 8px;
-  height: 8px;
-  border: 1px solid var(--mina-border-strong);
-}
-
-.step-dot.step-done {
-  background: var(--mina-text);
-}
-
-/* fields */
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-}
-
-.field-inline {
-  flex: 1;
-}
-
-.field-row {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: flex-start;
-}
-
-.field-label {
-  font-size: 11px;
-  color: var(--mina-muted);
-}
-
-.field-unit {
-  font-size: 11px;
-  color: var(--mina-muted);
-  margin-left: 4px;
-}
-
-.field-input,
-.field-textarea,
-.customer-input,
-select {
-  border: 1px solid var(--mina-border-soft);
-  padding: 6px 8px;
-  font-size: 13px;
-  background: transparent;
-  outline: none;
-}
-
-.field-input:focus,
-.field-textarea:focus,
-.customer-input:focus,
-select:focus {
-  border-color: var(--mina-border-strong);
-}
-
-.field-textarea {
-  resize: vertical;
-  min-height: 80px;
-  line-height: 1.4;
-}
-
-.field-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-}
-
-.field-toggle input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-}
-
-.toggle-label {
-  font-size: 12px;
-  color: var(--mina-muted);
-}
-
-.toggle-label.on {
-  color: var(--mina-text);
-}
-
-/* button system – text only, no boxes */
-
-button {
-  cursor: pointer;
-  border: none;
-  background: none;
-  padding: 0;
-}
-
-button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.primary-button,
-.secondary-button,
-.link-button,
-.mina-auth-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: none;
-  background: none;
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
-}
-
-/* primary = bold, 0.9 → 1 → 0.6 */
-
-.primary-button,
-.mina-auth-link.primary {
-  font-weight: 600;
-  opacity: 0.9;
-}
-
-.primary-button:hover,
-.mina-auth-link.primary:hover {
-  opacity: 1;
-}
-
-.primary-button:active,
-.mina-auth-link.primary:active {
-  opacity: 0.6;
-}
-
-/* secondary = regular, 0.75 → 0.9 → 0.5 */
-
-.secondary-button,
-.link-button,
-.mina-auth-link.secondary {
-  font-weight: 400;
-  opacity: 0.75;
-}
-
-.secondary-button:hover,
-.link-button:hover,
-.mina-auth-link.secondary:hover {
-  opacity: 0.9;
-}
-
-.secondary-button:active,
-.link-button:active,
-.mina-auth-link.secondary:active {
-  opacity: 0.5;
-}
-
-/* text helpers */
-
-.hint {
-  font-size: 12px;
-  color: var(--mina-muted);
-}
-
-.hint.small {
-  font-size: 11px;
-}
-
-.status-error,
-.error-text {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--mina-text);
-}
-
-/* outputs */
-
-.output-shell {
-  border: 1px solid var(--mina-border-soft);
-  display: flex;
-  flex-direction: column;
-}
-
-.output-media {
-  border-bottom: 1px solid var(--mina-border-soft);
-  background: rgba(8, 10, 0, 0.03);
-  padding: 8px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 200px;
-}
-
-.output-media img,
-.output-media video {
-  max-width: 100%;
-  max-height: 320px;
-}
-
-.output-placeholder {
-  padding: 16px;
-  font-size: 12px;
-  color: var(--mina-muted);
-}
-
-.output-meta {
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.output-tag-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-}
-
-.output-tag {
-  border: 1px solid var(--mina-border-soft);
-  padding: 2px 6px;
-  font-size: 10px;
-}
-
-.output-tag.subtle {
-  border-color: rgba(8, 10, 0, 0.12);
-  color: var(--mina-muted);
-}
-
-.output-prompt {
-  font-size: 12px;
-  line-height: 1.4;
-  white-space: pre-wrap;
-}
-
-.section-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  margin-top: 6px;
-}
-
-/* auto top-up */
-
-.auto-topup-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.auto-topup-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px 10px;
-}
-
-.customer-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--mina-border-soft);
-  padding: 4px 8px;
-  font-size: 12px;
-}
-
-/* profile & admin */
-
-.profile-layout,
-.admin-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.profile-body,
-.admin-columns {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px 14px;
-}
-
-.profile-label {
-  font-size: 11px;
-  color: var(--mina-muted);
-}
-
-.profile-value {
-  font-size: 13px;
-}
-
-.profile-hint {
-  font-size: 11px;
-  color: var(--mina-muted);
-  margin-top: 4px;
-}
-
-.credits-list {
-  list-style: none;
-  margin: 4px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-}
-
-.credits-delta {
-  width: 42px;
-  display: inline-block;
-}
-
-.credits-reason {
-  flex: 1;
-}
-
-.credits-time {
-  white-space: nowrap;
-  color: var(--mina-muted);
-}
-
-.admin-columns {
-  gap: 16px;
-}
-
-/* gallery */
-
-.gallery-grid {
-  margin-top: 8px;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-}
-
-.gallery-item {
-  border: 1px solid var(--mina-border-soft);
-  display: flex;
-  flex-direction: column;
-}
-
-.gallery-media {
-  border-bottom: 1px solid var(--mina-border-soft);
-  background: rgba(8, 10, 0, 0.03);
-  padding: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 140px;
-}
-
-.gallery-media img,
-.gallery-media video {
-  max-width: 100%;
-  max-height: 260px;
-}
-
-.gallery-meta {
-  padding: 6px 8px;
-}
-
-.gallery-meta-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 11px;
-}
-
-.gallery-tag {
-  font-size: 10px;
-  color: var(--mina-muted);
-}
-
-.gallery-date {
-  font-size: 11px;
-  color: var(--mina-muted);
-}
-
-/* responsive */
-
-@media (max-width: 960px) {
-  body {
-    overflow: auto;
-  }
-
-  .mina-main {
-    padding: 10px;
-  }
-
-  .mina-layout {
-    grid-template-columns: minmax(0, 1fr);
-    height: auto;
-  }
-
-  .mina-left,
-  .mina-right {
-    overflow: visible;
-  }
-
-  .mina-section.wide {
-    grid-column: auto;
-  }
-
-  .mina-auth-shell {
-    flex-direction: column;
-  }
-
-  .mina-auth-left {
-    border-right: none;
-    border-bottom: 1px solid var(--mina-border-soft);
-  }
-
-  .mina-auth-right {
-    height: 260px;
-  }
-}
-
 /* auth layout 50 / 50 */
 
 .mina-auth-shell {
@@ -658,24 +184,17 @@ button:disabled {
   max-width: 380px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 
-/* top-left info, low attention */
-
-.mina-auth-logo {
-  font-size: 12px;
-  opacity: 0.6;
-}
+/* title / text only used in loading + check-email states */
 
 .mina-auth-title {
-  font-size: 12px;
-  margin: 2px 0 4px;
-  opacity: 0.6;
+  font-size: 18px;
+  margin: 0 0 4px;
 }
 
 .mina-auth-text {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.4;
   margin: 0;
   max-width: 340px;
@@ -685,13 +204,13 @@ button:disabled {
 /* hero + actions */
 
 .mina-auth-actions {
-  margin-top: 20px;
+  margin-top: 32px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-/* hero button “Login with Google” */
+/* text buttons – base */
 
 .mina-auth-link {
   display: inline-flex;
@@ -706,7 +225,7 @@ button:disabled {
   cursor: pointer;
 }
 
-/* main hero size */
+/* main hero “Login with Google” (big) */
 
 .mina-auth-main {
   font-size: 22px;
@@ -722,7 +241,7 @@ button:disabled {
   opacity: 0.6;
 }
 
-/* when email mode is open → smaller, secondary */
+/* smaller version used for secondary actions (sign in, open email) */
 
 .mina-auth-main.small {
   font-size: 15px;
@@ -754,14 +273,41 @@ button:disabled {
   opacity: 0.5;
 }
 
-/* fade blocks (smooth, from bottom, push content) */
+/* back icon button (no text) */
+
+.mina-auth-back {
+  display: inline-flex;
+  padding: 8px 0 12px;
+  margin-bottom: 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.mina-auth-back img {
+  width: 22px;
+  height: 22px;
+  display: block;
+  opacity: 0.75;
+  transition: opacity 0.2s ease-out;
+}
+
+.mina-auth-back:hover img {
+  opacity: 1;
+}
+
+.mina-auth-back:active img {
+  opacity: 0.5;
+}
+
+/* fade blocks – slower, smoother, slide from bottom */
 
 .fade-block {
   transition:
-    opacity 0.35s ease-out,
-    max-height 0.35s ease-out,
-    transform 0.35s ease-out,
-    margin-top 0.35s ease-out;
+    opacity 0.6s ease-out,
+    max-height 0.6s ease-out,
+    transform 0.6s ease-out,
+    margin-top 0.6s ease-out;
   opacity: 1;
   max-height: 400px;
   transform: translateY(0);
@@ -771,7 +317,7 @@ button:disabled {
 .fade-block.hidden {
   opacity: 0;
   max-height: 0;
-  transform: translateY(10px);
+  transform: translateY(12px);
   margin-top: 0;
   overflow: hidden;
   pointer-events: none;
@@ -799,7 +345,7 @@ button:disabled {
   flex-direction: column;
 }
 
-/* big, borderless field – only placeholder text */
+/* big, borderless field – only placeholder text initially */
 
 .mina-auth-input {
   border: none;
@@ -815,7 +361,7 @@ button:disabled {
   font-weight: 600;
 }
 
-/* “Sign in” button below, same text style rules as hero */
+/* hint – tiny, low attention, only when typing */
 
 .mina-auth-hint {
   margin-top: 8px;
@@ -830,7 +376,7 @@ button:disabled {
   color: var(--mina-text);
 }
 
-/* check-email view */
+/* responsive */
 
 @media (max-width: 960px) {
   .mina-auth-shell {
