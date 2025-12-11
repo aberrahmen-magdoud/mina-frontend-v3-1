@@ -700,14 +700,18 @@ video {
   overflow-y: auto;
   padding-top: 4px;
   padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
 
-  /* hide scrollbars */
+  /* force hide scrollbars */
   scrollbar-width: none; /* Firefox */
 }
 
 .studio-brief-shell::-webkit-scrollbar {
-  display: none; /* WebKit */
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent;
 }
+
 
 .studio-brief-input {
   width: 100%;
