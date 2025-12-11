@@ -1263,7 +1263,26 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
     );
   };
 
-  const renderStudioRight = () => (
+  const renderStudioRight = () => {
+  const isEmpty = !currentStill && !currentMotion;
+
+  // STATE ZERO – just the big placeholder, no buttons / motion / feedback
+  if (isEmpty) {
+    return (
+      <div className="studio-right">
+        <div className="studio-output-main studio-output-main--empty">
+          <div className="studio-output-frame">
+            <div className="output-placeholder">
+              New ideas don’t actually exist, just recycle.
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // AFTER YOU HAVE AT LEAST ONE IMAGE / MOTION – keep full UI
+  return (
     <div className="studio-right">
       <div className="studio-output-main">
         <button
@@ -1302,10 +1321,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
               <button
                 key={item.id}
                 type="button"
-                className={classNames(
-                  "studio-dot",
-                  idx === stillIndex && "active"
-                )}
+                className={classNames("studio-dot", idx === stillIndex && "active")}
                 onClick={() => setStillIndex(idx)}
               />
             ))}
@@ -1319,33 +1335,24 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
             onClick={handleSuggestMotion}
             disabled={!currentStill || motionSuggestLoading}
           >
-            {motionSuggestLoading
-              ? "Thinking about motion…"
-              : "Suggest motion"}
+            {motionSuggestLoading ? "Thinking about motion…" : "Suggest motion"}
           </button>
-          {motionSuggestError && (
-            <span className="error-text">{motionSuggestError}</span>
-          )}
+          {motionSuggestError && <span className="error-text">{motionSuggestError}</span>}
           {motionError && <span className="error-text">{motionError}</span>}
         </div>
 
         {motionDescription && (
           <div className="studio-motion-description">
             {motionDescription}
-            {!!motionDescription && (
-              <>
-                {" "}
-                —{" "}
-                <button
-                  type="button"
-                  className="link-button subtle"
-                  onClick={handleGenerateMotion}
-                  disabled={motionGenerating}
-                >
-                  {motionGenerating ? "Animating…" : "Animate"}
-                </button>
-              </>
-            )}
+            {" — "}
+            <button
+              type="button"
+              className="link-button subtle"
+              onClick={handleGenerateMotion}
+              disabled={motionGenerating}
+            >
+              {motionGenerating ? "Animating…" : "Animate"}
+            </button>
           </div>
         )}
 
@@ -1368,12 +1375,13 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
             {feedbackSending ? "Sending…" : "Send"}
           </button>
         </div>
-        {feedbackError && (
-          <div className="error-text">{feedbackError}</div>
-        )}
+
+        {feedbackError && <div className="error-text">{feedbackError}</div>}
       </div>
     </div>
   );
+};
+
 
   const renderCustomStyleModal = () => {
     if (!customStylePanelOpen) return null;
