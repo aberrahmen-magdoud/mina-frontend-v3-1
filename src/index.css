@@ -628,10 +628,11 @@ video {
 .studio-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
+  gap: 8px;
+  padding: 6px 12px;
+  min-height: 24px;
   border: none;
-  background: rgba(8, 10, 0, 0.06);
+  background: rgba(8, 10, 0, 0.02); /* 2% black */
   cursor: pointer;
   transition:
     background 0.08s ease-out,
@@ -639,13 +640,9 @@ video {
     transform 0.08s ease-out;
 }
 
-
-.studio-pill.active {
-  background: rgba(8, 10, 0, 0.16);
-}
-
+.studio-pill.active,
 .studio-pill:hover {
-  opacity: 0.95;
+  background: rgba(8, 10, 0, 0.05); /* 5% black */
 }
 
 .studio-pill:active {
@@ -654,22 +651,24 @@ video {
 
 /* icon block */
 .studio-pill-icon {
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .studio-pill-icon img {
-  max-width: 100%;
-  max-height: 100%;
+  width: 100%;
+  height: 100%;
   display: block;
 }
 
 /* for + square on product / inspiration */
 .studio-pill-icon--square {
-  border-radius: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 0;
   border: 1px solid rgba(8, 10, 0, 0.7);
 }
 
@@ -677,6 +676,7 @@ video {
   font-size: 14px;
   line-height: 1;
 }
+
 
 /* text: 10pt-ish, semi bold + muted subtitle */
 .studio-pill-main {
@@ -729,23 +729,37 @@ video {
   background: transparent;
   color: var(--mina-text);
 }
-.studio-pills-animate {
-  animation: studioPillsIn 0.6s ease-out forwards;
+
+
+.studio-pills-animate .studio-pill {
+  opacity: 0;
+  transform: translateY(6px);
+  animation: studioPillIn 0.45s ease-out forwards;
 }
 
-@keyframes studioPillsIn {
+.studio-pills-animate .studio-pill:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.studio-pills-animate .studio-pill:nth-child(2) {
+  animation-delay: 0.06s;
+}
+
+.studio-pills-animate .studio-pill:nth-child(3) {
+  animation-delay: 0.12s;
+}
+
+@keyframes studioPillIn {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
-.studio-brief-input::placeholder {
-  color: rgba(8, 10, 0, 0.2);
-}
+
 
 
 /* styles section */
