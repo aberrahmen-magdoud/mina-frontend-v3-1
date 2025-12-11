@@ -871,7 +871,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   // ============================================
   // 12. Render – helper sections
   // ============================================
-  const renderStudioLeft = () => {
+    const renderStudioLeft = () => {
     const aspectIconUrl = ASPECT_ICON_URLS[currentAspect.key];
 
     return (
@@ -881,83 +881,93 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {/* Pills layer – floats above text, does not push it */}
-        {showPills && (
-          <div className="studio-pills-layer">
-            <div className="studio-row studio-row--pills studio-pills-animate">
-              {/* Product pill */}
-              <button
-                type="button"
-                className={classNames(
-                  "studio-pill",
-                  "studio-pill--upload",
-                  productImageAdded && "active"
-                )}
-                onClick={handleProductUploadClick}
-              >
-                <span className="studio-pill-icon studio-pill-icon--square">
-                  <span className="studio-pill-plus" aria-hidden="true">
-                    +
-                  </span>
-                </span>
-                <span className="studio-pill-main">Product image</span>
-              </button>
+        {/* Main column – Input 1 + Input 2 centered */}
+        <div
+          className={classNames(
+            "studio-left-main",
+            showStylesStep && "studio-left-main--with-step"
+          )}
+        >
+          {/* Input 1 = pills + textarea */}
+          <div className="studio-input1-block">
+            {/* Pills slot – always reserve height so textarea never moves */}
+            <div className="studio-pills-slot">
+              {showPills && (
+                <div className="studio-row studio-row--pills studio-pills-animate">
+                  {/* Product pill */}
+                  <button
+                    type="button"
+                    className={classNames(
+                      "studio-pill",
+                      "studio-pill--upload",
+                      productImageAdded && "active"
+                    )}
+                    onClick={handleProductUploadClick}
+                  >
+                    <span className="studio-pill-icon studio-pill-icon--square">
+                      <span className="studio-pill-plus" aria-hidden="true">
+                        +
+                      </span>
+                    </span>
+                    <span className="studio-pill-main">Product image</span>
+                  </button>
 
-              {/* Inspiration pill */}
-              <button
-                type="button"
-                className={classNames(
-                  "studio-pill",
-                  "studio-pill--upload",
-                  brandImageAdded && "active"
-                )}
-                onClick={handleBrandUploadClick}
-              >
-                <span className="studio-pill-icon studio-pill-icon--square">
-                  <span className="studio-pill-plus" aria-hidden="true">
-                    +
-                  </span>
-                </span>
-                <span className="studio-pill-main">Add inspiration</span>
-              </button>
+                  {/* Inspiration pill */}
+                  <button
+                    type="button"
+                    className={classNames(
+                      "studio-pill",
+                      "studio-pill--upload",
+                      brandImageAdded && "active"
+                    )}
+                    onClick={handleBrandUploadClick}
+                  >
+                    <span className="studio-pill-icon studio-pill-icon--square">
+                      <span className="studio-pill-plus" aria-hidden="true">
+                        +
+                      </span>
+                    </span>
+                    <span className="studio-pill-main">Add inspiration</span>
+                  </button>
 
-              {/* Aspect pill */}
-              <button
-                type="button"
-                className={classNames(
-                  "studio-pill",
-                  "studio-pill--aspect"
-                )}
-                onClick={handleCycleAspect}
-              >
-                <span className="studio-pill-icon">
-                  <img src={aspectIconUrl} alt="" />
-                </span>
-                <span className="studio-pill-main">{currentAspect.label}</span>
-                <span className="studio-pill-sub">
-                  {currentAspect.subtitle}
-                </span>
-              </button>
+                  {/* Aspect pill */}
+                  <button
+                    type="button"
+                    className={classNames(
+                      "studio-pill",
+                      "studio-pill--aspect"
+                    )}
+                    onClick={handleCycleAspect}
+                  >
+                    <span className="studio-pill-icon">
+                      <img src={aspectIconUrl} alt="" />
+                    </span>
+                    <span className="studio-pill-main">
+                      {currentAspect.label}
+                    </span>
+                    <span className="studio-pill-sub">
+                      {currentAspect.subtitle}
+                    </span>
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-        )}
 
-        {/* Vertically centered container for Input 1 + Input 2 */}
-        <div className="studio-left-main">
-          {/* Input 1 – brief textarea */}
-          <div className="studio-brief-block">
-            <div
-              className="studio-brief-shell"
-              ref={briefShellRef}
-              onScroll={handleBriefScroll}
-            >
-              <textarea
-                className="studio-brief-input"
-                placeholder="Describe how you want your photo to be like"
-                value={brief}
-                onChange={(e) => setBrief(e.target.value)}
-                rows={4}
-              />
+            {/* Brief text area */}
+            <div className="studio-brief-block">
+              <div
+                className="studio-brief-shell"
+                ref={briefShellRef}
+                onScroll={handleBriefScroll}
+              >
+                <textarea
+                  className="studio-brief-input"
+                  placeholder="Describe how you want your photo to be like"
+                  value={brief}
+                  onChange={(e) => setBrief(e.target.value)}
+                  rows={4}
+                />
+              </div>
             </div>
           </div>
 
@@ -1056,7 +1066,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
           onChange={handleBrandFileChange}
         />
 
-        {/* footer – fixed to bottom of left column via flex layout */}
+        {/* footer – Profile fixed at bottom-left via flex */}
         <div className="studio-footer">
           <button
             type="button"
@@ -1069,6 +1079,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
       </div>
     );
   };
+
 
   const renderStudioRight = () => (
     <div className="studio-right">
