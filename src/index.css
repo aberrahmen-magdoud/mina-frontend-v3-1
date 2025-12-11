@@ -756,11 +756,12 @@ video {
 /* when React adds .visible, it pops in and can animate if you want */
 .studio-step.visible {
   display: block;
-  margin-top: 40px;
-  padding-top: 32px;
+  margin-top: 0;              /* kill the orange gap */
+  padding-top: 16px;          /* small breathing room, tweak if you want */
   border-top: 1px solid rgba(8, 10, 0, 0.08);
   animation: studioStepIn 0.45s ease-out forwards;
 }
+
 
 /* optional soft fade/slide */
 @keyframes studioStepIn {
