@@ -757,7 +757,7 @@ video {
 .studio-step.visible {
   display: block;
   margin-top: 0;              /* kill the orange gap */
-  padding-top: 16px;          /* small breathing room, tweak if you want */
+  padding-top: 8px;          /* small breathing room, tweak if you want */
   border-top: 1px solid rgba(8, 10, 0, 0.08);
   animation: studioStepIn 0.45s ease-out forwards;
 }
