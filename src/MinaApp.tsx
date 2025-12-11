@@ -1267,9 +1267,9 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   const isEmpty = !currentStill && !currentMotion;
 
   // STATE ZERO – just the big placeholder, no buttons / motion / feedback
-  if (isEmpty) {
+ if (isEmpty) {
     return (
-      <div className="studio-right">
+      <div className="studio-right studio-right--full">
         <div className="studio-output-main studio-output-main--empty">
           <div className="studio-output-frame">
             <div className="output-placeholder">
