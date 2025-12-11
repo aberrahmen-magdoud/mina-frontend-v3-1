@@ -741,34 +741,6 @@ video {
   color: rgba(8, 10, 0, 0.2);
 }
 
-/* gradients on scroll – appear only when JS adds elements */
-
-.studio-brief-gradient {
-  position: sticky;
-  left: 0;
-  right: 0;
-  height: 56px;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.studio-brief-gradient--top {
-  top: 0;
-  background: linear-gradient(
-    to bottom,
-    #EEEEE2 0%,
-    rgba(238, 238, 226, 0) 80%
-  );
-}
-
-.studio-brief-gradient--bottom {
-  bottom: 0;
-  background: linear-gradient(
-    to top,
-    #EEEEE2 0%,
-    rgba(238, 238, 226, 0) 80%
-  );
-}
 
 /* styles section */
 
