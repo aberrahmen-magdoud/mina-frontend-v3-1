@@ -606,22 +606,24 @@ video {
 
 /* upper pills – ~22px height, compact */
 .studio-row--pills {
-  margin-bottom: 24px;
+ display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
+/* 22px-ish pill, single line */
 .studio-pill {
-  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 2px 10px;             /* compact vertical padding */
+  gap: 8px;
+  padding: 0 10px;
   min-height: 22px;
-  background: rgba(8, 10, 0, 0.05);
-  text-align: left;
+  border: none;
+  background: rgba(8, 10, 0, 0.06);
   cursor: pointer;
   transition:
     background 0.08s ease-out,
-    transform 0.08s ease-out,
-    opacity 0.08s ease-out;
+    opacity 0.08s ease-out,
+    transform 0.08s ease-out;
 }
 
 .studio-pill.active {
@@ -636,27 +638,25 @@ video {
   transform: scale(0.98);
 }
 
-/* tiny icon block inside pill */
+/* icon block */
 .studio-pill-icon {
   width: 22px;
   height: 22px;
-  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(8, 10, 0, 0.08);
 }
 
-/* aspect rectangle outline */
-.studio-pill-icon--device {
-  background: transparent;
-  border-radius: 4px;
-  border: 2px solid var(--mina-text);
+.studio-pill-icon img {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
 }
 
-/* plus thumbnail */
-.studio-pill-icon--thumb {
-  background: rgba(8, 10, 0, 0.08);
+/* for + square on product / inspiration */
+.studio-pill-icon--square {
+  border-radius: 3px;
+  border: 1px solid rgba(8, 10, 0, 0.7);
 }
 
 .studio-pill-plus {
@@ -664,16 +664,10 @@ video {
   line-height: 1;
 }
 
-/* text – 10pt-ish semibold (≈13px) */
-.studio-pill-text {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
+/* text: 10pt-ish, semi bold + muted subtitle */
 .studio-pill-main {
-  font-size: 13px;               /* ~10pt */
-  font-weight: 600;              /* semibold */
+  font-size: 13px;      /* ≈10pt */
+  font-weight: 600;
 }
 
 .studio-pill-sub {
