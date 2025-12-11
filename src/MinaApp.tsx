@@ -927,10 +927,15 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
                     onClick={handleBrandUploadClick}
                   >
                     <span className="studio-pill-icon studio-pill-icon--square">
-                      <span className="studio-pill-plus" aria-hidden="true">
-                        +
+                        {brandImageThumb ? (
+                          <img src={brandImageThumb} alt="" />
+                        ) : (
+                          <span className="studio-pill-plus" aria-hidden="true">
+                            +
+                          </span>
+                        )}
                       </span>
-                    </span>
+
                     <span className="studio-pill-main">Add inspiration</span>
                   </button>
 
