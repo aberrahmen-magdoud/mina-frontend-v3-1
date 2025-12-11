@@ -1290,7 +1290,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
               />
             ) : (
               <div className="output-placeholder">
-                Describe your image on the left to see it here.
+                New ideas don’t actually exist, just recycle.
               </div>
             )}
           </div>
