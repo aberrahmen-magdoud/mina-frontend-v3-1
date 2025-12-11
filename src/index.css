@@ -564,25 +564,20 @@ video {
   min-height: 0;
 }
 
-/* overlay that sits above the centered text */
-.studio-pills-layer {
-  position: absolute;
-  left: 64px;
-  right: 64px;
-  top: 50%;
-  transform: translateY(-140px);  /* how far above the center block */
-  pointer-events: none;
-}
 
-.studio-pills-layer .studio-row {
-  pointer-events: auto;  /* buttons are clickable again */
-}
 .studio-left-main {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   margin-top: 0;
   margin-bottom: 0;   /* anchor to the top padding of .studio-left */
+}
+/* Pills slot – reserves height so text doesn't move when pills appear */
+.studio-pills-slot {
+  min-height: 32px;          /* ~22px pill + a bit of breathing room */
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
 }
 
 .studio-right {
