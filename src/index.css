@@ -649,8 +649,7 @@ video {
   transform: scale(0.98);
 }
 
-/* icon block */
-.studio-pill-icon {
+/.studio-pill-icon {
   width: 16px;
   height: 16px;
   display: flex;
@@ -658,19 +657,26 @@ video {
   justify-content: center;
 }
 
-.studio-pill-icon img {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-/* for + square on product / inspiration */
+/* filled 10% black square, no outline */
 .studio-pill-icon--square {
   width: 16px;
   height: 16px;
   border-radius: 0;
-  border: 1px solid rgba(8, 10, 0, 0.7);
+  background: rgba(8, 10, 0, 0.1);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
+
+.studio-pill-icon--square img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 
 .studio-pill-plus {
   font-size: 14px;
