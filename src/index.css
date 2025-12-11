@@ -624,24 +624,24 @@ video {
   flex-wrap: wrap;
   gap: 8px;
 }
-/* 22px-ish pill, single line */
 .studio-pill {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;          /* bigger */
-  min-height: 32px;           /* bigger */
+  align-items: left;
+  gap: 10px;
+  padding: 12px 14px;          /* tighter vertical, comfy horizontal */
   border: none;
   background: rgba(8, 10, 0, 0.02);  /* 2% black */
   cursor: pointer;
   font-size: 13px;            /* ≈10pt */
   font-weight: 600;           /* semibold */
-  letter-spacing: -0.02em;
+  letter-spacing: -0.00em;
+  line-height: 1.1;
   transition:
     background 0.08s ease-out,
     opacity 0.08s ease-out,
     transform 0.08s ease-out;
 }
+
 
 .studio-pill.active,
 .studio-pill:hover {
