@@ -6,1661 +6,1647 @@ import React, { useEffect, useState, useRef } from "react";
 import { supabase } from "./lib/supabaseClient";
 
 const API_BASE_URL =
-import.meta.env.VITE_MINA_API_BASE_URL ||
-"[https://mina-editorial-ai-api.onrender.com](https://mina-editorial-ai-api.onrender.com)";
+  import.meta.env.VITE_MINA_API_BASE_URL ||
+  "https://mina-editorial-ai-api.onrender.com";
 
 const TOPUP_URL =
-import.meta.env.VITE_MINA_TOPUP_URL ||
-"[https://www.faltastudio.com/checkouts/cn/hWN6EhbqQW5KrdIuBO3j5HKV/en-ae?_r=AQAB9NY_ccOV_da3y7VmTxJU-dDoLEOCdhP9sg2YlvDwLQQ](https://www.faltastudio.com/checkouts/cn/hWN6EhbqQW5KrdIuBO3j5HKV/en-ae?_r=AQAB9NY_ccOV_da3y7VmTxJU-dDoLEOCdhP9sg2YlvDwLQQ)";
+  import.meta.env.VITE_MINA_TOPUP_URL ||
+  "https://www.faltastudio.com/checkouts/cn/hWN6EhbqQW5KrdIuBO3j5HKV/en-ae?_r=AQAB9NY_ccOV_da3y7VmTxJU-dDoLEOCdhP9sg2YlvDwLQQ";
 
 // ==============================================
 // 2. Types
 // ==============================================
 type HealthState = {
-ok: boolean;
-message?: string;
+  ok: boolean;
+  message?: string;
 };
 
 type CreditsMeta = {
-imageCost: number;
-motionCost: number;
+  imageCost: number;
+  motionCost: number;
 };
 
 type CreditsState = {
-balance: number;
-meta?: CreditsMeta;
+  balance: number;
+  meta?: CreditsMeta;
 };
 
 type EditorialResponse = {
-ok: boolean;
-prompt?: string;
-imageUrl?: string;
-imageUrls?: string[];
-generationId?: string;
-sessionId?: string;
-credits?: {
-balance: number;
-cost?: number;
-};
+  ok: boolean;
+  prompt?: string;
+  imageUrl?: string;
+  imageUrls?: string[];
+  generationId?: string;
+  sessionId?: string;
+  credits?: {
+    balance: number;
+    cost?: number;
+  };
 };
 
 type MotionSuggestResponse = {
-ok: boolean;
-suggestion?: string;
+  ok: boolean;
+  suggestion?: string;
 };
 
 type MotionResponse = {
-ok: boolean;
-prompt?: string;
-videoUrl?: string;
-generationId?: string;
-sessionId?: string;
-credits?: {
-balance: number;
-cost?: number;
-};
+  ok: boolean;
+  prompt?: string;
+  videoUrl?: string;
+  generationId?: string;
+  sessionId?: string;
+  credits?: {
+    balance: number;
+    cost?: number;
+  };
 };
 
 type GenerationRecord = {
-id: string;
-type: string;
-sessionId: string;
-customerId: string;
-platform: string;
-prompt: string;
-outputUrl: string;
-createdAt: string;
-meta?: {
-tone?: string;
-platform?: string;
-minaVisionEnabled?: boolean;
-stylePresetKey?: string;
-productImageUrl?: string;
-styleImageUrls?: string[];
-aspectRatio?: string;
-[key: string]: unknown;
-} | null;
+  id: string;
+  type: string;
+  sessionId: string;
+  customerId: string;
+  platform: string;
+  prompt: string;
+  outputUrl: string;
+  createdAt: string;
+  meta?: {
+    tone?: string;
+    platform?: string;
+    minaVisionEnabled?: boolean;
+    stylePresetKey?: string;
+    productImageUrl?: string;
+    styleImageUrls?: string[];
+    aspectRatio?: string;
+    [key: string]: unknown;
+  } | null;
 };
 
 type FeedbackRecord = {
-id: string;
-customerId: string;
-resultType: string;
-platform: string;
-prompt: string;
-comment: string;
-imageUrl?: string;
-videoUrl?: string;
-createdAt: string;
+  id: string;
+  customerId: string;
+  resultType: string;
+  platform: string;
+  prompt: string;
+  comment: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  createdAt: string;
 };
 
 type HistoryResponse = {
-ok: boolean;
-customerId: string;
-credits: {
-balance: number;
-history?: {
-id: string;
-amount: number;
-reason: string;
-createdAt: string;
-}[];
-};
-generations: GenerationRecord[];
-feedbacks: FeedbackRecord[];
+  ok: boolean;
+  customerId: string;
+  credits: {
+    balance: number;
+    history?: {
+      id: string;
+      amount: number;
+      reason: string;
+      createdAt: string;
+    }[];
+  };
+  generations: GenerationRecord[];
+  feedbacks: FeedbackRecord[];
 };
 
 type StillItem = {
-id: string;
-url: string;
-createdAt: string;
-prompt: string;
-aspectRatio?: string;
+  id: string;
+  url: string;
+  createdAt: string;
+  prompt: string;
+  aspectRatio?: string;
 };
 
 type MotionItem = {
-id: string;
-url: string;
-createdAt: string;
-prompt: string;
+  id: string;
+  url: string;
+  createdAt: string;
+  prompt: string;
 };
 
 type CustomStyleImage = {
-id: string;
-url: string;
-file: File;
+  id: string;
+  url: string;
+  file: File;
 };
 
 type AspectKey = "9-16" | "4-5" | "2-3" | "1-1";
 
 type AspectOption = {
-key: AspectKey;
-ratio: string;
-label: string;
-subtitle: string;
-platformKey: string;
+  key: AspectKey;
+  ratio: string;
+  label: string;
+  subtitle: string;
+  platformKey: string;
 };
 
 // ==============================================
 // 3. Constants & helpers
 // ==============================================
 const ASPECT_OPTIONS: AspectOption[] = [
-{
-key: "9-16",
-ratio: "9:16",
-label: "9:16",
-subtitle: "Tiktok/Reel",
-platformKey: "tiktok",
-},
-{
-key: "4-5",
-ratio: "4:5",
-label: "4:5",
-subtitle: "Post",
-platformKey: "instagram-post",
-},
-{
-key: "2-3",
-ratio: "2:3",
-label: "2:3",
-subtitle: "Printing",
-platformKey: "print",
-},
-{
-key: "1-1",
-ratio: "1:1",
-label: "1:1",
-subtitle: "Square",
-platformKey: "square",
-},
+  {
+    key: "9-16",
+    ratio: "9:16",
+    label: "9:16",
+    subtitle: "Tiktok/Reel",
+    platformKey: "tiktok",
+  },
+  {
+    key: "4-5",
+    ratio: "4:5",
+    label: "4:5",
+    subtitle: "Post",
+    platformKey: "instagram-post",
+  },
+  {
+    key: "2-3",
+    ratio: "2:3",
+    label: "2:3",
+    subtitle: "Printing",
+    platformKey: "print",
+  },
+  {
+    key: "1-1",
+    ratio: "1:1",
+    label: "1:1",
+    subtitle: "Square",
+    platformKey: "square",
+  },
 ];
 
 const ASPECT_ICON_URLS: Record<AspectKey, string> = {
-"9-16":
-"[https://cdn.shopify.com/s/files/1/0678/9254/3571/files/tiktokreels_icon_e116174c-afc7-4174-9cf0-f24a07c8517b.svg?v=1765425956](https://cdn.shopify.com/s/files/1/0678/9254/3571/files/tiktokreels_icon_e116174c-afc7-4174-9cf0-f24a07c8517b.svg?v=1765425956)",
-"4-5":
-"[https://cdn.shopify.com/s/files/1/0678/9254/3571/files/post_icon_f646fcb5-03be-4cf5-b25c-b1ec38f6794e.svg?v=1765425956](https://cdn.shopify.com/s/files/1/0678/9254/3571/files/post_icon_f646fcb5-03be-4cf5-b25c-b1ec38f6794e.svg?v=1765425956)",
-"2-3":
-"[https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Printing_icon_c7252c7d-863e-4efb-89c4-669261119d61.svg?v=1765425956](https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Printing_icon_c7252c7d-863e-4efb-89c4-669261119d61.svg?v=1765425956)",
-"1-1":
-"[https://cdn.shopify.com/s/files/1/0678/9254/3571/files/square_icon_901d47a8-44a8-4ab9-b412-2224e97fd9d9.svg?v=1765425956](https://cdn.shopify.com/s/files/1/0678/9254/3571/files/square_icon_901d47a8-44a8-4ab9-b412-2224e97fd9d9.svg?v=1765425956)",
+  "9-16":
+    "https://cdn.shopify.com/s/files/1/0678/9254/3571/files/tiktokreels_icon_e116174c-afc7-4174-9cf0-f24a07c8517b.svg?v=1765425956",
+  "4-5":
+    "https://cdn.shopify.com/s/files/1/0678/9254/3571/files/post_icon_f646fcb5-03be-4cf5-b25c-b1ec38f6794e.svg?v=1765425956",
+  "2-3":
+    "https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Printing_icon_c7252c7d-863e-4efb-89c4-669261119d61.svg?v=1765425956",
+  "1-1":
+    "https://cdn.shopify.com/s/files/1/0678/9254/3571/files/square_icon_901d47a8-44a8-4ab9-b412-2224e97fd9d9.svg?v=1765425956",
 };
 
 const STYLE_PRESETS = [
-{
-key: "vintage",
-label: "Vintage",
-thumb:
-"[https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Vintage_1.png?v=1765457775](https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Vintage_1.png?v=1765457775)",
-},
-{
-key: "gradient",
-label: "Gradient",
-thumb:
-"[https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Gradient.png?v=1765457775](https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Gradient.png?v=1765457775)",
-},
-{
-key: "back-light",
-label: "Back light",
-thumb:
-"[https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Backlight.png?v=1765457775](https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Backlight.png?v=1765457775)",
-},
+  {
+    key: "vintage",
+    label: "Vintage",
+    thumb:
+      "https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Vintage_1.png?v=1765457775",
+  },
+  {
+    key: "gradient",
+    label: "Gradient",
+    thumb:
+      "https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Gradient.png?v=1765457775",
+  },
+  {
+    key: "back-light",
+    label: "Back light",
+    thumb:
+      "https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Backlight.png?v=1765457775",
+  },
 ] as const;
 
 function getInitialCustomerId(initialCustomerId?: string): string {
-try {
-if (typeof window !== "undefined") {
-const params = new URLSearchParams(window.location.search);
-const fromUrl = params.get("customerId");
-if (fromUrl && fromUrl.trim().length > 0) {
-return fromUrl.trim();
-}
+  try {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const fromUrl = params.get("customerId");
+      if (fromUrl && fromUrl.trim().length > 0) {
+        return fromUrl.trim();
+      }
 
- 
-  const stored = window.localStorage.getItem("minaCustomerId");
-  if (stored && stored.trim().length > 0) {
-    return stored.trim();
+      const stored = window.localStorage.getItem("minaCustomerId");
+      if (stored && stored.trim().length > 0) {
+        return stored.trim();
+      }
+    }
+  } catch {
+    // ignore
   }
-}
- 
 
-} catch (err) {
-// ignore
-}
+  if (initialCustomerId && initialCustomerId.trim().length > 0) {
+    return initialCustomerId.trim();
+  }
 
-if (initialCustomerId && initialCustomerId.trim().length > 0) {
-return initialCustomerId.trim();
-}
-
-return "anonymous";
+  return "anonymous";
 }
 
 function persistCustomerId(id: string) {
-try {
-if (typeof window !== "undefined") {
-window.localStorage.setItem("minaCustomerId", id);
-}
-} catch (err) {
-// ignore
-}
+  try {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("minaCustomerId", id);
+    }
+  } catch {
+    // ignore
+  }
 }
 
 function formatTime(ts?: string | null) {
-if (!ts) return "";
-const d = new Date(ts);
-if (Number.isNaN(d.getTime())) return ts;
-return d.toLocaleString();
+  if (!ts) return "";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return ts;
+  return d.toLocaleString();
 }
 
 function classNames(
-...parts: Array<string | false | null | undefined>
+  ...parts: Array<string | false | null | undefined>
 ): string {
-return parts.filter(Boolean).join(" ");
+  return parts.filter(Boolean).join(" ");
 }
 
 type MinaAppProps = {
-initialCustomerId?: string;
+  initialCustomerId?: string;
 };
 
 // ==============================================
 // 4. Component
 // ==============================================
 const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
-// 4.1 Global tab + customer
-const [activeTab, setActiveTab] = useState<"studio" | "profile">("studio");
-const [customerId, setCustomerId] = useState<string>(() =>
-getInitialCustomerId(initialCustomerId)
-);
-const [customerIdInput, setCustomerIdInput] = useState<string>(customerId);
-
-// 4.2 Health / credits / session
-const [health, setHealth] = useState<HealthState | null>(null);
-const [checkingHealth, setCheckingHealth] = useState(false);
-
-const [credits, setCredits] = useState<CreditsState | null>(null);
-const [creditsLoading, setCreditsLoading] = useState(false);
-
-const [sessionId, setSessionId] = useState<string | null>(null);
-const [sessionTitle, setSessionTitle] = useState("Mina Studio session");
-
-// 4.3 Studio – brief + steps
-const [brief, setBrief] = useState("");
-const [tone] = useState("Poetic");
-const [aspectIndex, setAspectIndex] = useState(0);
-
-const [productImageAdded, setProductImageAdded] = useState(false);
-const [brandImageAdded, setBrandImageAdded] = useState(false);
-const [productImageThumb, setProductImageThumb] = useState<string | null>(
-null
-);
-const [brandImageThumb, setBrandImageThumb] = useState<string | null>(null);
-
-const [stylePresetKey, setStylePresetKey] =
-useState<string>("soft-desert-editorial");
-const [minaVisionEnabled, setMinaVisionEnabled] = useState(true);
-const [stylesCollapsed, setStylesCollapsed] = useState(false);
-
-const [stillItems, setStillItems] = useState<StillItem[]>([]);
-const [stillIndex, setStillIndex] = useState(0);
-const [stillGenerating, setStillGenerating] = useState(false);
-const [stillError, setStillError] = useState<string | null>(null);
-const [lastStillPrompt, setLastStillPrompt] = useState<string>("");
-
-const [motionItems, setMotionItems] = useState<MotionItem[]>([]);
-const [motionIndex, setMotionIndex] = useState(0);
-const [motionDescription, setMotionDescription] = useState("");
-const [motionSuggestLoading, setMotionSuggestLoading] = useState(false);
-const [motionSuggestError, setMotionSuggestError] = useState<string | null>(
-null
-);
-const [motionGenerating, setMotionGenerating] = useState(false);
-const [motionError, setMotionError] = useState<string | null>(null);
-
-const [feedbackText, setFeedbackText] = useState("");
-const [feedbackSending, setFeedbackSending] = useState(false);
-const [feedbackError, setFeedbackError] = useState<string | null>(null);
-
-// 4.4 History (profile)
-const [historyLoading, setHistoryLoading] = useState(false);
-const [historyError, setHistoryError] = useState<string | null>(null);
-const [historyGenerations, setHistoryGenerations] = useState<
-GenerationRecord[]
-
-([]);
-const [historyFeedbacks, setHistoryFeedbacks] = useState<FeedbackRecord[]>(
-[]
-);
-
-// 4.5 Drag & upload refs
-const [draggingUpload, setDraggingUpload] = useState(false);
-const productInputRef = useRef<HTMLInputElement | null>(null);
-const brandInputRef = useRef<HTMLInputElement | null>(null);
-
-// 4.6 Brief helper hint for "describe more"
-const [showDescribeMore, setShowDescribeMore] = useState(false);
-const describeMoreTimeoutRef = useRef<number | null>(null);
-
-// 4.7 Brief scroll ref (for CSS mask fade)
-const briefShellRef = useRef<HTMLDivElement | null>(null);
-
-// 4.8 Custom style (Add yours)
-const [customStylePanelOpen, setCustomStylePanelOpen] = useState(false);
-const [customStyleImages, setCustomStyleImages] = useState<CustomStyleImage[]>(
-[]
-);
-const [customStyleHeroId, setCustomStyleHeroId] = useState<string | null>(
-null
-);
-const [customStyleHeroThumb, setCustomStyleHeroThumb] = useState<
-string | null
-
-> (null);
-> const [customStyleTraining, setCustomStyleTraining] = useState(false);
-> const [customStyleError, setCustomStyleError] = useState<string | null>(null);
-> const customStyleInputRef = useRef<HTMLInputElement | null>(null);
-
-// ============================================
-// 5. Derived values
-// ============================================
-const briefLength = brief.trim().length;
-const showPills = briefLength >= 3;
-const showStylesStep = briefLength >= 20;
-const canCreateStill = briefLength >= 40 && !stillGenerating;
-
-const currentAspect = ASPECT_OPTIONS[aspectIndex];
-const currentStill: StillItem | null =
-stillItems[stillIndex] || stillItems[0] || null;
-const currentMotion: MotionItem | null =
-motionItems[motionIndex] || motionItems[0] || null;
-
-const imageCost = credits?.meta?.imageCost ?? 1;
-const motionCost = credits?.meta?.motionCost ?? 5;
-
-const briefHintVisible =
-showDescribeMore && briefLength > 0 && briefLength < 20;
-
-// ============================================
-// 6. Effects – bootstrap + persist customer + brief hint
-// ============================================
-useEffect(() => {
-setCustomerIdInput(customerId);
-persistCustomerId(customerId);
-}, [customerId]);
-
-useEffect(() => {
-if (!API_BASE_URL || !customerId) return;
-
- 
-const bootstrap = async () => {
-  await handleCheckHealth();
-  await fetchCredits();
-  await ensureSession();
-  await fetchHistory();
-};
-
-void bootstrap();
-// eslint-disable-next-line react-hooks/exhaustive-deps
- 
-
-}, [customerId]);
-
-// revoke object URLs on unmount
-useEffect(() => {
-return () => {
-if (productImageThumb) URL.revokeObjectURL(productImageThumb);
-if (brandImageThumb) URL.revokeObjectURL(brandImageThumb);
-if (customStyleHeroThumb && customStyleHeroThumb.startsWith("blob:")) {
-URL.revokeObjectURL(customStyleHeroThumb);
-}
-};
-}, [productImageThumb, brandImageThumb, customStyleHeroThumb]);
-
-// "Describe more" hint – show if user stops before 20 chars
-useEffect(() => {
-if (describeMoreTimeoutRef.current && typeof window !== "undefined") {
-window.clearTimeout(describeMoreTimeoutRef.current);
-}
-
- 
-const trimmed = brief.trim();
-if (!trimmed || trimmed.length >= 20) {
-  setShowDescribeMore(false);
-  return;
-}
-
-if (typeof window === "undefined") return;
-
-const id = window.setTimeout(() => {
-  setShowDescribeMore(true);
-}, 1200);
-describeMoreTimeoutRef.current = id as unknown as number;
-
-return () => {
-  window.clearTimeout(id);
-};
- 
-
-}, [brief]);
-
-// ============================================
-// 7. API helpers
-// ============================================
-const handleCheckHealth = async () => {
-if (!API_BASE_URL) return;
-try {
-setCheckingHealth(true);
-const res = await fetch(`${API_BASE_URL}/health`);
-const json = (await res.json().catch(() => ({}))) as {
-ok?: boolean;
-message?: string;
-};
-setHealth({
-ok: json.ok ?? false,
-message: json.message ?? "",
-});
-} catch (err: any) {
-setHealth({
-ok: false,
-message: err?.message || "Unable to reach Mina.",
-});
-} finally {
-setCheckingHealth(false);
-}
-};
-
-const fetchCredits = async () => {
-if (!API_BASE_URL || !customerId) return;
-try {
-setCreditsLoading(true);
-const params = new URLSearchParams({ customerId });
-const res = await fetch(`${API_BASE_URL}/credits/balance?${params}`);
-if (!res.ok) return;
-const json = (await res.json()) as {
-balance: number;
-meta?: { imageCost: number; motionCost: number };
-};
-setCredits({
-balance: json.balance,
-meta: json.meta,
-});
-} catch (err) {
-// silent
-} finally {
-setCreditsLoading(false);
-}
-};
-
-const ensureSession = async (): Promise<string | null> => {
-if (sessionId) return sessionId;
-if (!API_BASE_URL || !customerId) return null;
-
- 
-try {
-  const res = await fetch(`${API_BASE_URL}/sessions/start`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      customerId,
-      platform: currentAspect.platformKey,
-      title: sessionTitle,
-    }),
-  });
-
-  if (!res.ok) return null;
-  const json = (await res.json()) as {
-    ok: boolean;
-    session?: { id: string; title?: string };
-  };
-  if (json.ok && json.session?.id) {
-    setSessionId(json.session.id);
-    setSessionTitle(json.session.title || sessionTitle);
-    return json.session.id;
-  }
-} catch (err) {
-  // ignore
-}
-return null;
- 
-
-};
-
-const fetchHistory = async () => {
-if (!API_BASE_URL || !customerId) return;
-try {
-setHistoryLoading(true);
-const res = await fetch(
-`${API_BASE_URL}/history/customer/${encodeURIComponent(customerId)}`
-);
-if (!res.ok) throw new Error(`Status ${res.status}`);
-const json = (await res.json()) as HistoryResponse;
-if (!json.ok) throw new Error("History error");
-
- 
-  setCredits((prev) => ({
-    balance: json.credits.balance,
-    meta: prev?.meta,
-  }));
-  setHistoryGenerations(json.generations || []);
-  setHistoryFeedbacks(json.feedbacks || []);
-} catch (err: any) {
-  setHistoryError(err?.message || "Unable to load history.");
-} finally {
-  setHistoryLoading(false);
-}
- 
-
-};
-
-// ============================================
-// 8. Editorial stills
-// ============================================
-const handleGenerateStill = async () => {
-const trimmed = brief.trim();
-if (trimmed.length < 40) return;
-
- 
-if (!API_BASE_URL) {
-  setStillError("Missing API base URL (VITE_MINA_API_BASE_URL).");
-  return;
-}
-
-const sid = await ensureSession();
-if (!sid) {
-  setStillError("Could not start Mina session.");
-  return;
-}
-
-try {
-  setStillGenerating(true);
-  setStillError(null);
-
-  const res = await fetch(`${API_BASE_URL}/editorial/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      customerId,
-      sessionId: sid,
-      brief: trimmed,
-      tone,
-      platform: currentAspect.platformKey,
-      minaVisionEnabled,
-      stylePresetKey,
-      productImageUrl: productImageAdded ? "local-upload" : "",
-      styleImageUrls: brandImageAdded ? ["local-brand"] : [],
-      aspectRatio: currentAspect.ratio,
-    }),
-  });
-
-  if (!res.ok) {
-    const errJson = await res.json().catch(() => null);
-    const msg =
-      errJson?.message ||
-      `Error ${res.status}: Failed to generate editorial still.`;
-    throw new Error(msg);
-  }
-
-  const data = (await res.json()) as EditorialResponse;
-  const url = data.imageUrl || data.imageUrls?.[0];
-  if (!url) throw new Error("No image URL in Mina response.");
-
-  const item: StillItem = {
-    id: data.generationId || `still_${Date.now()}`,
-    url,
-    createdAt: new Date().toISOString(),
-    prompt: data.prompt || trimmed,
-    aspectRatio: currentAspect.ratio,
-  };
-
-  setStillItems((prev) => [...prev, item]);
-  setStillIndex((prev) => prev + 1);
-  setLastStillPrompt(item.prompt);
-
-  if (data.credits?.balance !== undefined) {
-    setCredits((prev) => ({
-      balance: data.credits!.balance,
-      meta: prev?.meta,
-    }));
-  }
-} catch (err: any) {
-  setStillError(err?.message || "Unexpected error generating still.");
-} finally {
-  setStillGenerating(false);
-}
- 
-
-};
-
-// ============================================
-// 9. Motion – suggest + generate
-// ============================================
-const handleSuggestMotion = async () => {
-if (!API_BASE_URL || !currentStill) return;
-
- 
-try {
-  setMotionSuggestLoading(true);
-  setMotionSuggestError(null);
-  const res = await fetch(`${API_BASE_URL}/motion/suggest`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      customerId,
-      referenceImageUrl: currentStill.url,
-      tone,
-      platform: currentAspect.platformKey,
-      minaVisionEnabled,
-      stylePresetKey,
-    }),
-  });
-
-  if (!res.ok) {
-    const errJson = await res.json().catch(() => null);
-    const msg =
-      errJson?.message ||
-      `Error ${res.status}: Failed to suggest motion.`;
-    throw new Error(msg);
-  }
-
-  const data = (await res.json()) as MotionSuggestResponse;
-  if (data.suggestion) {
-    setMotionDescription(data.suggestion);
-  }
-} catch (err: any) {
-  setMotionSuggestError(
-    err?.message || "Unexpected error suggesting motion."
+  // 4.1 Global tab + customer
+  const [activeTab, setActiveTab] = useState<"studio" | "profile">("studio");
+  const [customerId, setCustomerId] = useState<string>(() =>
+    getInitialCustomerId(initialCustomerId)
   );
-} finally {
-  setMotionSuggestLoading(false);
-}
- 
+  const [customerIdInput, setCustomerIdInput] = useState<string>(customerId);
 
-};
+  // 4.2 Health / credits / session
+  const [health, setHealth] = useState<HealthState | null>(null);
+  const [checkingHealth, setCheckingHealth] = useState(false);
 
-const handleGenerateMotion = async () => {
-if (!API_BASE_URL || !currentStill || !motionDescription.trim()) {
-return;
-}
+  const [credits, setCredits] = useState<CreditsState | null>(null);
+  const [creditsLoading, setCreditsLoading] = useState(false);
 
- 
-const sid = await ensureSession();
-if (!sid) {
-  setMotionError("Could not start Mina session.");
-  return;
-}
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionTitle, setSessionTitle] = useState("Mina Studio session");
 
-try {
-  setMotionGenerating(true);
-  setMotionError(null);
+  // 4.3 Studio – brief + steps
+  const [brief, setBrief] = useState("");
+  const [tone] = useState("Poetic");
+  const [, setPlatform] = useState("tiktok");
+  const [aspectIndex, setAspectIndex] = useState(0);
 
-  const res = await fetch(`${API_BASE_URL}/motion/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      customerId,
-      sessionId: sid,
-      lastImageUrl: currentStill.url,
-      motionDescription: motionDescription.trim(),
-      tone,
-      platform: currentAspect.platformKey,
-      minaVisionEnabled,
-      stylePresetKey,
-    }),
+  const [productImageAdded, setProductImageAdded] = useState(false);
+  const [brandImageAdded, setBrandImageAdded] = useState(false);
+  const [productImageThumb, setProductImageThumb] = useState<string | null>(
+    null
+  );
+  const [brandImageThumb, setBrandImageThumb] = useState<string | null>(null);
+
+  const [stylePresetKey, setStylePresetKey] = useState<string>("vintage");
+  const [minaVisionEnabled, setMinaVisionEnabled] = useState(true);
+  const [stylesCollapsed, setStylesCollapsed] = useState(false);
+
+  const [stillItems, setStillItems] = useState<StillItem[]>([]);
+  const [stillIndex, setStillIndex] = useState(0);
+  const [stillGenerating, setStillGenerating] = useState(false);
+  const [stillError, setStillError] = useState<string | null>(null);
+  const [lastStillPrompt, setLastStillPrompt] = useState<string>("");
+
+  const [motionItems, setMotionItems] = useState<MotionItem[]>([]);
+  const [motionIndex, setMotionIndex] = useState(0);
+  const [motionDescription, setMotionDescription] = useState("");
+  const [motionSuggestLoading, setMotionSuggestLoading] = useState(false);
+  const [motionSuggestError, setMotionSuggestError] = useState<string | null>(
+    null
+  );
+  const [motionGenerating, setMotionGenerating] = useState(false);
+  const [motionError, setMotionError] = useState<string | null>(null);
+
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackSending, setFeedbackSending] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+
+  // 4.4 History (profile)
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyGenerations, setHistoryGenerations] = useState<
+    GenerationRecord[]
+  >([]);
+  const [historyFeedbacks, setHistoryFeedbacks] = useState<FeedbackRecord[]>(
+    []
+  );
+
+  // 4.5 Drag & upload refs
+  const [draggingUpload, setDraggingUpload] = useState(false);
+  const productInputRef = useRef<HTMLInputElement | null>(null);
+  const brandInputRef = useRef<HTMLInputElement | null>(null);
+
+  // 4.6 Brief helper hint for "describe more"
+  const [showDescribeMore, setShowDescribeMore] = useState(false);
+  const describeMoreTimeoutRef = useRef<number | null>(null);
+
+  // 4.7 Brief scroll state (unused for now, but kept for future gradients)
+  const briefShellRef = useRef<HTMLDivElement | null>(null);
+  const [briefScrollState] = useState({
+    canScroll: false,
+    atTop: true,
+    atBottom: true,
   });
 
-  if (!res.ok) {
-    const errJson = await res.json().catch(() => null);
-    const msg =
-      errJson?.message ||
-      `Error ${res.status}: Failed to generate motion.`;
-    throw new Error(msg);
-  }
+  // 4.8 Custom style (Add yours)
+  const [customStylePanelOpen, setCustomStylePanelOpen] = useState(false);
+  const [customStyleImages, setCustomStyleImages] = useState<CustomStyleImage[]>(
+    []
+  );
+  const [customStyleHeroId, setCustomStyleHeroId] = useState<string | null>(
+    null
+  );
+  const [customStyleHeroThumb, setCustomStyleHeroThumb] = useState<
+    string | null
+  >(null);
+  const [customStyleTraining, setCustomStyleTraining] = useState(false);
+  const [customStyleError, setCustomStyleError] = useState<string | null>(null);
+  const customStyleInputRef = useRef<HTMLInputElement | null>(null);
 
-  const data = (await res.json()) as MotionResponse;
-  const url = data.videoUrl;
-  if (!url) throw new Error("No video URL in Mina response.");
+  // ============================================
+  // 5. Derived values
+  // ============================================
+  const briefLength = brief.trim().length;
+  const showPills = briefLength >= 3;
+  const showStylesStep = briefLength >= 20;
+  const canCreateStill = briefLength >= 40 && !stillGenerating;
 
-  const item: MotionItem = {
-    id: data.generationId || `motion_${Date.now()}`,
-    url,
-    createdAt: new Date().toISOString(),
-    prompt: data.prompt || motionDescription.trim(),
-  };
+  const currentAspect = ASPECT_OPTIONS[aspectIndex];
+  const currentStill: StillItem | null =
+    stillItems[stillIndex] || stillItems[0] || null;
+  const currentMotion: MotionItem | null =
+    motionItems[motionIndex] || motionItems[0] || null;
 
-  setMotionItems((prev) => [...prev, item]);
-  setMotionIndex((prev) => prev + 1);
+  const imageCost = credits?.meta?.imageCost ?? 1;
+  const motionCost = credits?.meta?.motionCost ?? 5;
 
-  if (data.credits?.balance !== undefined) {
-    setCredits((prev) => ({
-      balance: data.credits!.balance,
-      meta: prev?.meta,
-    }));
-  }
-} catch (err: any) {
-  setMotionError(err?.message || "Unexpected error generating motion.");
-} finally {
-  setMotionGenerating(false);
-}
- 
+  // for JSX readability
+  const briefHintVisible = showDescribeMore;
 
-};
+  // ============================================
+  // 6. Effects – bootstrap + persist customer
+  // ============================================
+  useEffect(() => {
+    setCustomerIdInput(customerId);
+    persistCustomerId(customerId);
+  }, [customerId]);
 
-// ============================================
-// 10. Feedback / like / download
-// ============================================
-const handleLikeCurrentStill = async () => {
-if (!API_BASE_URL || !currentStill) return;
+  useEffect(() => {
+    if (!API_BASE_URL || !customerId) return;
 
- 
-try {
-  await fetch(`${API_BASE_URL}/feedback/like`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      customerId,
-      resultType: "image",
-      platform: currentAspect.platformKey,
-      prompt: currentStill.prompt || lastStillPrompt || brief,
-      comment: "",
-      imageUrl: currentStill.url,
-      videoUrl: "",
-      sessionId,
-    }),
-  });
-} catch (err) {
-  // non-blocking
-}
- 
+    const bootstrap = async () => {
+      await handleCheckHealth();
+      await fetchCredits();
+      await ensureSession();
+      await fetchHistory();
+    };
 
-};
+    void bootstrap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId]);
 
-const handleSubmitFeedback = async () => {
-if (!API_BASE_URL || !feedbackText.trim()) return;
-const comment = feedbackText.trim();
-
- 
-const targetVideo = currentMotion?.url || "";
-const targetImage = currentStill?.url || "";
-
-try {
-  setFeedbackSending(true);
-  setFeedbackError(null);
-
-  await fetch(`${API_BASE_URL}/feedback/like`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      customerId,
-      resultType: targetVideo ? "motion" : "image",
-      platform: currentAspect.platformKey,
-      prompt: lastStillPrompt || brief,
-      comment,
-      imageUrl: targetImage,
-      videoUrl: targetVideo,
-      sessionId,
-    }),
-  });
-
-  setFeedbackText("");
-} catch (err: any) {
-  setFeedbackError(err?.message || "Failed to send feedback.");
-} finally {
-  setFeedbackSending(false);
-}
- 
-
-};
-
-const handleDownloadCurrentStill = () => {
-const target = currentMotion?.url || currentStill?.url;
-if (!target) return;
-
- 
-const a = document.createElement("a");
-a.href = target;
-const safePrompt =
-  (lastStillPrompt || brief || "Mina-image")
-    .replace(/[^a-z0-9]+/gi, "-")
-    .toLowerCase()
-    .slice(0, 80) || "mina-image";
-a.download = `Mina-v3-${safePrompt}`;
-document.body.appendChild(a);
-a.click();
-document.body.removeChild(a);
- 
-
-};
-
-// ============================================
-// 11. UI helpers – aspect + uploads + custom style + logout
-// ============================================
-const handleCycleAspect = () => {
-setAspectIndex((prev) => {
-const next = (prev + 1) % ASPECT_OPTIONS.length;
-return next;
-});
-};
-
-const handleProductUploadClick = () => {
-productInputRef.current?.click();
-};
-
-const handleBrandUploadClick = () => {
-brandInputRef.current?.click();
-};
-
-const handleProductFileChange = (
-e: React.ChangeEvent<HTMLInputElement>
-) => {
-const file = e.target.files && e.target.files[0];
-if (!file) return;
-
- 
-setProductImageAdded(true);
-const url = URL.createObjectURL(file);
-setProductImageThumb((prev) => {
-  if (prev) URL.revokeObjectURL(prev);
-  return url;
-});
- 
-
-};
-
-const handleBrandFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-const file = e.target.files && e.target.files[0];
-if (!file) return;
-
- 
-setBrandImageAdded(true);
-const url = URL.createObjectURL(file);
-setBrandImageThumb((prev) => {
-  if (prev) URL.revokeObjectURL(prev);
-  return url;
-});
- 
-
-};
-
-// custom style (Add yours)
-const handleOpenCustomStylePanel = () => {
-setCustomStylePanelOpen(true);
-setCustomStyleError(null);
-};
-
-const handleCloseCustomStylePanel = () => {
-setCustomStylePanelOpen(false);
-};
-
-const handleCustomStyleFiles = (files: FileList | null) => {
-if (!files) return;
-
- 
-const remainingSlots = Math.max(0, 10 - customStyleImages.length);
-if (!remainingSlots) return;
-
-const nextFiles = Array.from(files).slice(0, remainingSlots);
-const now = Date.now();
-
-const newItems: CustomStyleImage[] = nextFiles.map((file, index) => ({
-  id: `${now}_${index}_${file.name}`,
-  url: URL.createObjectURL(file),
-  file,
-}));
-
-setCustomStyleImages((prev) => {
-  const merged = [...prev, ...newItems];
-  let nextHeroId = customStyleHeroId;
-  if (!nextHeroId && merged.length) {
-    nextHeroId = merged[0].id;
-    setCustomStyleHeroId(nextHeroId);
-  }
-
-  const heroImage =
-    merged.find((img) => img.id === nextHeroId) || merged[0];
-
-  if (heroImage) {
-    setCustomStyleHeroThumb((prevThumb) => {
-      if (prevThumb && prevThumb.startsWith("blob:")) {
-        URL.revokeObjectURL(prevThumb);
+  // revoke object URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (productImageThumb) URL.revokeObjectURL(productImageThumb);
+      if (brandImageThumb) URL.revokeObjectURL(brandImageThumb);
+      if (customStyleHeroThumb && customStyleHeroThumb.startsWith("blob:")) {
+        URL.revokeObjectURL(customStyleHeroThumb);
       }
-      return heroImage.url;
+      customStyleImages.forEach((img) => {
+        if (img.url.startsWith("blob:")) {
+          URL.revokeObjectURL(img.url);
+        }
+      });
+    };
+    // we intentionally ignore deps; this is only for final cleanup
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // clear "describe more" timer on unmount
+  useEffect(() => {
+    return () => {
+      if (describeMoreTimeoutRef.current !== null) {
+        window.clearTimeout(describeMoreTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // ============================================
+  // 7. API helpers
+  // ============================================
+  const handleCheckHealth = async () => {
+    if (!API_BASE_URL) return;
+    try {
+      setCheckingHealth(true);
+      const res = await fetch(`${API_BASE_URL}/health`);
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+      };
+      setHealth({
+        ok: json.ok ?? false,
+        message: json.message ?? "",
+      });
+    } catch (err: any) {
+      setHealth({
+        ok: false,
+        message: err?.message || "Unable to reach Mina.",
+      });
+    } finally {
+      setCheckingHealth(false);
+    }
+  };
+
+  const fetchCredits = async () => {
+    if (!API_BASE_URL || !customerId) return;
+    try {
+      setCreditsLoading(true);
+      const params = new URLSearchParams({ customerId });
+      const res = await fetch(`${API_BASE_URL}/credits/balance?${params}`);
+      if (!res.ok) return;
+      const json = (await res.json()) as {
+        balance: number;
+        meta?: { imageCost: number; motionCost: number };
+      };
+      setCredits({
+        balance: json.balance,
+        meta: json.meta,
+      });
+    } catch {
+      // silent
+    } finally {
+      setCreditsLoading(false);
+    }
+  };
+
+  const ensureSession = async (): Promise<string | null> => {
+    if (sessionId) return sessionId;
+    if (!API_BASE_URL || !customerId) return null;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/sessions/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId,
+          platform: currentAspect.platformKey,
+          title: sessionTitle,
+        }),
+      });
+
+      if (!res.ok) return null;
+      const json = (await res.json()) as {
+        ok: boolean;
+        session?: { id: string; title?: string };
+      };
+      if (json.ok && json.session?.id) {
+        setSessionId(json.session.id);
+        setSessionTitle(json.session.title || sessionTitle);
+        return json.session.id;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  };
+
+  const fetchHistory = async () => {
+    if (!API_BASE_URL || !customerId) return;
+    try {
+      setHistoryLoading(true);
+      const res = await fetch(
+        `${API_BASE_URL}/history/customer/${encodeURIComponent(customerId)}`
+      );
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const json = (await res.json()) as HistoryResponse;
+      if (!json.ok) throw new Error("History error");
+
+      setCredits((prev) => ({
+        balance: json.credits.balance,
+        meta: prev?.meta,
+      }));
+      setHistoryGenerations(json.generations || []);
+      setHistoryFeedbacks(json.feedbacks || []);
+    } catch (err: any) {
+      setHistoryError(err?.message || "Unable to load history.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  // ============================================
+  // 8. Editorial stills
+  // ============================================
+  const handleGenerateStill = async () => {
+    const trimmed = brief.trim();
+    if (trimmed.length < 40) return;
+
+    if (!API_BASE_URL) {
+      setStillError("Missing API base URL (VITE_MINA_API_BASE_URL).");
+      return;
+    }
+
+    const sid = await ensureSession();
+    if (!sid) {
+      setStillError("Could not start Mina session.");
+      return;
+    }
+
+    try {
+      setStillGenerating(true);
+      setStillError(null);
+
+      const res = await fetch(`${API_BASE_URL}/editorial/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId,
+          sessionId: sid,
+          brief: trimmed,
+          tone,
+          platform: currentAspect.platformKey,
+          minaVisionEnabled,
+          stylePresetKey,
+          productImageUrl: productImageAdded ? "local-upload" : "",
+          styleImageUrls: brandImageAdded ? ["local-brand"] : [],
+          aspectRatio: currentAspect.ratio,
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        const msg =
+          errJson?.message ||
+          `Error ${res.status}: Failed to generate editorial still.`;
+        throw new Error(msg);
+      }
+
+      const data = (await res.json()) as EditorialResponse;
+      const url = data.imageUrl || data.imageUrls?.[0];
+      if (!url) throw new Error("No image URL in Mina response.");
+
+      const item: StillItem = {
+        id: data.generationId || `still_${Date.now()}`,
+        url,
+        createdAt: new Date().toISOString(),
+        prompt: data.prompt || trimmed,
+        aspectRatio: currentAspect.ratio,
+      };
+
+      setStillItems((prev) => [...prev, item]);
+      setStillIndex((prev) => prev + 1);
+      setLastStillPrompt(item.prompt);
+
+      if (data.credits?.balance !== undefined) {
+        setCredits((prev) => ({
+          balance: data.credits!.balance,
+          meta: prev?.meta,
+        }));
+      }
+    } catch (err: any) {
+      setStillError(err?.message || "Unexpected error generating still.");
+    } finally {
+      setStillGenerating(false);
+    }
+  };
+
+  // ============================================
+  // 9. Motion – suggest + generate
+  // ============================================
+  const handleSuggestMotion = async () => {
+    if (!API_BASE_URL || !currentStill) return;
+
+    try {
+      setMotionSuggestLoading(true);
+      setMotionSuggestError(null);
+      const res = await fetch(`${API_BASE_URL}/motion/suggest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId,
+          referenceImageUrl: currentStill.url,
+          tone,
+          platform: currentAspect.platformKey,
+          minaVisionEnabled,
+          stylePresetKey,
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        const msg =
+          errJson?.message ||
+          `Error ${res.status}: Failed to suggest motion.`;
+        throw new Error(msg);
+      }
+
+      const data = (await res.json()) as MotionSuggestResponse;
+      if (data.suggestion) {
+        setMotionDescription(data.suggestion);
+      }
+    } catch (err: any) {
+      setMotionSuggestError(
+        err?.message || "Unexpected error suggesting motion."
+      );
+    } finally {
+      setMotionSuggestLoading(false);
+    }
+  };
+
+  const handleGenerateMotion = async () => {
+    if (!API_BASE_URL || !currentStill || !motionDescription.trim()) {
+      return;
+    }
+
+    const sid = await ensureSession();
+    if (!sid) {
+      setMotionError("Could not start Mina session.");
+      return;
+    }
+
+    try {
+      setMotionGenerating(true);
+      setMotionError(null);
+
+      const res = await fetch(`${API_BASE_URL}/motion/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId,
+          sessionId: sid,
+          lastImageUrl: currentStill.url,
+          motionDescription: motionDescription.trim(),
+          tone,
+          platform: currentAspect.platformKey,
+          minaVisionEnabled,
+          stylePresetKey,
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        const msg =
+          errJson?.message ||
+          `Error ${res.status}: Failed to generate motion.`;
+        throw new Error(msg);
+      }
+
+      const data = (await res.json()) as MotionResponse;
+      const url = data.videoUrl;
+      if (!url) throw new Error("No video URL in Mina response.");
+
+      const item: MotionItem = {
+        id: data.generationId || `motion_${Date.now()}`,
+        url,
+        createdAt: new Date().toISOString(),
+        prompt: data.prompt || motionDescription.trim(),
+      };
+
+      setMotionItems((prev) => [...prev, item]);
+      setMotionIndex((prev) => prev + 1);
+
+      if (data.credits?.balance !== undefined) {
+        setCredits((prev) => ({
+          balance: data.credits!.balance,
+          meta: prev?.meta,
+        }));
+      }
+    } catch (err: any) {
+      setMotionError(err?.message || "Unexpected error generating motion.");
+    } finally {
+      setMotionGenerating(false);
+    }
+  };
+
+  // ============================================
+  // 10. Feedback / like / download
+  // ============================================
+  const handleLikeCurrentStill = async () => {
+    if (!API_BASE_URL || !currentStill) return;
+
+    try {
+      await fetch(`${API_BASE_URL}/feedback/like`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId,
+          resultType: "image",
+          platform: currentAspect.platformKey,
+          prompt: currentStill.prompt || lastStillPrompt || brief,
+          comment: "",
+          imageUrl: currentStill.url,
+          videoUrl: "",
+          sessionId,
+        }),
+      });
+    } catch {
+      // non-blocking
+    }
+  };
+
+  const handleSubmitFeedback = async () => {
+    if (!API_BASE_URL || !feedbackText.trim()) return;
+    const comment = feedbackText.trim();
+
+    const targetVideo = currentMotion?.url || "";
+    const targetImage = currentStill?.url || "";
+
+    try {
+      setFeedbackSending(true);
+      setFeedbackError(null);
+
+      await fetch(`${API_BASE_URL}/feedback/like`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId,
+          resultType: targetVideo ? "motion" : "image",
+          platform: currentAspect.platformKey,
+          prompt: lastStillPrompt || brief,
+          comment,
+          imageUrl: targetImage,
+          videoUrl: targetVideo,
+          sessionId,
+        }),
+      });
+
+      setFeedbackText("");
+    } catch (err: any) {
+      setFeedbackError(err?.message || "Failed to send feedback.");
+    } finally {
+      setFeedbackSending(false);
+    }
+  };
+
+  const handleDownloadCurrentStill = () => {
+    const target = currentMotion?.url || currentStill?.url;
+    if (!target) return;
+
+    const a = document.createElement("a");
+    a.href = target;
+    const safePrompt =
+      (lastStillPrompt || brief || "Mina-image")
+        .replace(/[^a-z0-9]+/gi, "-")
+        .toLowerCase()
+        .slice(0, 80) || "mina-image";
+    a.download = `Mina-v3-${safePrompt}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  // ============================================
+  // 11. UI helpers – aspect + uploads + logout
+  // ============================================
+  const handleCycleAspect = () => {
+    setAspectIndex((prev) => {
+      const next = (prev + 1) % ASPECT_OPTIONS.length;
+      setPlatform(ASPECT_OPTIONS[next].platformKey);
+      return next;
     });
-  }
+  };
 
-  return merged;
-});
- 
+  const handleProductUploadClick = () => {
+    productInputRef.current?.click();
+  };
 
-};
+  const handleBrandUploadClick = () => {
+    brandInputRef.current?.click();
+  };
 
-const handleCustomStyleInputChange = (
-e: React.ChangeEvent<HTMLInputElement>
-) => {
-handleCustomStyleFiles(e.target.files);
-e.target.value = "";
-};
+  const handleProductFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
 
-const handleCustomStyleUploadClick = () => {
-customStyleInputRef.current?.click();
-};
+    setProductImageAdded(true);
+    const url = URL.createObjectURL(file);
+    setProductImageThumb((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return url;
+    });
+  };
 
-const handleSelectCustomStyleHero = (id: string) => {
-setCustomStyleHeroId(id);
-const img = customStyleImages.find((item) => item.id === id);
-if (img) {
-setCustomStyleHeroThumb((prevThumb) => {
-if (prevThumb && prevThumb.startsWith("blob:")) {
-URL.revokeObjectURL(prevThumb);
-}
-return img.url;
-});
-}
-};
+  const handleBrandFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
 
-const handleTrainCustomStyle = async () => {
-if (!customStyleImages.length || !customStyleHeroId) return;
+    setBrandImageAdded(true);
+    const url = URL.createObjectURL(file);
+    setBrandImageThumb((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return url;
+    });
+  };
 
- 
-try {
-  setCustomStyleTraining(true);
-  setCustomStyleError(null);
+  // custom style (Add yours)
+  const handleOpenCustomStylePanel = () => {
+    setCustomStylePanelOpen(true);
+    setCustomStyleError(null);
+  };
 
-  // TODO: plug this into the real training endpoint.
-  await new Promise((resolve) => setTimeout(resolve, 1200));
+  const handleCloseCustomStylePanel = () => {
+    setCustomStylePanelOpen(false);
+  };
 
-  setStylePresetKey("custom-style");
-  setCustomStylePanelOpen(false);
-} catch (err: any) {
-  setCustomStyleError(
-    err?.message || "Unable to train style right now."
-  );
-} finally {
-  setCustomStyleTraining(false);
-}
- 
+  const handleCustomStyleFiles = (files: FileList | null) => {
+    if (!files) return;
 
-};
+    const remainingSlots = Math.max(0, 10 - customStyleImages.length);
+    if (!remainingSlots) return;
 
-const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-if (!showStylesStep) return;
-e.preventDefault();
-setDraggingUpload(true);
-};
+    const nextFiles = Array.from(files).slice(0, remainingSlots);
+    const now = Date.now();
 
-const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-e.preventDefault();
-setDraggingUpload(false);
-};
+    const newItems: CustomStyleImage[] = nextFiles.map((file, index) => ({
+      id: `${now}_${index}_${file.name}`,
+      url: URL.createObjectURL(file),
+      file,
+    }));
 
-const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-if (!showStylesStep) return;
-e.preventDefault();
-setDraggingUpload(false);
-if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-const file = e.dataTransfer.files[0];
-setProductImageAdded(true);
-const url = URL.createObjectURL(file);
-setProductImageThumb((prev) => {
-if (prev) URL.revokeObjectURL(prev);
-return url;
-});
-}
-};
+    setCustomStyleImages((prev) => {
+      const merged = [...prev, ...newItems];
+      let nextHeroId = customStyleHeroId;
+      if (!nextHeroId && merged.length) {
+        nextHeroId = merged[0].id;
+        setCustomStyleHeroId(nextHeroId);
+      }
 
-const handleChangeCustomer = (e: React.FormEvent) => {
-e.preventDefault();
-const trimmed = customerIdInput.trim();
-if (!trimmed) return;
-setCustomerId(trimmed);
-setSessionId(null);
-setStillItems([]);
-setMotionItems([]);
-};
+      const heroImage =
+        merged.find((img) => img.id === nextHeroId) || merged[0];
 
-const handleSignOut = async () => {
-try {
-await supabase.auth.signOut();
-} finally {
-if (typeof window !== "undefined") {
-window.location.reload();
-}
-}
-};
+      if (heroImage) {
+        setCustomStyleHeroThumb((prevThumb) => {
+          if (prevThumb && prevThumb.startsWith("blob:")) {
+            URL.revokeObjectURL(prevThumb);
+          }
+          return heroImage.url;
+        });
+      }
 
-const handleAnimateHeaderClick = async () => {
-if (!motionDescription.trim()) {
-await handleSuggestMotion();
-}
-await handleGenerateMotion();
-};
+      return merged;
+    });
+  };
 
-const handleBriefScroll = () => {
-// fade is handled purely by CSS mask on .studio-brief-shell
-};
+  const handleCustomStyleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    handleCustomStyleFiles(e.target.files);
+    e.target.value = "";
+  };
 
-// ============================================
-// 12. Render – helper sections
-// ============================================
-const renderStudioLeft = () => {
-const aspectIconUrl = ASPECT_ICON_URLS[currentAspect.key];
+  const handleCustomStyleUploadClick = () => {
+    customStyleInputRef.current?.click();
+  };
 
- 
-return (
-  <div
-    className={classNames("studio-left", draggingUpload && "drag-active")}
-    onDragOver={handleDragOver}
-    onDragLeave={handleDragLeave}
-    onDrop={handleDrop}
-  >
-    {/* Main column – Input 1 + Input 2 centered */}
-    <div
-      className={classNames(
-        "studio-left-main",
-        showStylesStep && "studio-left-main--with-step"
-      )}
-    >
-      {/* Input 1 = pills + textarea */}
-      <div className="studio-input1-block">
-        {/* Pills slot – always reserve height so textarea never moves */}
-        <div className="studio-pills-slot">
-          {showPills && (
-            <div className="studio-row studio-row--pills studio-pills-animate">
-              {/* Product pill */}
-              <button
-                type="button"
-                className={classNames(
-                  "studio-pill",
-                  "studio-pill--upload",
-                  productImageAdded && "active"
-                )}
-                onClick={handleProductUploadClick}
-              >
-                <span className="studio-pill-icon studio-pill-icon--square">
-                  {productImageThumb ? (
-                    <img src={productImageThumb} alt="" />
-                  ) : (
-                    <span className="studio-pill-plus" aria-hidden="true">
-                      +
-                    </span>
-                  )}
-                </span>
-                <span className="studio-pill-main">Product image</span>
-              </button>
+  const handleSelectCustomStyleHero = (id: string) => {
+    setCustomStyleHeroId(id);
+    const img = customStyleImages.find((item) => item.id === id);
+    if (img) {
+      setCustomStyleHeroThumb((prevThumb) => {
+        if (prevThumb && prevThumb.startsWith("blob:")) {
+          URL.revokeObjectURL(prevThumb);
+        }
+        return img.url;
+      });
+    }
+  };
 
-              {/* Inspiration pill */}
-              <button
-                type="button"
-                className={classNames(
-                  "studio-pill",
-                  "studio-pill--upload",
-                  brandImageAdded && "active"
-                )}
-                onClick={handleBrandUploadClick}
-              >
-                <span className="studio-pill-icon studio-pill-icon--square">
-                  {brandImageThumb ? (
-                    <img src={brandImageThumb} alt="" />
-                  ) : (
-                    <span className="studio-pill-plus" aria-hidden="true">
-                      +
-                    </span>
-                  )}
-                </span>
+  const handleTrainCustomStyle = async () => {
+    if (!customStyleImages.length || !customStyleHeroId) return;
 
-                <span className="studio-pill-main">Add inspiration</span>
-              </button>
+    try {
+      setCustomStyleTraining(true);
+      setCustomStyleError(null);
 
-              {/* Aspect pill */}
-              <button
-                type="button"
-                className={classNames(
-                  "studio-pill",
-                  "studio-pill--aspect"
-                )}
-                onClick={handleCycleAspect}
-              >
-                <span className="studio-pill-icon">
-                  <img src={aspectIconUrl} alt="" />
-                </span>
-                <span className="studio-pill-main">
-                  {currentAspect.label}
-                </span>
-                <span className="studio-pill-sub">
-                  {currentAspect.subtitle}
-                </span>
-              </button>
-            </div>
-          )}
-        </div>
+      // TODO: plug this into the real training endpoint.
+      await new Promise((resolve) => setTimeout(resolve, 1200));
 
-        {/* Brief text area */}
-        <div className="studio-brief-block">
-          <div
-            className={classNames(
-              "studio-brief-shell",
-              briefHintVisible && "has-brief-hint"
-            )}
-            ref={briefShellRef}
-            onScroll={handleBriefScroll}
-          >
-            <textarea
-              className="studio-brief-input"
-              placeholder="Describe how you want your still life image to look like"
-              value={brief}
-              onChange={(e) => setBrief(e.target.value)}
-              rows={4}
-            />
+      setStylePresetKey("custom-style");
+      setCustomStylePanelOpen(false);
+    } catch (err: any) {
+      setCustomStyleError(
+        err?.message || "Unable to train style right now."
+      );
+    } finally {
+      setCustomStyleTraining(false);
+    }
+  };
 
-            {briefHintVisible && (
-              <div className="studio-brief-hint">Describe more</div>
-            )}
-          </div>
-          {stillError && (
-            <div className="error-text" style={{ marginTop: 8 }}>
-              {stillError}
-            </div>
-          )}
-        </div>
-      </div>
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!showStylesStep) return;
+    e.preventDefault();
+    setDraggingUpload(true);
+  };
 
-      {/* Input 2 – styles, vision toggle, create */}
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDraggingUpload(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!showStylesStep) return;
+    e.preventDefault();
+    setDraggingUpload(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      setProductImageAdded(true);
+      const url = URL.createObjectURL(file);
+      setProductImageThumb((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
+    }
+  };
+
+  const handleChangeCustomer = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = customerIdInput.trim();
+    if (!trimmed) return;
+    setCustomerId(trimmed);
+    setSessionId(null);
+    setStillItems([]);
+    setMotionItems([]);
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      if (typeof window !== "undefined") {
+        window.location.reload();
+      }
+    }
+  };
+
+  const handleAnimateHeaderClick = async () => {
+    if (!motionDescription.trim()) {
+      await handleSuggestMotion();
+    }
+    await handleGenerateMotion();
+  };
+
+  const handleBriefScroll = () => {
+    // fade is handled via CSS mask on .studio-brief-shell
+    // briefScrollState kept for possible future use
+    void briefScrollState;
+  };
+
+  const handleBriefChange = (value: string) => {
+    setBrief(value);
+
+    // reset any existing timer
+    if (describeMoreTimeoutRef.current !== null) {
+      window.clearTimeout(describeMoreTimeoutRef.current);
+      describeMoreTimeoutRef.current = null;
+    }
+
+    setShowDescribeMore(false);
+
+    const trimmedLength = value.trim().length;
+    if (trimmedLength > 0 && trimmedLength < 20) {
+      describeMoreTimeoutRef.current = window.setTimeout(() => {
+        setShowDescribeMore(true);
+      }, 1200);
+    }
+  };
+
+  // ============================================
+  // 12. Render – helper sections
+  // ============================================
+  const renderStudioLeft = () => {
+    const aspectIconUrl = ASPECT_ICON_URLS[currentAspect.key];
+
+    return (
       <div
-        className={classNames(
-          "studio-step",
-          showStylesStep && "visible"
-        )}
+        className={classNames("studio-left", draggingUpload && "drag-active")}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
-        <button
-          type="button"
-          className="studio-style-title"
-          onClick={() => {
-            if (!showStylesStep) return;
-            setStylesCollapsed((prev) => !prev);
-          }}
+        {/* Main column – Input 1 + Input 2 centered */}
+        <div
+          className={classNames(
+            "studio-left-main",
+            showStylesStep && "studio-left-main--with-step"
+          )}
         >
-          {stylesCollapsed
-            ? `Editorial style picked: ${
-                STYLE_PRESETS.find(
-                  (p) => p.key === stylePresetKey
-                )?.label ??
-              (stylePresetKey === "custom-style" ? "Custom" : "—")
-              }`
-            : "Pick one editorial style"}
-        </button>
+          {/* Input 1 = pills + textarea */}
+          <div className="studio-input1-block">
+            {/* Pills slot – always reserve height so textarea never moves */}
+            <div className="studio-pills-slot">
+              {showPills && (
+                <div className="studio-row studio-row--pills studio-pills-animate">
+                  {/* Product pill */}
+                  <button
+                    type="button"
+                    className={classNames(
+                      "studio-pill",
+                      "studio-pill--upload",
+                      productImageAdded && "active"
+                    )}
+                    onClick={handleProductUploadClick}
+                  >
+                    <span className="studio-pill-icon studio-pill-icon--square">
+                      {productImageThumb ? (
+                        <img src={productImageThumb} alt="" />
+                      ) : (
+                        <span className="studio-pill-plus" aria-hidden="true">
+                          +
+                        </span>
+                      )}
+                    </span>
+                    <span className="studio-pill-main">Product image</span>
+                  </button>
 
-        {!stylesCollapsed && (
-          <div className="studio-style-row">
-            {STYLE_PRESETS.map((preset) => (
-              <button
-                key={preset.key}
-                type="button"
-                className={classNames(
-                  "studio-style-card",
-                  stylePresetKey === preset.key && "active"
-                )}
-                onClick={() => setStylePresetKey(preset.key)}
-                onMouseEnter={() => setStylePresetKey(preset.key)}
-              >
-                <div className="studio-style-thumb">
-                  <img src={preset.thumb} alt="" />
+                  {/* Inspiration pill */}
+                  <button
+                    type="button"
+                    className={classNames(
+                      "studio-pill",
+                      "studio-pill--upload",
+                      brandImageAdded && "active"
+                    )}
+                    onClick={handleBrandUploadClick}
+                  >
+                    <span className="studio-pill-icon studio-pill-icon--square">
+                      {brandImageThumb ? (
+                        <img src={brandImageThumb} alt="" />
+                      ) : (
+                        <span className="studio-pill-plus" aria-hidden="true">
+                          +
+                        </span>
+                      )}
+                    </span>
+
+                    <span className="studio-pill-main">Add inspiration</span>
+                  </button>
+
+                  {/* Aspect pill */}
+                  <button
+                    type="button"
+                    className={classNames(
+                      "studio-pill",
+                      "studio-pill--aspect"
+                    )}
+                    onClick={handleCycleAspect}
+                  >
+                    <span className="studio-pill-icon">
+                      <img src={aspectIconUrl} alt="" />
+                    </span>
+                    <span className="studio-pill-main">
+                      {currentAspect.label}
+                    </span>
+                    <span className="studio-pill-sub">
+                      {currentAspect.subtitle}
+                    </span>
+                  </button>
                 </div>
-                <div className="studio-style-label">{preset.label}</div>
-              </button>
-            ))}
-
-            <button
-              type="button"
-              className={classNames(
-                "studio-style-card",
-                "add",
-                stylePresetKey === "custom-style" && "active"
               )}
-              onClick={handleOpenCustomStylePanel}
-            >
-              <div className="studio-style-thumb">
-                {customStyleHeroThumb ? (
-                  <img src={customStyleHeroThumb} alt="" />
-                ) : (
-                  <span>+</span>
+            </div>
+
+            {/* Brief text area */}
+            <div className="studio-brief-block">
+              <div
+                className={classNames(
+                  "studio-brief-shell",
+                  briefHintVisible && "has-brief-hint"
+                )}
+                ref={briefShellRef}
+                onScroll={handleBriefScroll}
+              >
+                <textarea
+                  className="studio-brief-input"
+                  placeholder="Describe how you want your still life image to look like"
+                  value={brief}
+                  onChange={(e) => handleBriefChange(e.target.value)}
+                  rows={4}
+                />
+
+                {briefHintVisible && (
+                  <div className="studio-brief-hint">Describe more</div>
                 )}
               </div>
-              <div className="studio-style-label">Add yours</div>
+            </div>
+          </div>
+
+          {/* Input 2 – styles, vision toggle, create */}
+          <div
+            className={classNames("studio-step", showStylesStep && "visible")}
+          >
+            <button
+              type="button"
+              className="studio-style-title"
+              onClick={() => {
+                if (!showStylesStep) return;
+                setStylesCollapsed((prev) => !prev);
+              }}
+            >
+              {stylesCollapsed
+                ? `Editorial style picked: ${
+                    STYLE_PRESETS.find(
+                      (p) => p.key === stylePresetKey
+                    )?.label ??
+                    (stylePresetKey === "custom-style" ? "Custom" : "—")
+                  }`
+                : "Pick one editorial style"}
             </button>
+
+            {!stylesCollapsed && (
+              <div className="studio-style-row">
+                {STYLE_PRESETS.map((preset) => (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    className={classNames(
+                      "studio-style-card",
+                      stylePresetKey === preset.key && "active"
+                    )}
+                    onClick={() => setStylePresetKey(preset.key)}
+                    onMouseEnter={() => setStylePresetKey(preset.key)} // hover selects
+                  >
+                    <div className="studio-style-thumb">
+                      <img src={preset.thumb} alt="" />
+                    </div>
+                    <div className="studio-style-label">{preset.label}</div>
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  className={classNames(
+                    "studio-style-card",
+                    "add",
+                    stylePresetKey === "custom-style" && "active"
+                  )}
+                  onClick={handleOpenCustomStylePanel}
+                >
+                  <div className="studio-style-thumb">
+                    {customStyleHeroThumb ? (
+                      <img src={customStyleHeroThumb} alt="" />
+                    ) : (
+                      <span>+</span>
+                    )}
+                  </div>
+                  <div className="studio-style-label">Add yours</div>
+                </button>
+              </div>
+            )}
+
+            {showStylesStep && <div className="studio-style-divider" />}
+
+            <button
+              type="button"
+              className="studio-vision-toggle"
+              onClick={() => setMinaVisionEnabled((prev) => !prev)}
+            >
+              Mina Vision Intelligence:{" "}
+              <span className="studio-vision-state">
+                {minaVisionEnabled ? "ON" : "OFF"}
+              </span>
+            </button>
+
+            <div className="studio-create-block">
+              <button
+                type="button"
+                className={classNames(
+                  "studio-create-link",
+                  !canCreateStill && "disabled"
+                )}
+                disabled={!canCreateStill}
+                onClick={handleGenerateStill}
+              >
+                {stillGenerating ? "Creating…" : "Create"}
+              </button>
+            </div>
+
+            <div className="studio-credits-small">
+              {creditsLoading ? (
+                "Checking credits…"
+              ) : credits ? (
+                <>
+                  Credits: {credits.balance} (img −{imageCost} · motion −
+                  {motionCost})
+                </>
+              ) : null}
+            </div>
+
+            {stillError && <div className="error-text">{stillError}</div>}
+          </div>
+        </div>
+
+        {/* hidden file inputs */}
+        <input
+          ref={productInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={handleProductFileChange}
+        />
+        <input
+          ref={brandInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={handleBrandFileChange}
+        />
+
+        {/* footer – Profile fixed at bottom-left via flex */}
+        <div className="studio-footer">
+          <button
+            type="button"
+            className="link-button subtle"
+            onClick={() => setActiveTab("profile")}
+          >
+            Profile
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderStudioRight = () => (
+    <div className="studio-right">
+      <div className="studio-output-main">
+        <button
+          type="button"
+          className="studio-output-click"
+          onClick={handleDownloadCurrentStill}
+          disabled={!currentStill && !currentMotion}
+        >
+          <div className="studio-output-frame">
+            {currentMotion ? (
+              <video
+                className="studio-output-media"
+                src={currentMotion.url}
+                autoPlay
+                loop
+                muted
+                controls
+              />
+            ) : currentStill ? (
+              <img
+                className="studio-output-media"
+                src={currentStill.url}
+                alt=""
+              />
+            ) : (
+              <div className="output-placeholder">
+                Describe your image on the left to see it here.
+              </div>
+            )}
+          </div>
+        </button>
+
+        {stillItems.length > 1 && (
+          <div className="studio-dots-row">
+            {stillItems.map((item, idx) => (
+              <button
+                key={item.id}
+                type="button"
+                className={classNames(
+                  "studio-dot",
+                  idx === stillIndex && "active"
+                )}
+                onClick={() => setStillIndex(idx)}
+              />
+            ))}
           </div>
         )}
 
-        {showStylesStep && <div className="studio-style-divider" />}
-
-        <button
-          type="button"
-          className="studio-vision-toggle"
-          onClick={() => setMinaVisionEnabled((prev) => !prev)}
-        >
-          Mina Vision Intelligence:{" "}
-          <span className="studio-vision-state">
-            {minaVisionEnabled ? "ON" : "OFF"}
-          </span>
-        </button>
-
-        <div className="studio-create-block">
+        <div className="studio-motion-helpers">
           <button
             type="button"
-            className={classNames(
-              "studio-create-link",
-              !canCreateStill && "disabled"
-            )}
-            disabled={!canCreateStill}
-            onClick={handleGenerateStill}
+            className="link-button subtle"
+            onClick={handleSuggestMotion}
+            disabled={!currentStill || motionSuggestLoading}
           >
-            {stillGenerating ? "Creating…" : "Create"}
+            {motionSuggestLoading
+              ? "Thinking about motion…"
+              : "Suggest motion"}
           </button>
+          {motionSuggestError && (
+            <span className="error-text">{motionSuggestError}</span>
+          )}
+          {motionError && <span className="error-text">{motionError}</span>}
         </div>
 
-        <div className="studio-credits-small">
-          {creditsLoading ? (
-            "Checking credits…"
-          ) : credits ? (
-            <>
-              Credits: {credits.balance} (img −{imageCost} · motion −
-              {motionCost})
-            </>
-          ) : null}
-        </div>
-      </div>
-    </div>
-
-    {/* hidden file inputs */}
-    <input
-      ref={productInputRef}
-      type="file"
-      accept="image/*"
-      style={{ display: "none" }}
-      onChange={handleProductFileChange}
-    />
-    <input
-      ref={brandInputRef}
-      type="file"
-      accept="image/*"
-      style={{ display: "none" }}
-      onChange={handleBrandFileChange}
-    />
-
-    {/* footer – Profile */}
-    <div className="studio-footer">
-      <button
-        type="button"
-        className="link-button subtle"
-        onClick={() => setActiveTab("profile")}
-      >
-        Profile
-      </button>
-    </div>
-  </div>
-);
- 
-
-};
-
-const renderStudioRight = () => ( <div className="studio-right"> <div className="studio-output-main">
-<button
-type="button"
-className="studio-output-click"
-onClick={handleDownloadCurrentStill}
-disabled={!currentStill && !currentMotion}
-> <div className="studio-output-frame">
-{currentMotion ? ( <video
-             className="studio-output-media"
-             src={currentMotion.url}
-             autoPlay
-             loop
-             muted
-             controls
-           />
-) : currentStill ? ( <img
-             className="studio-output-media"
-             src={currentStill.url}
-             alt=""
-           />
-) : ( <div className="output-placeholder">
-Describe your image on the left to see it here. </div>
-)} </div> </button>
-
- 
-    {stillItems.length > 1 && (
-      <div className="studio-dots-row">
-        {stillItems.map((item, idx) => (
-          <button
-            key={item.id}
-            type="button"
-            className={classNames(
-              "studio-dot",
-              idx === stillIndex && "active"
+        {motionDescription && (
+          <div className="studio-motion-description">
+            {motionDescription}
+            {!!motionDescription && (
+              <>
+                {" "}
+                —{" "}
+                <button
+                  type="button"
+                  className="link-button subtle"
+                  onClick={handleGenerateMotion}
+                  disabled={motionGenerating}
+                >
+                  {motionGenerating ? "Animating…" : "Animate"}
+                </button>
+              </>
             )}
-            onClick={() => setStillIndex(idx)}
-          />
-        ))}
-      </div>
-    )}
-
-    <div className="studio-motion-helpers">
-      <button
-        type="button"
-        className="link-button subtle"
-        onClick={handleSuggestMotion}
-        disabled={!currentStill || motionSuggestLoading}
-      >
-        {motionSuggestLoading
-          ? "Thinking about motion…"
-          : "Suggest motion"}
-      </button>
-      {motionSuggestError && (
-        <span className="error-text">{motionSuggestError}</span>
-      )}
-      {motionError && (
-        <span className="error-text">{motionError}</span>
-      )}
-    </div>
-
-    {motionDescription && (
-      <div className="studio-motion-description">
-        {motionDescription}
-        {!!motionDescription && (
-          <>
-            {" "}
-            —{" "}
-            <button
-              type="button"
-              className="link-button subtle"
-              onClick={handleGenerateMotion}
-              disabled={motionGenerating}
-            >
-              {motionGenerating ? "Animating…" : "Animate"}
-            </button>
-          </>
+          </div>
         )}
-      </div>
-    )}
 
-    <div className="studio-feedback-row">
-      <div className="studio-feedback-hint">
-        Speak to me, tell me what you like and dislike about my generation
-      </div>
-      <input
-        className="studio-feedback-input"
-        placeholder="Type feedback..."
-        value={feedbackText}
-        onChange={(e) => setFeedbackText(e.target.value)}
-      />
-      <button
-        type="button"
-        className="link-button"
-        onClick={handleSubmitFeedback}
-        disabled={feedbackSending}
-      >
-        {feedbackSending ? "Sending…" : "Send"}
-      </button>
-    </div>
-    {feedbackError && (
-      <div className="error-text">{feedbackError}</div>
-    )}
-  </div>
-</div>
- 
-
-);
-
-const renderCustomStyleModal = () => {
-if (!customStylePanelOpen) return null;
-
- 
-return (
-  <div
-    className="mina-modal-backdrop"
-    onClick={handleCloseCustomStylePanel}
-  >
-    <div
-      className="mina-modal"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="mina-modal-header">
-        <div>Train your own style</div>
-        <button
-          type="button"
-          className="mina-modal-close"
-          onClick={handleCloseCustomStylePanel}
-        >
-          Close
-        </button>
-      </div>
-
-      <div
-        className="mina-modal-drop"
-        onDragOver={(e) => {
-          e.preventDefault();
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          handleCustomStyleFiles(e.dataTransfer.files);
-        }}
-      >
-        <div className="mina-modal-drop-main">
+        <div className="studio-feedback-row">
+          <div className="studio-feedback-hint">
+            Speak to me, tell me what you like and dislike about my generation
+          </div>
+          <input
+            className="studio-feedback-input"
+            placeholder="Type feedback..."
+            value={feedbackText}
+            onChange={(e) => setFeedbackText(e.target.value)}
+          />
           <button
             type="button"
             className="link-button"
-            onClick={handleCustomStyleUploadClick}
+            onClick={handleSubmitFeedback}
+            disabled={feedbackSending}
           >
-            Upload images
+            {feedbackSending ? "Sending…" : "Send"}
           </button>
-          <span>(up to 10)</span>
         </div>
-        <div className="mina-modal-drop-help">
-          Drop your 10 reference images and pick one as hero.
+        {feedbackError && (
+          <div className="error-text">{feedbackError}</div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderCustomStyleModal = () => {
+    if (!customStylePanelOpen) return null;
+
+    return (
+      <div
+        className="mina-modal-backdrop"
+        onClick={handleCloseCustomStylePanel}
+      >
+        <div
+          className="mina-modal"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mina-modal-header">
+            <div>Train your own style</div>
+            <button
+              type="button"
+              className="mina-modal-close"
+              onClick={handleCloseCustomStylePanel}
+            >
+              Close
+            </button>
+          </div>
+
+          <div
+            className="mina-modal-drop"
+            onDragOver={(e) => {
+              e.preventDefault();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              handleCustomStyleFiles(e.dataTransfer.files);
+            }}
+          >
+            <div className="mina-modal-drop-main">
+              <button
+                type="button"
+                className="link-button"
+                onClick={handleCustomStyleUploadClick}
+              >
+                Upload images
+              </button>
+              <span>(up to 10)</span>
+            </div>
+            <div className="mina-modal-drop-help">
+              Drop your 10 reference images and pick one as hero.
+            </div>
+            <input
+              ref={customStyleInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: "none" }}
+              onChange={handleCustomStyleInputChange}
+            />
+          </div>
+
+          {customStyleImages.length > 0 && (
+            <div className="mina-modal-grid">
+              {customStyleImages.map((img) => (
+                <button
+                  key={img.id}
+                  type="button"
+                  className={classNames(
+                    "mina-modal-thumb",
+                    customStyleHeroId === img.id && "hero"
+                  )}
+                  onClick={() => handleSelectCustomStyleHero(img.id)}
+                >
+                  <img src={img.url} alt="" />
+                  {customStyleHeroId === img.id && (
+                    <div className="mina-modal-thumb-tag">Hero</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="mina-modal-footer">
+            {customStyleError && (
+              <div className="error-text">{customStyleError}</div>
+            )}
+            <button
+              type="button"
+              className="mina-modal-train"
+              onClick={handleTrainCustomStyle}
+              disabled={
+                !customStyleImages.length ||
+                !customStyleHeroId ||
+                customStyleTraining
+              }
+            >
+              {customStyleTraining ? "Training…" : "Train me"}
+            </button>
+          </div>
         </div>
-        <input
-          ref={customStyleInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          style={{ display: "none" }}
-          onChange={handleCustomStyleInputChange}
-        />
+      </div>
+    );
+  };
+
+  const renderStudioBody = () => (
+    <div className={classNames("studio-body", "studio-body--two-col")}>
+      {renderStudioLeft()}
+      {renderStudioRight()}
+    </div>
+  );
+
+  const renderProfileBody = () => (
+    <div className="studio-profile-body">
+      <div className="studio-profile-left">
+        <h2>Profile</h2>
+        <div className="profile-row">
+          <div className="profile-label">Customer ID</div>
+          <form
+            onSubmit={handleChangeCustomer}
+            className="profile-inline-form"
+          >
+            <input
+              className="profile-input"
+              value={customerIdInput}
+              onChange={(e) => setCustomerIdInput(e.target.value)}
+            />
+            <button
+              type="submit"
+              className="link-button primary-button"
+            >
+              Switch
+            </button>
+          </form>
+        </div>
+
+        <div className="profile-row">
+          <div className="profile-label">Credits</div>
+          <div className="profile-value">
+            {credits ? credits.balance : "—"}
+          </div>
+        </div>
+
+        <div className="profile-row">
+          <a
+            href={TOPUP_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="link-button primary-button"
+          >
+            Add credits
+          </a>
+        </div>
+
+        <div className="profile-row">
+          <button
+            type="button"
+            className="link-button subtle"
+            onClick={handleSignOut}
+          >
+            Sign out
+          </button>
+        </div>
+
+        <div className="profile-row small">
+          <button
+            type="button"
+            className="link-button subtle"
+            onClick={() => setActiveTab("studio")}
+          >
+            ← Back to studio
+          </button>
+        </div>
       </div>
 
-      {customStyleImages.length > 0 && (
-        <div className="mina-modal-grid">
-          {customStyleImages.map((img) => (
-            <button
-              key={img.id}
-              type="button"
-              className={classNames(
-                "mina-modal-thumb",
-                customStyleHeroId === img.id && "hero"
-              )}
-              onClick={() => handleSelectCustomStyleHero(img.id)}
+      <div className="studio-profile-right">
+        <h3>Recent generations</h3>
+        {historyLoading && <div>Loading history…</div>}
+        {historyError && (
+          <div className="error-text">{historyError}</div>
+        )}
+        {!historyLoading && !historyGenerations.length && (
+          <div>No history yet.</div>
+        )}
+        <div className="profile-history-grid">
+          {historyGenerations.map((g) => (
+            <a
+              key={g.id}
+              href={g.outputUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="profile-history-card"
             >
-              <img src={img.url} alt="" />
-              {customStyleHeroId === img.id && (
-                <div className="mina-modal-thumb-tag">Hero</div>
-              )}
-            </button>
+              <div className="profile-history-thumb" />
+              <div className="profile-history-meta">
+                <div className="profile-history-type">{g.type}</div>
+                <div className="profile-history-time">
+                  {formatTime(g.createdAt)}
+                </div>
+              </div>
+            </a>
           ))}
         </div>
-      )}
-
-      <div className="mina-modal-footer">
-        {customStyleError && (
-          <div className="error-text">{customStyleError}</div>
-        )}
-        <button
-          type="button"
-          className="mina-modal-train"
-          onClick={handleTrainCustomStyle}
-          disabled={
-            !customStyleImages.length ||
-            !customStyleHeroId ||
-            customStyleTraining
-          }
-        >
-          {customStyleTraining ? "Training…" : "Train me"}
-        </button>
       </div>
     </div>
-  </div>
-);
- 
+  );
 
-};
-
-const renderStudioBody = () => (
-<div className={classNames("studio-body", "studio-body--two-col")}>
-{renderStudioLeft()}
-{renderStudioRight()} </div>
-);
-
-const renderProfileBody = () => ( <div className="studio-profile-body"> <div className="studio-profile-left"> <h2>Profile</h2> <div className="profile-row"> <div className="profile-label">Customer ID</div> <form
-         onSubmit={handleChangeCustomer}
-         className="profile-inline-form"
-       >
-<input
-className="profile-input"
-value={customerIdInput}
-onChange={(e) => setCustomerIdInput(e.target.value)}
-/> <button
-           type="submit"
-           className="link-button primary-button"
-         >
-Switch </button> </form> </div>
-
- 
-    <div className="profile-row">
-      <div className="profile-label">Credits</div>
-      <div className="profile-value">
-        {credits ? credits.balance : "—"}
-      </div>
-    </div>
-
-    <div className="profile-row">
-      <a
-        href={TOPUP_URL}
-        target="_blank"
-        rel="noreferrer"
-        className="link-button primary-button"
-      >
-        Add credits
-      </a>
-    </div>
-
-    <div className="profile-row">
-      <button
-        type="button"
-        className="link-button subtle"
-        onClick={handleSignOut}
-      >
-        Sign out
-      </button>
-    </div>
-
-    <div className="profile-row small">
-      <button
-        type="button"
-        className="link-button subtle"
-        onClick={() => setActiveTab("studio")}
-      >
-        ← Back to studio
-      </button>
-    </div>
-  </div>
-
-  <div className="studio-profile-right">
-    <h3>Recent generations</h3>
-    {historyLoading && <div>Loading history…</div>}
-    {historyError && (
-      <div className="error-text">{historyError}</div>
-    )}
-    {!historyLoading && !historyGenerations.length && (
-      <div>No history yet.</div>
-    )}
-    <div className="profile-history-grid">
-      {historyGenerations.map((g) => (
-        <a
-          key={g.id}
-          href={g.outputUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="profile-history-card"
-        >
-          <div className="profile-history-thumb" />
-          <div className="profile-history-meta">
-            <div className="profile-history-type">{g.type}</div>
-            <div className="profile-history-time">
-              {formatTime(g.createdAt)}
-            </div>
+  // ============================================
+  // 13. Full layout with header overlay
+  // ============================================
+  return (
+    <div className="mina-studio-root">
+      <div className="studio-frame">
+        {/* Header overlay on top of both columns */}
+        <div className="studio-header-overlay">
+          <div className="studio-header-left">
+            <a
+              href="https://mina.faltastudio.com"
+              className="studio-logo-link"
+            >
+              Mina
+            </a>
           </div>
-        </a>
-      ))}
+          <div className="studio-header-center">
+            {activeTab === "studio" ? "Still life images" : "Profile"}
+          </div>
+          <div className="studio-header-right">
+            {activeTab === "studio" && (
+              <>
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={handleAnimateHeaderClick}
+                  disabled={
+                    !currentStill ||
+                    motionGenerating ||
+                    (!motionDescription && motionSuggestLoading)
+                  }
+                >
+                  Animate this
+                </button>
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={handleLikeCurrentStill}
+                  disabled={!currentStill}
+                >
+                  ♡ more of this
+                </button>
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={handleDownloadCurrentStill}
+                  disabled={!currentStill && !currentMotion}
+                >
+                  Download
+                </button>
+              </>
+            )}
+            {activeTab === "profile" && (
+              <button
+                type="button"
+                className="link-button subtle"
+                onClick={() => setActiveTab("studio")}
+              >
+                Back to studio
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Body (50/50 like login) */}
+        {activeTab === "studio" ? renderStudioBody() : renderProfileBody()}
+      </div>
+
+      {renderCustomStyleModal()}
     </div>
-  </div>
-</div>
- 
-
-);
-
-// ============================================
-// 13. Full layout with header overlay
-// ============================================
-return ( <div className="mina-studio-root"> <div className="studio-frame">
-{/* Header overlay on top of both columns */} <div className="studio-header-overlay"> <div className="studio-header-left"> <a
-           href="https://mina.faltastudio.com"
-           className="studio-logo-link"
-         >
-Mina </a> </div> <div className="studio-header-center">
-{activeTab === "studio" ? "Still life images" : "Profile"} </div> <div className="studio-header-right">
-{activeTab === "studio" && (
-<>
-<button
-type="button"
-className="link-button"
-onClick={handleAnimateHeaderClick}
-disabled={
-!currentStill ||
-motionGenerating ||
-(!motionDescription && motionSuggestLoading)
-}
->
-Animate this </button> <button
-               type="button"
-               className="link-button"
-               onClick={handleLikeCurrentStill}
-               disabled={!currentStill}
-             >
-♡ more of this </button>
-<button
-type="button"
-className="link-button"
-onClick={handleDownloadCurrentStill}
-disabled={!currentStill && !currentMotion}
->
-Download </button>
-</>
-)}
-{activeTab === "profile" && (
-<button
-type="button"
-className="link-button subtle"
-onClick={() => setActiveTab("studio")}
->
-Back to studio </button>
-)} </div> </div>
-
- 
-    {/* Body (50/50 like login) */}
-    {activeTab === "studio" ? renderStudioBody() : renderProfileBody()}
-  </div>
-
-  {renderCustomStyleModal()}
-</div>
- 
-
-);
+  );
 };
 
 export default MinaApp;
