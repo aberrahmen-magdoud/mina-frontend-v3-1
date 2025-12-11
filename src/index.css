@@ -710,6 +710,7 @@ padding: 8px 12px 8px 8px;                /* bigger, but still clean */
   margin-top: 8px;
 }
 
+/* Input 1 scroll container with fade on top/bottom */
 .studio-brief-shell {
   position: relative;
   max-height: 260px;
@@ -718,8 +719,24 @@ padding: 8px 12px 8px 8px;                /* bigger, but still clean */
   padding-bottom: 4px;
   -webkit-overflow-scrolling: touch;
 
-  /* force hide scrollbars */
+  /* hide scrollbars */
   scrollbar-width: none; /* Firefox */
+
+  /* soft fade top + bottom */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 18px,
+    #000 calc(100% - 18px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 18px,
+    #000 calc(100% - 18px),
+    transparent 100%
+  );
 }
 
 .studio-brief-shell::-webkit-scrollbar {
@@ -727,6 +744,7 @@ padding: 8px 12px 8px 8px;                /* bigger, but still clean */
   height: 0 !important;
   background: transparent;
 }
+
 
 
 .studio-brief-input {
@@ -740,6 +758,7 @@ padding: 8px 12px 8px 8px;                /* bigger, but still clean */
   font-size: 32px;
   line-height: 1.08;
   font-weight: 600;
+ letter-spacing: -0.02em;
   background: transparent;
   color: var(--mina-text);
 }
