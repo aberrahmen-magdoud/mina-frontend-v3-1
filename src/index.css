@@ -564,9 +564,18 @@ video {
   min-height: 0;
 }
 
+/* overlay that sits above the centered text */
+.studio-pills-layer {
+  position: absolute;
+  left: 64px;
+  right: 64px;
+  top: 50%;
+  transform: translateY(-140px);  /* how far above the center block */
+  pointer-events: none;
+}
 
-.studio-left {
-  border-right: 1px solid var(--mina-border-soft);
+.studio-pills-layer .studio-row {
+  pointer-events: auto;  /* buttons are clickable again */
 }
 .studio-left-main {
   flex: 0 0 auto;
