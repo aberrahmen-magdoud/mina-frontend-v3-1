@@ -711,10 +711,14 @@ video {
   background: transparent;
   color: var(--mina-text);
 }
+.studio-pills-animate {
+  animation: studioPillsIn 0.6s ease-out forwards;
+}
+
 @keyframes studioPillsIn {
   from {
     opacity: 0;
-    transform: translateY(24px);
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
