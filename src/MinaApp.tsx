@@ -324,6 +324,10 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   const [motionDescription, setMotionDescription] = useState("");
   const [motionGenerating, setMotionGenerating] = useState(false);
   const [motionError, setMotionError] = useState<string | null>(null);
+  const [motionSuggestLoading, setMotionSuggestLoading] = useState(false);
+  const [motionSuggestError, setMotionSuggestError] = useState<string | null>(
+    null
+  );
 
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackSending, setFeedbackSending] = useState(false);
@@ -345,7 +349,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   const brandInputRef = useRef<HTMLInputElement | null>(null);
   const customStyleInputRef = useRef<HTMLInputElement | null>(null);
 
-  // 4.6 Scroll state for gradient
+  // 4.6 Scroll state for brief (ref only; fade handled in CSS)
   const briefShellRef = useRef<HTMLDivElement | null>(null);
   const briefScrollStateRef = useRef({
     atTop: true,
@@ -370,8 +374,8 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   const imageCost = credits?.meta?.imageCost ?? 1;
   const motionCost = credits?.meta?.motionCost ?? 5;
 
-  // ============================================
-  // 6. Effects – bootstrap + persist customer + scroll state
+    // ============================================
+  // 6. Effects – bootstrap + persist customer
   // ============================================
   useEffect(() => {
     setCustomerIdInput(customerId);
@@ -399,48 +403,6 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
       if (brandImageThumb) URL.revokeObjectURL(brandImageThumb);
     };
   }, [productImageThumb, brandImageThumb]);
-
-  const updateBriefScrollState = () => {
-    const el = briefShellRef.current;
-    if (!el) {
-      setBriefScrollState({
-        canScroll: false,
-        atTop: true,
-        atBottom: true,
-      });
-      return;
-    }
-
-    const { scrollTop, scrollHeight, clientHeight } = el;
-    const canScroll = scrollHeight > clientHeight + 1;
-    const atTop = scrollTop <= 1;
-    const atBottom = scrollTop + clientHeight >= scrollHeight - 1;
-
-    setBriefScrollState({
-      canScroll,
-      atTop,
-      atBottom,
-    });
-  };
-
-  useEffect(() => {
-    updateBriefScrollState();
-  }, [brief]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      updateBriefScrollState();
-    };
-
-    if (typeof window !== "undefined") {
-      window.addEventListener("resize", handleResize);
-      return () => {
-        window.removeEventListener("resize", handleResize);
-      };
-    }
-
-    return undefined;
-  }, []);
 
   // ============================================
   // 7. API helpers
@@ -999,7 +961,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   };
 
   const handleBriefScroll = () => {
-    updateBriefScrollState();
+    // no-op for now; fade is handled via CSS mask on .studio-brief-shell
   };
 
 
