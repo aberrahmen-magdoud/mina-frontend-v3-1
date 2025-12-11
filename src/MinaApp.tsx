@@ -280,7 +280,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionTitle, setSessionTitle] = useState("Mina Studio session");
 
-  // 4.3 Studio – brief + steps
+    // 4.3 Studio – brief + steps
   const [brief, setBrief] = useState("");
   const [tone] = useState("Poetic");
   const [platform, setPlatform] = useState("tiktok");
@@ -297,6 +297,22 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
     useState<string>("soft-desert-editorial");
   const [minaVisionEnabled, setMinaVisionEnabled] = useState(true);
 
+  // custom styles (Add yours)
+  const [customStylePanelOpen, setCustomStylePanelOpen] = useState(false);
+  const [customStyleImages, setCustomStyleImages] = useState<
+    CustomStyleImage[]
+  >([]);
+  const [customStyleHeroId, setCustomStyleHeroId] = useState<string | null>(
+    null
+  );
+  const [customStyleHeroThumb, setCustomStyleHeroThumb] = useState<
+    string | null
+  >(null);
+  const [customStyleTraining, setCustomStyleTraining] = useState(false);
+  const [customStyleError, setCustomStyleError] = useState<string | null>(
+    null
+  );
+
   const [stillItems, setStillItems] = useState<StillItem[]>([]);
   const [stillIndex, setStillIndex] = useState(0);
   const [stillGenerating, setStillGenerating] = useState(false);
@@ -306,10 +322,6 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   const [motionItems, setMotionItems] = useState<MotionItem[]>([]);
   const [motionIndex, setMotionIndex] = useState(0);
   const [motionDescription, setMotionDescription] = useState("");
-  const [motionSuggestLoading, setMotionSuggestLoading] = useState(false);
-  const [motionSuggestError, setMotionSuggestError] = useState<string | null>(
-    null
-  );
   const [motionGenerating, setMotionGenerating] = useState(false);
   const [motionError, setMotionError] = useState<string | null>(null);
 
@@ -331,14 +343,15 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   const [draggingUpload, setDraggingUpload] = useState(false);
   const productInputRef = useRef<HTMLInputElement | null>(null);
   const brandInputRef = useRef<HTMLInputElement | null>(null);
+  const customStyleInputRef = useRef<HTMLInputElement | null>(null);
 
-  // 4.6 Brief scroll state (for possible gradients – safe to keep)
+  // 4.6 Scroll state for gradient
   const briefShellRef = useRef<HTMLDivElement | null>(null);
-  const [briefScrollState, setBriefScrollState] = useState({
-    canScroll: false,
+  const briefScrollStateRef = useRef({
     atTop: true,
     atBottom: true,
   });
+
 
   // ============================================
   // 5. Derived values
@@ -793,7 +806,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
     document.body.removeChild(a);
   };
 
-  // ============================================
+    // ============================================
   // 11. UI helpers – aspect + uploads + logout
   // ============================================
   const handleCycleAspect = () => {
@@ -836,6 +849,100 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
       if (prev) URL.revokeObjectURL(prev);
       return url;
     });
+  };
+
+  // custom style (Add yours)
+  const handleOpenCustomStylePanel = () => {
+    setCustomStylePanelOpen(true);
+    setCustomStyleError(null);
+  };
+
+  const handleCloseCustomStylePanel = () => {
+    setCustomStylePanelOpen(false);
+  };
+
+  const handleCustomStyleFiles = (files: FileList | null) => {
+    if (!files) return;
+
+    const remainingSlots = Math.max(0, 10 - customStyleImages.length);
+    if (!remainingSlots) return;
+
+    const nextFiles = Array.from(files).slice(0, remainingSlots);
+    const now = Date.now();
+
+    const newItems: CustomStyleImage[] = nextFiles.map((file, index) => ({
+      id: `${now}_${index}_${file.name}`,
+      url: URL.createObjectURL(file),
+      file,
+    }));
+
+    setCustomStyleImages((prev) => {
+      const merged = [...prev, ...newItems];
+      let nextHeroId = customStyleHeroId;
+      if (!nextHeroId && merged.length) {
+        nextHeroId = merged[0].id;
+        setCustomStyleHeroId(nextHeroId);
+      }
+
+      const heroImage =
+        merged.find((img) => img.id === nextHeroId) || merged[0];
+
+      if (heroImage) {
+        setCustomStyleHeroThumb((prevThumb) => {
+          if (prevThumb && prevThumb.startsWith("blob:")) {
+            URL.revokeObjectURL(prevThumb);
+          }
+          return heroImage.url;
+        });
+      }
+
+      return merged;
+    });
+  };
+
+  const handleCustomStyleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    handleCustomStyleFiles(e.target.files);
+    e.target.value = "";
+  };
+
+  const handleCustomStyleUploadClick = () => {
+    customStyleInputRef.current?.click();
+  };
+
+  const handleSelectCustomStyleHero = (id: string) => {
+    setCustomStyleHeroId(id);
+    const img = customStyleImages.find((item) => item.id === id);
+    if (img) {
+      setCustomStyleHeroThumb((prevThumb) => {
+        if (prevThumb && prevThumb.startsWith("blob:")) {
+          URL.revokeObjectURL(prevThumb);
+        }
+        return img.url;
+      });
+    }
+  };
+
+  const handleTrainCustomStyle = async () => {
+    if (!customStyleImages.length || !customStyleHeroId) return;
+
+    try {
+      setCustomStyleTraining(true);
+      setCustomStyleError(null);
+
+      // TODO: plug this into the real training endpoint.
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+
+      setStylePresetKey("custom-style");
+      setCustomStylePanelOpen(false);
+    } catch (err: any) {
+      setCustomStyleError(
+        err?.message || "Unable to train style right now."
+      );
+    } finally {
+      setCustomStyleTraining(false);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -894,6 +1001,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   const handleBriefScroll = () => {
     updateBriefScrollState();
   };
+
 
   // ============================================
   // 12. Render – helper sections
@@ -1013,40 +1121,44 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
           >
             <div className="studio-style-title">Pick one editorial style</div>
 
-            <div className="studio-style-row">
-              {["Vintage", "Gradient", "Back light"].map((label, idx) => {
-                const presetKeys = [
-                  "vintage",
-                  "gradient",
-                  "back-light",
-                ] as const;
-                const key = presetKeys[idx];
+                        <div className="studio-style-row">
+              {STYLE_PRESETS.map((preset) => (
+                <button
+                  key={preset.key}
+                  type="button"
+                  className={classNames(
+                    "studio-style-card",
+                    stylePresetKey === preset.key && "active"
+                  )}
+                  onClick={() => setStylePresetKey(preset.key)}
+                >
+                  <div className="studio-style-thumb">
+                    <img src={preset.thumb} alt="" />
+                  </div>
+                  <div className="studio-style-label">{preset.label}</div>
+                </button>
+              ))}
 
-                return (
-                  <button
-                    key={label}
-                    type="button"
-                    className={classNames(
-                      "studio-style-card",
-                      stylePresetKey === key && "active"
-                    )}
-                    onClick={() => setStylePresetKey(key)}
-                  >
-                    <div className="studio-style-thumb">
-                      <span>+</span>
-                    </div>
-                    <div className="studio-style-label">{label}</div>
-                  </button>
-                );
-              })}
-
-              <button type="button" className="studio-style-card add">
+              <button
+                type="button"
+                className={classNames(
+                  "studio-style-card",
+                  "add",
+                  stylePresetKey === "custom-style" && "active"
+                )}
+                onClick={handleOpenCustomStylePanel}
+              >
                 <div className="studio-style-thumb">
-                  <span>+</span>
+                  {customStyleHeroThumb ? (
+                    <img src={customStyleHeroThumb} alt="" />
+                  ) : (
+                    <span>+</span>
+                  )}
                 </div>
                 <div className="studio-style-label">Add yours</div>
               </button>
             </div>
+
 
             <button
               type="button"
@@ -1230,6 +1342,104 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
       </div>
     </div>
   );
+  const renderCustomStyleModal = () => {
+    if (!customStylePanelOpen) return null;
+
+    return (
+      <div
+        className="mina-modal-backdrop"
+        onClick={handleCloseCustomStylePanel}
+      >
+        <div
+          className="mina-modal"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mina-modal-header">
+            <div>Train your own style</div>
+            <button
+              type="button"
+              className="mina-modal-close"
+              onClick={handleCloseCustomStylePanel}
+            >
+              Close
+            </button>
+          </div>
+
+          <div
+            className="mina-modal-drop"
+            onDragOver={(e) => {
+              e.preventDefault();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              handleCustomStyleFiles(e.dataTransfer.files);
+            }}
+          >
+            <div className="mina-modal-drop-main">
+              <button
+                type="button"
+                className="link-button"
+                onClick={handleCustomStyleUploadClick}
+              >
+                Upload images
+              </button>
+              <span>(up to 10)</span>
+            </div>
+            <div className="mina-modal-drop-help">
+              Drop your 10 reference images and pick one as hero.
+            </div>
+            <input
+              ref={customStyleInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: "none" }}
+              onChange={handleCustomStyleInputChange}
+            />
+          </div>
+
+          {customStyleImages.length > 0 && (
+            <div className="mina-modal-grid">
+              {customStyleImages.map((img) => (
+                <button
+                  key={img.id}
+                  type="button"
+                  className={classNames(
+                    "mina-modal-thumb",
+                    customStyleHeroId === img.id && "hero"
+                  )}
+                  onClick={() => handleSelectCustomStyleHero(img.id)}
+                >
+                  <img src={img.url} alt="" />
+                  {customStyleHeroId === img.id && (
+                    <div className="mina-modal-thumb-tag">Hero</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="mina-modal-footer">
+            {customStyleError && (
+              <div className="error-text">{customStyleError}</div>
+            )}
+            <button
+              type="button"
+              className="mina-modal-train"
+              onClick={handleTrainCustomStyle}
+              disabled={
+                !customStyleImages.length ||
+                !customStyleHeroId ||
+                customStyleTraining
+              }
+            >
+              {customStyleTraining ? "Training…" : "Train me"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderStudioBody = () => (
     <div className={classNames("studio-body", "studio-body--two-col")}>
@@ -1333,7 +1543,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
     </div>
   );
 
-  // ============================================
+   // ============================================
   // 13. Full layout with header overlay
   // ============================================
   return (
@@ -1400,8 +1610,11 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
         {/* Body (50/50 like login) */}
         {activeTab === "studio" ? renderStudioBody() : renderProfileBody()}
       </div>
+
+      {renderCustomStyleModal()}
     </div>
   );
 };
 
 export default MinaApp;
+
