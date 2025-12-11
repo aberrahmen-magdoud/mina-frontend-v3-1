@@ -629,11 +629,14 @@ video {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
-  min-height: 24px;
+  padding: 8px 14px;          /* bigger */
+  min-height: 32px;           /* bigger */
   border: none;
-  background: rgba(8, 10, 0, 0.02); /* 2% black */
+  background: rgba(8, 10, 0, 0.02);  /* 2% black */
   cursor: pointer;
+  font-size: 13px;            /* ≈10pt */
+  font-weight: 600;           /* semibold */
+  letter-spacing: -0.02em;
   transition:
     background 0.08s ease-out,
     opacity 0.08s ease-out,
@@ -642,12 +645,13 @@ video {
 
 .studio-pill.active,
 .studio-pill:hover {
-  background: rgba(8, 10, 0, 0.05); /* 5% black */
+  background: rgba(8, 10, 0, 0.05);  /* 5% when selected / hover */
 }
 
 .studio-pill:active {
   transform: scale(0.98);
 }
+
 
 /.studio-pill-icon {
   width: 16px;
