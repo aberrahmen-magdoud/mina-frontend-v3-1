@@ -683,6 +683,18 @@ padding: 8px 12px 8px 8px;                /* bigger, but still clean */
   object-fit: cover;
   display: block;
 }
+/* Aspect pill icon – 32px square */
+.studio-pill--aspect .studio-pill-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.studio-pill--aspect .studio-pill-icon img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
 
 .studio-pill-plus {
   font-size: 14px;
