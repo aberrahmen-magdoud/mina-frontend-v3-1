@@ -735,81 +735,77 @@ padding: 8px 12px 8px 8px;                /* bigger, but still clean */
 
       /* brief block (state zero) */
 
-         .studio-brief-block {
-           margin-top: 8px;
-         }
-         
-         /* Input 1 scroll container with fade on top/bottom */
-         .studio-brief-shell {
-           position: relative;
-           max-height: 260px;
-           overflow-y: auto;
-           padding-top: 4px;
-           padding-bottom: 4px;
-           -webkit-overflow-scrolling: touch;
-         
-           /* hide scrollbars */
-           scrollbar-width: none; /* Firefox */
-         
-                   /* soft fade bottom only */
-                  .your-selector (
-                 -webkit-mask-image: linear-gradient(
-                   to bottom,
-                   #000 0,
-                   #000 calc(100% - 60px),
-                   transparent 100%
-                 );
-                 mask-image: linear-gradient(
-                   to bottom,
-                   #000 0,
-                   #000 calc(100% - 60px),
-                   transparent 100%
-                 );
-               }
+.studio-brief-block {
+  margin-top: 8px;
+}
 
+/* Input 1 scroll container with fade on bottom only */
 
-         
-         .studio-brief-shell::-webkit-scrollbar {
-           width: 0 !important;
-           height: 0 !important;
-           background: transparent;
-         }
-         
-         .studio-brief-input {
-           width: 100%;
-           border: none;
-           outline: none;
-           resize: none;
-           padding: 0;
-           margin: 0;
-           font-family: inherit;
-           font-size: 32px;
-           line-height: 1.08;
-           font-weight: 600;
-           letter-spacing: -0.02em;
-           background: transparent;
-           color: var(--mina-text);
-         }
-         
-         .studio-brief-input::placeholder {
-           color: rgba(8, 10, 0, 0.2);
-         }
-         
-         /* “Describe more” overlay */
-         
-         .studio-brief-hint {
-           position: absolute;
-           right: 0;
-           bottom: 6px;
-           font-size: 12px;
-           font-weight: 500;
-           letter-spacing: -0.02em;
-           color: rgba(8, 10, 0, 0.45);
-           pointer-events: none;
-         }
+.studio-brief-shell {
+  position: relative;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
 
+  /* hide scrollbars */
+  scrollbar-width: none; /* Firefox */
 
-/* styles section */
+  /* soft fade ONLY on the bottom (~60px) */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 calc(100% - 60px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 calc(100% - 60px),
+    transparent 100%
+  );
+}
+
+.studio-brief-shell::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent;
+}
+
+.studio-brief-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  font-size: 32px;
+  line-height: 1.08;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  background: transparent;
+  color: var(--mina-text);
+}
+
+.studio-brief-input::placeholder {
+  color: rgba(8, 10, 0, 0.2);
+}
+
+/* “Describe more” overlay */
+
+.studio-brief-hint {
+  position: absolute;
+  right: 0;
+  bottom: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: rgba(8, 10, 0, 0.45);
+  pointer-events: none;
+}
+
 
 /* completely hidden until .visible is added */
 .studio-step {
