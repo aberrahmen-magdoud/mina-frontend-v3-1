@@ -626,21 +626,22 @@ video {
 }
 .studio-pill {
   display: inline-flex;
-  align-items: left;
+  align-items: center;
   gap: 10px;
-  padding: 12px 14px;          /* tighter vertical, comfy horizontal */
+  padding: 8px 18px;                 /* bigger, but still clean */
   border: none;
   background: rgba(8, 10, 0, 0.02);  /* 2% black */
   cursor: pointer;
-  font-size: 13px;            /* ≈10pt */
-  font-weight: 600;           /* semibold */
-  letter-spacing: -0.00em;
+  font-size: 13px;                   /* ≈10pt */
+  font-weight: 600;
+  letter-spacing: -0.02em;
   line-height: 1.1;
   transition:
     background 0.08s ease-out,
     opacity 0.08s ease-out,
     transform 0.08s ease-out;
 }
+
 
 
 .studio-pill.active,
@@ -653,20 +654,22 @@ video {
 }
 
 
-/.studio-pill-icon {
-  width: 16px;
-  height: 16px;
+/* default icon size (aspect pill) */
+.studio-pill-icon {
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* filled 10% black square, no outline */
+/* image/plus box – visible thumbnail */
 .studio-pill-icon--square {
-  width: 16px;
-  height: 16px;
-  border-radius: 0;
-  background: rgba(8, 10, 0, 0.1);
+  min-width: 24px;
+  min-height: 24px;
+  width: 24px;
+  height: 24px;
+  background: rgba(8, 10, 0, 0.1);   /* 10% black */
   border: none;
   display: flex;
   align-items: center;
@@ -681,11 +684,11 @@ video {
   display: block;
 }
 
-
 .studio-pill-plus {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1;
 }
+
 
 
 /* text: 10pt-ish, semi bold + muted subtitle */
