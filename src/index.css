@@ -603,9 +603,7 @@ video {
   align-items: center;
 }
 
-.studio-right {
-  border-left: 1px solid var(--mina-border-soft);
-}
+
 
 /* drag highlight */
 
