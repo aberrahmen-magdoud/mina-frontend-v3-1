@@ -779,7 +779,7 @@ video {
 
 
 .studio-style-title {
-  font-size: 24px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.02em;
   margin-bottom: 24px;
@@ -801,12 +801,6 @@ video {
   text-align: left;
 }
 
-.studio-style-label {
-  margin-top: 6px;
-  font-size: 12px;
-}
-
-
 .studio-style-thumb {
   width: 50px;
   height: 50px;
@@ -827,19 +821,25 @@ video {
 }
 
 .studio-style-label {
-  margin-top: 8px;
-  font-size: 14px;
+  margin-top: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
+
 
 .studio-vision-toggle {
   margin-top: 16px;
   border: none;
   padding: 0;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   text-decoration: underline;
   cursor: pointer;
 }
+
 
 .studio-vision-state {
   font-weight: 600;
