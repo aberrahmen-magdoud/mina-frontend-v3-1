@@ -751,21 +751,22 @@ padding: 8px 12px 8px 8px;                /* bigger, but still clean */
            /* hide scrollbars */
            scrollbar-width: none; /* Firefox */
          
-                   /* soft fade at bottom only, longer fade */
-         .your-element {
-           -webkit-mask-image: linear-gradient(
-             to bottom,
-             #000 0,
-             #000 calc(100% - 60px),
-             transparent 100%
-           );
-           mask-image: linear-gradient(
-             to bottom,
-             #000 0,
-             #000 calc(100% - 60px),
-             transparent 100%
-           );
-         }
+                   /* soft fade bottom only */
+            .your-element-selector {
+              -webkit-mask-image: linear-gradient(
+                to bottom,
+                #000 0,
+                #000 calc(100% - 60px),
+                transparent 100%
+              );
+              mask-image: linear-gradient(
+                to bottom,
+                #000 0,
+                #000 calc(100% - 60px),
+                transparent 100%
+              );
+            }
+
 
          
          .studio-brief-shell::-webkit-scrollbar {
