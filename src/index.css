@@ -43,6 +43,8 @@ body {
   color: var(--mina-text);
   font-family: "Schibsted Grotesk", system-ui, -apple-system, BlinkMacSystemFont,
     "SF Pro Text", sans-serif;
+     letter-spacing: -0.02em;
+
 }
 
 a {
