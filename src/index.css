@@ -979,20 +979,30 @@ padding: 8px 12px 8px 8px;                /* bigger, but still clean */
   flex: 1;
   min-height: 0;
   display: flex;
-  background: rgba(8, 10, 0, 0.1); /* 10% black placeholder */
+  background: rgba(8, 10, 0, 0.05); /* 5% black */
 }
 
+/* image / video always fills the frame */
 .studio-output-media {
   width: 100%;
   height: 100%;
-  object-fit: cover; /* cover half screen */
+  object-fit: cover;
 }
 
+/* state-zero placeholder: full cover, centered text */
 .output-placeholder {
-  padding: 40px 24px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  text-align: center;
   font-size: 14px;
-  color: rgba(8, 10, 0, 0.7);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: rgba(8, 10, 0, 0.75);
 }
+
 
 /* dots for still history */
 
