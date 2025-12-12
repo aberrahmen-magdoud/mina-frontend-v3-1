@@ -1766,7 +1766,7 @@ const deleteCustomStyle = (key: string) => {
 
         {/* Panels (smooth open/close, no jumps) */}
         <div className={classNames("mina-slide", !showPanels && "hidden")}>
-          <Collapse open={activePanel === "product"} delayMs={80}>
+          <Collapse open={activePanel === "product" || activePanel === null} delayMs={80}>
             <div className="studio-panel">
               <div className="studio-panel-title">Add your product</div>
           
@@ -2300,8 +2300,9 @@ const deleteCustomStyle = (key: string) => {
   // [PART 18 START] Final layout
   // ========================================================================
   return (
-    <div className="mina-studio-root">
-      <div className="studio-frame">
+     <div className="mina-studio-root">
+    <div className={classNames("mina-drag-overlay", globalDragging && "show")} />
+    <div className="studio-frame">
         <div className="studio-header-overlay">
           <div className="studio-header-left">
             <a href="https://mina.faltastudio.com" className="studio-logo-link">
