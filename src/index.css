@@ -155,6 +155,19 @@ video {
   color: rgba(8, 10, 0, 0.8);
 }
 
+/* ===========================================================
+   GLOBAL: hide scrollbars (still scrollable)
+   =========================================================== */
+
+* {
+  scrollbar-width: none; /* Firefox */
+}
+
+*::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+}
+
 /* fade / slide helpers */
 
 .mina-fade,
@@ -180,324 +193,13 @@ video {
     transform var(--mina-anim-slide) ease-out;
   opacity: 1;
   transform: translateY(0);
+  will-change: opacity, transform;
 }
 
 .mina-slide.hidden {
   opacity: 0;
-  transform: translateY(-12px);
+  transform: translateY(-10px);
   pointer-events: none;
-}
-
-/* ===========================================================
-   2. LOGIN LAYOUT
-   =========================================================== */
-
-.mina-auth-shell {
-  height: 100vh;
-  height: 100dvh;
-  display: flex;
-  background: var(--mina-bg);
-  color: var(--mina-text);
-  overflow: hidden;
-}
-
-.mina-auth-left,
-.mina-auth-right {
-  flex: 1;
-  min-width: 0;
-}
-
-.mina-auth-left {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px 40px;
-  border-right: 1px solid var(--mina-border-soft);
-}
-
-.mina-auth-right {
-  background-image: url("https://cdn.shopify.com/s/files/1/0678/9254/3571/files/g-form-121277-appearance.imageUrl-mijzwt6a-cropped.jpg?v=1764402871");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-}
-
-/* brand + card + footer */
-
-.mina-auth-card {
-  width: 100%;
-  max-width: 420px;
-  display: flex;
-  flex-direction: column;
-  transform: translateY(-40px);
-}
-
-.mina-auth-brand {
-  position: absolute;
-  top: 16px;
-  left: 40px;
-}
-
-.mina-auth-brand img {
-  height: 18px;
-  display: block;
-}
-
-.mina-auth-footer {
-  position: absolute;
-  left: 40px;
-  bottom: 16px;
-  font-size: 11px;
-  color: rgba(8, 10, 0, 0.4);
-}
-
-/* auth copy */
-
-.mina-auth-title {
-  font-size: 18px;
-  margin: 0 0 4px;
-}
-
-.mina-auth-text {
-  font-size: 13px;
-  line-height: 1.4;
-  margin: 0;
-  max-width: 340px;
-  color: rgba(8, 10, 0, 0.3);
-}
-
-/* top back button */
-
-.mina-auth-back-wrapper {
-  margin-bottom: 4px;
-}
-
-.mina-auth-back {
-  display: inline-flex;
-  padding: 4px 0 4px;
-  border: none;
-  background: none;
-  cursor: pointer;
-}
-
-.mina-auth-back img {
-  width: 22px;
-  height: 22px;
-  display: block;
-  opacity: 0.5;
-  transition: opacity 0.2s ease-out;
-}
-
-.mina-auth-back:hover img {
-  opacity: 0.8;
-}
-
-.mina-auth-back:active img {
-  opacity: 0.4;
-}
-
-/* hero links */
-
-.mina-auth-actions {
-  margin-top: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.mina-auth-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: none;
-  background: none;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-
-.mina-auth-main {
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  opacity: 0.9;
-  text-decoration: underline;
-}
-
-.mina-auth-main:hover {
-  opacity: 1;
-}
-
-.mina-auth-main:active {
-  opacity: 0.6;
-}
-
-.mina-auth-main.small {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  opacity: 0.85;
-}
-
-.mina-auth-main.small:hover {
-  opacity: 1;
-}
-
-.mina-auth-main.small:active {
-  opacity: 0.6;
-}
-
-.mina-auth-link.secondary {
-  text-decoration: none;
-  font-weight: 400;
-  opacity: 0.75;
-  font-size: 14px;
-}
-
-.mina-auth-link.secondary:hover {
-  opacity: 0.9;
-}
-
-.mina-auth-link.secondary:active {
-  opacity: 0.5;
-}
-
-/* stacked hero states */
-
-.mina-auth-stack {
-  margin-top: 4px;
-  position: relative;
-  height: 72px;
-}
-
-.fade-overlay.auth-panel {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* base transition */
-
-.auth-panel {
-  transition:
-    opacity var(--mina-anim-fade) ease-out,
-    transform var(--mina-anim-slide) ease-out;
-}
-
-/* google panel */
-
-.auth-panel--google.visible {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
-}
-
-.auth-panel--google.hidden {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-12px);
-}
-
-/* email panel */
-
-.auth-panel--email.hidden {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(12px);
-}
-
-.auth-panel--email.visible {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
-  transition-delay: var(--mina-anim-fade);
-}
-
-/* check-email panel */
-
-.auth-panel--check.visible {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
-}
-
-/* email form */
-
-.mina-auth-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.mina-auth-label {
-  display: flex;
-  flex-direction: column;
-}
-
-.mina-auth-input {
-  border: none;
-  padding: 8px 0;
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  background: transparent;
-  outline: none;
-  color: var(--mina-text);
-}
-
-.mina-auth-input::placeholder {
-  color: rgba(8, 10, 0, 0.3);
-  font-weight: 600;
-}
-
-.mina-auth-hint {
-  margin-top: 8px;
-  font-size: 11px;
-  color: rgba(8, 10, 0, 0.3);
-  max-width: 340px;
-}
-
-.mina-auth-error {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--mina-text);
-}
-
-/* responsive auth */
-
-@media (max-width: 960px) {
-  .mina-auth-shell {
-    flex-direction: column;
-  }
-
-  .mina-auth-left {
-    border-right: none;
-    border-bottom: 1px solid var(--mina-border-soft);
-  }
-
-  .mina-auth-right {
-    height: 260px;
-  }
-
-  .mina-auth-card {
-    max-width: 360px;
-    transform: translateY(-24px);
-  }
-
-  .mina-auth-brand {
-    left: 20px;
-    top: 16px;
-  }
-
-  .mina-auth-footer {
-    left: 20px;
-    bottom: 16px;
-  }
 }
 
 /* ===========================================================
@@ -578,25 +280,22 @@ video {
   min-height: 0;
 }
 
-/* NO border-left here – we removed the middle divider */
-
-/* left dragging highlight */
+/* left dragging highlight (no outline, subtle darken) */
 .studio-left.drag-active {
-  outline: 1px dashed rgba(8, 10, 0, 0.4);
+  background: rgba(8, 10, 0, 0.02);
 }
 
-/* center Input 1 + Input 2 on the left */
+.studio-left.drag-active .studio-plusbox {
+  background: rgba(8, 10, 0, 0.10);
+}
+
+/* center Input 1 + later blocks on the left */
 
 .studio-left-main {
   flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  transition: transform var(--mina-anim-slide) ease-out;
-}
-
-.studio-left-main--with-step {
-  transform: translateY(-24px);
 }
 
 .studio-input1-block {
@@ -613,10 +312,8 @@ video {
 }
 
 /* ===========================================================
-   3.1 LEFT SIDE – describe + pills + styles
+   LEFT SIDE – describe + pills
    =========================================================== */
-
-/* pill row */
 
 .studio-row {
   display: flex;
@@ -624,33 +321,31 @@ video {
   gap: 16px;
 }
 
-/* upper pills – compact */
-
 .studio-row--pills {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-/* ===========================================================
-   PATCH 2A — Smaller pills
-   =========================================================== */
-
 .studio-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 9px 5px 6px;      /* smaller */
+  gap: 8px;
+  padding: 6px 10px;
+  border: none;
   background: rgba(8, 10, 0, 0.02);
   cursor: pointer;
-  font-size: 11px;               /* smaller */
+
+  font-size: 12px; /* ✅ */
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   line-height: 1.1;
+
   transition:
-    background 0.14s ease-out,
-    opacity 0.22s ease-out,
-    transform 0.22s ease-out;
+    background 220ms ease,
+    opacity 220ms ease,
+    transform 220ms ease;
+  will-change: opacity, transform;
 }
 
 .studio-pill.active,
@@ -659,52 +354,22 @@ video {
 }
 
 .studio-pill:active {
-  transform: scale(0.985);
+  transform: scale(0.98);
 }
-
-
-
-/* default icon size (small icons) */
-
-/* ===========================================================
-   PATCH 1B — Smaller pill icons (replace icon blocks)
-   =========================================================== */
 
 .studio-pill-icon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* non-aspect pills (square icon wrapper) */
-.studio-pill-icon--square {
-  min-width: 22px;
-  min-height: 22px;
-  width: 22px;
-  height: 22px;
-  background: rgba(8, 10, 0, 0.1); /* 10% */
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.studio-pill-icon--square img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-/* aspect pill */
 .studio-pill--aspect .studio-pill-icon {
-  min-width: 28px;
-  min-height: 28px;
-  width: 28px;
-  height: 28px;
+  min-width: 32px;
+  min-height: 32px;
+  width: 32px;
+  height: 32px;
   background: rgba(8, 10, 0, 0);
   border: none;
   display: flex;
@@ -713,22 +378,15 @@ video {
 }
 
 .studio-pill--aspect .studio-pill-icon img {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   display: block;
   object-fit: contain;
 }
 
-.studio-pill-plus {
-  font-size: 14px;
-  line-height: 1;
-}
-
-/* pill text */
-
 .studio-pill-main,
 .studio-pill-sub {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0;
 }
@@ -736,31 +394,12 @@ video {
 .studio-pill-sub {
   opacity: 0.6;
 }
-/* Shared glyph + check for non-aspect pills */
-
-.studio-pill-glyph {
-  width: 18px;
-  height: 18px;
-  display: block;
-}
-
-/* ===========================================================
-   PATCH 1C — Smaller checkmark
-   =========================================================== */
-
-.studio-pill-check {
-  font-size: 14px;
-  line-height: 1;
-}
-
 
 /* brief block */
 
 .studio-brief-block {
   margin-top: 8px;
 }
-
-/* Input 1 scroll container with fade on bottom only */
 
 .studio-brief-shell {
   position: relative;
@@ -769,8 +408,6 @@ video {
   padding-top: 4px;
   padding-bottom: 4px;
   -webkit-overflow-scrolling: touch;
-
-  scrollbar-width: none; /* Firefox */
 
   -webkit-mask-image: linear-gradient(
     to bottom,
@@ -785,22 +422,6 @@ video {
     transparent 100%
   );
 }
-
-/* ===========================================================
-   PATCH 1B — Hide scrollbars on the shell too (extra safe)
-   =========================================================== */
-
-.studio-brief-shell {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.studio-brief-shell::-webkit-scrollbar {
-  width: 0 !important;
-  height: 0 !important;
-  display: none !important;
-}
-
 
 .studio-brief-input {
   width: 100%;
@@ -817,26 +438,10 @@ video {
   background: transparent;
   color: var(--mina-text);
 }
-/* ===========================================================
-   PATCH 1A — Hide textarea scrollbar (but keep scroll working)
-   =========================================================== */
-
-.studio-brief-input {
-  scrollbar-width: none;         /* Firefox */
-  -ms-overflow-style: none;      /* old Edge */
-}
-
-.studio-brief-input::-webkit-scrollbar {
-  width: 0 !important;
-  height: 0 !important;
-  display: none !important;      /* Safari/Chrome */
-}
 
 .studio-brief-input::placeholder {
   color: rgba(8, 10, 0, 0.2);
 }
-
-/* “Describe more” overlay */
 
 .studio-brief-hint {
   position: absolute;
@@ -849,150 +454,77 @@ video {
   pointer-events: none;
 }
 
-/* styles section */
-
-/* completely hidden until .visible is added */
-.studio-step {
-  display: none;
-}
 /* ===========================================================
-   PATCH 2 — Upload dropzone + thumbs
+   PANELS (Product / Logo / Inspiration / Style)
    =========================================================== */
 
-.studio-dropzone {
-  border: 1px dashed rgba(8, 10, 0, 0.35);
-  background: rgba(8, 10, 0, 0.03);
-  padding: 12px 12px;
-  transition: background 0.12s ease-out, border-color 0.12s ease-out;
+.studio-panel {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(8, 10, 0, 0.08);
+}
+
+.studio-panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: 10px;
+  opacity: 0.9;
+}
+
+.studio-plusbox {
+  width: 72px;
+  height: 72px;
+  background: rgba(8, 10, 0, 0.05); /* ✅ 5% black */
+  border: none; /* ✅ no contour */
+  outline: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 220ms ease, transform 220ms ease, opacity 220ms ease;
 }
 
-.studio-dropzone:hover {
-  background: rgba(8, 10, 0, 0.05);
+.studio-plusbox:active {
+  transform: scale(0.98);
 }
 
-/* ✅ YOUR REQUEST: while dragging over, background becomes darker 10% */
-.studio-dropzone--dragging {
-  background: rgba(8, 10, 0, 0.10);
-  border-color: rgba(8, 10, 0, 0.55);
-}
-
-.studio-dropzone:focus {
-  outline: 1px solid rgba(8, 10, 0, 0.35);
-  outline-offset: 2px;
-}
-
-/* thumbs */
-.studio-thumbs-row {
+.studio-thumbs {
+  margin-top: 10px;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
 }
 
 .studio-thumb {
-  border: none;
+  width: 72px;
+  height: 72px;
+  border: none;  /* ✅ */
+  outline: none; /* ✅ */
+  background: rgba(8, 10, 0, 0.05);
   padding: 0;
-  background: none;
+  overflow: hidden;
   cursor: pointer;
-  transition: transform 0.08s ease-out, opacity 0.08s ease-out;
+  transition: transform 220ms ease, opacity 220ms ease;
 }
 
 .studio-thumb:active {
   transform: scale(0.98);
-  opacity: 0.75;
 }
 
-/* when React adds .visible */
-.studio-step.visible {
-  display: block;
-  margin-top: 0;
-  padding-top: 8px;
-  border-top: 1px solid rgba(8, 10, 0, 0.08);
-  animation: studioStepIn 0.45s ease-out forwards;
-}
-
-/* soft fade/slide */
-@keyframes studioStepIn {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* clickable title / summary */
-.studio-style-title {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  margin-bottom: 16px;
-  padding: 0;
-  border: none;
-  background: none;
-  text-align: left;
-  cursor: pointer;
-}
-
-/* divider between styles + toggle */
-.studio-style-divider {
-  border-bottom: 1px solid rgba(8, 10, 0, 0.08);
-  margin: 12px 0 8px;
-}
-
-.studio-style-row {
-  display: flex;
-  gap: 24px;
-  margin-bottom: 8px;
-}
-
-.studio-style-card {
-  border: none;
-  background: none;
-  padding: 0;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 12px;
-  text-align: left;
-}
-
-.studio-style-thumb {
-  width: 72px;
-  height: 72px;
-  background: rgba(8, 10, 0, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.studio-style-thumb img {
+.studio-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
-.studio-style-card.add .studio-style-thumb span {
-  font-size: 18px;
-}
-
-.studio-style-card.active .studio-style-thumb {
-  outline: 1px solid rgba(8, 10, 0, 0.7);
-}
-
-.studio-style-label {
-  margin-top: 6px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-/* vision toggle + state */
+/* create / vision */
 
 .studio-vision-toggle {
-  margin-top: 8px;
+  margin-top: 12px;
   border: none;
   padding: 0;
   font-family: inherit;
@@ -1003,12 +535,8 @@ video {
   cursor: pointer;
 }
 
-.studio-vision-state {
-  font-weight: 600;
-}
-
 .studio-create-block {
-  margin-top: 48px;
+  margin-top: 28px;
 }
 
 .studio-create-link {
@@ -1026,44 +554,49 @@ video {
   cursor: default;
 }
 
-.studio-credits-small {
-  display: none;
-}
-
-/* footer */
-
-.studio-footer {
-  margin-top: 24px;
+/* profile button bottom-left */
+.studio-profile-float {
+  position: absolute;
+  left: 64px;
+  bottom: 24px;
   font-size: 12px;
-}
-/* ===========================================================
-   PATCH 3A — Pills staggered fade-in (needs .pills-visible class)
-   =========================================================== */
-
-/* hidden state */
-.studio-row--pills .studio-pill {
-  opacity: 0;
-  transform: translateY(6px);
-  pointer-events: none;
+  font-weight: 500;
+  opacity: 0.7;
+  text-decoration: none;
 }
 
-/* visible state */
-.studio-row--pills.pills-visible .studio-pill {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
+.studio-profile-float:hover {
+  opacity: 0.9;
 }
 
-/* stagger delays */
-.studio-row--pills.pills-visible .studio-pill:nth-child(1) { transition-delay: 0ms; }
-.studio-row--pills.pills-visible .studio-pill:nth-child(2) { transition-delay: 40ms; }
-.studio-row--pills.pills-visible .studio-pill:nth-child(3) { transition-delay: 80ms; }
-.studio-row--pills.pills-visible .studio-pill:nth-child(4) { transition-delay: 120ms; }
-.studio-row--pills.pills-visible .studio-pill:nth-child(5) { transition-delay: 160ms; }
+.studio-profile-float:active {
+  opacity: 0.6;
+}
 
-/* make sure transition exists */
-.studio-row--pills .studio-pill {
-  transition: opacity 220ms ease-out, transform 220ms ease-out, background 140ms ease-out;
+@media (max-width: 960px) {
+  .studio-header-overlay {
+    top: 16px;
+    left: 20px;
+    right: 20px;
+  }
+
+  .studio-body--two-col {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .studio-left,
+  .studio-right {
+    padding: 80px 20px 32px;
+    border-left: none;
+    border-right: none;
+  }
+
+  .studio-profile-float {
+    left: 20px;
+    bottom: 18px;
+  }
 }
 
 /* ===========================================================
@@ -1211,12 +744,15 @@ video {
 .mina-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(8, 10, 0, 0.3);
+  background: rgba(8, 10, 0, 0.10);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(50px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 40;
 }
+
 
 .mina-modal {
   width: 100%;
