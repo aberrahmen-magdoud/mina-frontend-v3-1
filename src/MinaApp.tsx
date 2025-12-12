@@ -1491,7 +1491,7 @@ const deleteCustomStyle = (key: string) => {
   const renderStudioLeft = () => {
   // pills are text-only (+ / ✓), except ratio pill keeps its icon
   const pillBaseStyle = (index: number): React.CSSProperties => ({
-    transitionDelay: showPills ? `${index * 55}ms` : "0ms",
+    transitionDelay: showPills ? `${index * 80}ms` : "0ms",
   });
 
   const plusOrTick = (n: number) => (n > 0 ? "✓" : "+");
