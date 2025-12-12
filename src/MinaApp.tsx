@@ -303,17 +303,10 @@ function saveCustomStyles(styles: CustomStylePreset[]) {
 // [PART 3 END]
 // ============================================================================
 // ==============================================
+// ==============================================
 // PART UI HELPERS (pills/panels)
 // ==============================================
 type PanelKey = "product" | "logo" | "inspiration" | "style" | null;
-type UploadPanelKey = "product" | "logo" | "inspiration";
-
-type UploadItem = {
-  id: string;
-  url: string; // blob:... or https://...
-  kind: "file" | "url";
-  file?: File;
-};
 
 type CustomStyle = {
   id: string; // custom-...
@@ -332,18 +325,9 @@ function extractFirstHttpUrl(text: string) {
   return m ? m[0] : null;
 }
 
-async function fileToDataUrl(file: File): Promise<string> {
-  return await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("FileReader failed"));
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.readAsDataURL(file);
-  });
-}
-
 /**
  * Smooth open/close without "display:none" jumps.
- * (Your CSS can style inside; TSX handles the height animation.)
+ * (CSS can style inside; TSX handles the height animation.)
  */
 const Collapse: React.FC<{
   open: boolean;
@@ -354,7 +338,6 @@ const Collapse: React.FC<{
   const [mounted, setMounted] = useState(open);
   const [height, setHeight] = useState<number | "auto">(open ? "auto" : 0);
 
-  // mount immediately when opening
   useEffect(() => {
     if (open) setMounted(true);
   }, [open]);
@@ -366,18 +349,12 @@ const Collapse: React.FC<{
     const D = 280;
 
     if (open) {
-      // from 0 -> content height -> auto
       const h = el.scrollHeight;
       setHeight(h);
-
-      const t = window.setTimeout(() => {
-        setHeight("auto");
-      }, D + delayMs);
-
+      const t = window.setTimeout(() => setHeight("auto"), D + delayMs);
       return () => window.clearTimeout(t);
     }
 
-    // closing: from auto -> measured -> 0, then unmount
     const current = el.scrollHeight;
     setHeight(current);
 
@@ -396,7 +373,7 @@ const Collapse: React.FC<{
     <div
       style={{
         overflow: "hidden",
-        height: open ? height : height,
+        height,
         opacity: open ? 1 : 0,
         transform: open ? "translateY(0)" : "translateY(-6px)",
         transition:
@@ -408,6 +385,7 @@ const Collapse: React.FC<{
     </div>
   );
 };
+
 
 // ============================================================================
 // [PART 4 START] Component
@@ -440,18 +418,6 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   const [, setPlatform] = useState("tiktok");
   const [aspectIndex, setAspectIndex] = useState(0);
 
-  // NEW: upload panels (product/logo/inspiration)
-  const [openPanel, setOpenPanel] = useState<UploadPanelKey | null>(null);
-
-  const [productItems, setProductItems] = useState<UploadItem[]>([]);
-  const [logoItems, setLogoItems] = useState<UploadItem[]>([]);
-  const [inspirationItems, setInspirationItems] = useState<UploadItem[]>([]);
-  // Style step toggle (by Style pill)
-  const [styleStepOpen, setStyleStepOpen] = useState(false);
-  // Style preset (UI key; built-ins or custom-*)
-  const [stylePresetKey, setStylePresetKey] = useState<string>("vintage");
-  // Vision toggle (Input 3) — ALWAYS visible
-  const [minaVisionEnabled, setMinaVisionEnabled] = useState(true);
   // Stills
   const [stillItems, setStillItems] = useState<StillItem[]>([]);
   const [stillIndex, setStillIndex] = useState(0);
@@ -564,64 +530,40 @@ const inspirationInputRef = useRef<HTMLInputElement | null>(null);
   });
 
   // ========================================================================
-  // [PART 5 START] Derived values (the “rules” you requested)
-  // ========================================================================
-  const briefLength = brief.trim().length;
-  const canCreateStill = briefLength >= 40 && !stillGenerating;
-  
-  const showPills = uiStage >= 1;
-  const showPanels = uiStage >= 2;
-  const showControls = uiStage >= 3;
-  
-  const productCount = uploads.product.length;
-  const logoCount = uploads.logo.length;
-  const inspirationCount = uploads.inspiration.length;
+// [PART 5 START] Derived values (the “rules” you requested)
+// ========================================================================
+const briefLength = brief.trim().length;
+const canCreateStill = briefLength >= 40 && !stillGenerating;
 
+// UI stages
+const showPills = uiStage >= 1;
+const showPanels = uiStage >= 2;
+const showControls = uiStage >= 3;
 
-  const currentAspect = ASPECT_OPTIONS[aspectIndex];
-  const currentStill: StillItem | null = stillItems[stillIndex] || stillItems[0] || null;
-  const currentMotion: MotionItem | null = motionItems[motionIndex] || motionItems[0] || null;
+// counts for +/✓
+const productCount = uploads.product.length;
+const logoCount = uploads.logo.length;
+const inspirationCount = uploads.inspiration.length;
 
-  const imageCost = credits?.meta?.imageCost ?? 1;
-  const motionCost = credits?.meta?.motionCost ?? 5;
+const currentAspect = ASPECT_OPTIONS[aspectIndex];
+const currentStill: StillItem | null =
+  stillItems[stillIndex] || stillItems[0] || null;
+const currentMotion: MotionItem | null =
+  motionItems[motionIndex] || motionItems[0] || null;
 
-  // Input 1 hint visibility
-  const briefHintVisible = showDescribeMore;
+const imageCost = credits?.meta?.imageCost ?? 1;
+const motionCost = credits?.meta?.motionCost ?? 5;
 
-  // Upload panel target for full-page drag/drop / paste:
-  const currentUploadTarget: UploadPanelKey = openPanel || "product";
+const briefHintVisible = showDescribeMore;
 
-  const productHasMedia = productItems.length > 0;
-  const logoHasMedia = logoItems.length > 0;
-  const inspirationHasMedia = inspirationItems.length > 0;
+// Style key for API (avoid unknown custom keys)
+const stylePresetKeyForApi = stylePresetKey.startsWith("custom-")
+  ? "custom-style"
+  : stylePresetKey;
+// ========================================================================
+// [PART 5 END]
+// ========================================================================
 
-  // Compatibility: “productImageThumb / styleImageUrls” used by API payload
-  // (NOTE: blob: urls won’t be sent to API — same behavior as before)
-  const productImageThumb = productItems[0]?.url || null;
-  const styleImageUrls = inspirationItems.map((x) => x.url).filter(safeIsHttpUrl);
-
-  // Style key for API (avoid unknown custom keys)
-  const stylePresetKeyForApi = stylePresetKey.startsWith("custom-")
-    ? "custom-style"
-    : stylePresetKey;
-
-  // Pills auto-open product when they appear (your request)
-  const pillsWereVisibleRef = useRef(false);
-  useEffect(() => {
-    if (showPills && !pillsWereVisibleRef.current) {
-      pillsWereVisibleRef.current = true;
-      setOpenPanel("product");
-    }
-    if (!showPills) {
-      pillsWereVisibleRef.current = false;
-      setOpenPanel(null);
-      setStyleStepOpen(false);
-    }
-  }, [showPills]);
-
-  // ========================================================================
-  // [PART 5 END]
-  // ========================================================================
 // ============================================
 // PART UI STAGING (premium reveal / no jumping)
 // ============================================
@@ -646,8 +588,8 @@ useEffect(() => {
 }, [customStyles]);
 
 useEffect(() => {
-  // Stage 0: only textarea
-  if (briefLength <= 0) {
+  // Stage 0: only textarea (until 10 chars)
+  if (briefLength < 10) {
     setUiStage(0);
     setActivePanel(null);
     setGlobalDragging(false);
@@ -655,7 +597,7 @@ useEffect(() => {
     return;
   }
 
-  // First time you type: open Product by default
+  // Premium reveal after 10 chars
   setUiStage(1);
   setActivePanel((prev) => prev ?? "product");
 
@@ -667,6 +609,7 @@ useEffect(() => {
     window.clearTimeout(t3);
   };
 }, [briefLength]);
+
 
   // ========================================================================
   // [PART 6 START] Effects – persist customer + bootstrap
@@ -720,41 +663,6 @@ useEffect(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Full-page paste support (image files or https image links)
-  useEffect(() => {
-    const onPaste = async (e: ClipboardEvent) => {
-      if (!showPills) return;
-
-      try {
-        const items = e.clipboardData?.items;
-        if (items && items.length) {
-          // Try image file paste
-          for (const it of Array.from(items)) {
-            if (it.kind === "file") {
-              const file = it.getAsFile();
-              if (file && file.type.startsWith("image/")) {
-                addFilesToPanel(currentUploadTarget, [file]);
-                return;
-              }
-            }
-          }
-        }
-
-        // Try text paste (URL)
-        const text = e.clipboardData?.getData("text") || "";
-        const trimmed = text.trim();
-        if (looksLikeImageUrl(trimmed)) {
-          addUrlToPanel(currentUploadTarget, trimmed);
-        }
-      } catch {
-        // ignore
-      }
-    };
-
-    window.addEventListener("paste", onPaste);
-    return () => window.removeEventListener("paste", onPaste);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showPills, currentUploadTarget, productItems, logoItems, inspirationItems]);
   // ========================================================================
   // [PART 6 END]
   // ========================================================================
@@ -842,130 +750,7 @@ useEffect(() => {
   // [PART 7 END]
   // ========================================================================
 
-  // ========================================================================
-  // [PART 8 START] Upload logic (product/logo/inspiration)
-  // ========================================================================
-  const revokeIfBlob = (u?: string) => {
-    if (u && u.startsWith("blob:")) URL.revokeObjectURL(u);
-  };
-
-  const setPanelItems = (panel: UploadPanelKey, next: UploadItem[]) => {
-    if (panel === "product") setProductItems(next);
-    if (panel === "logo") setLogoItems(next);
-    if (panel === "inspiration") setInspirationItems(next);
-  };
-
-  const getPanelItems = (panel: UploadPanelKey) => {
-    if (panel === "product") return productItems;
-    if (panel === "logo") return logoItems;
-    return inspirationItems;
-  };
-
-  const addFilesToPanel = (panel: UploadPanelKey, files: File[]) => {
-    if (!files.length) return;
-
-    const limit = PANEL_LIMITS[panel];
-    const current = getPanelItems(panel);
-
-    const onlyImages = files.filter((f) => f.type.startsWith("image/"));
-    if (!onlyImages.length) return;
-
-    const now = Date.now();
-    const newItems: UploadItem[] = onlyImages.map((file, idx) => ({
-      id: `${panel}_${now}_${idx}_${file.name}`,
-      kind: "file",
-      url: URL.createObjectURL(file),
-      file,
-    }));
-
-    if (limit === 1) {
-      // replace
-      current.forEach((x) => revokeIfBlob(x.url));
-      setPanelItems(panel, [newItems[0]]);
-      return;
-    }
-
-    const remaining = Math.max(0, limit - current.length);
-    const toAdd = newItems.slice(0, remaining);
-    setPanelItems(panel, [...current, ...toAdd]);
-  };
-
-  const addUrlToPanel = (panel: UploadPanelKey, url: string) => {
-    const u = url.trim();
-    if (!safeIsHttpUrl(u)) return;
-
-    const limit = PANEL_LIMITS[panel];
-    const current = getPanelItems(panel);
-
-    const item: UploadItem = {
-      id: `${panel}_url_${Date.now()}`,
-      kind: "url",
-      url: u,
-    };
-
-    if (limit === 1) {
-      // replace
-      current.forEach((x) => revokeIfBlob(x.url));
-      setPanelItems(panel, [item]);
-      return;
-    }
-
-    if (current.length >= limit) return;
-    setPanelItems(panel, [...current, item]);
-  };
-
-  const removePanelItem = (panel: UploadPanelKey, id: string) => {
-    const current = getPanelItems(panel);
-    const next = current.filter((x) => x.id !== id);
-    const removed = current.find((x) => x.id === id);
-    if (removed) revokeIfBlob(removed.url);
-    setPanelItems(panel, next);
-  };
-
-  const reorderPanelItems = (panel: UploadPanelKey, fromIndex: number, toIndex: number) => {
-    const current = [...getPanelItems(panel)];
-    if (fromIndex < 0 || toIndex < 0 || fromIndex >= current.length || toIndex >= current.length) return;
-    const [moved] = current.splice(fromIndex, 1);
-    current.splice(toIndex, 0, moved);
-    setPanelItems(panel, current);
-  };
-
-  // Thumb drag for reorder (within same panel)
-  const dragThumbRef = useRef<{ panel: UploadPanelKey; index: number } | null>(null);
-
-  const openFilePickerForPanel = (panel: UploadPanelKey) => {
-    if (panel === "product") productInputRef.current?.click();
-    if (panel === "logo") logoInputRef.current?.click();
-    if (panel === "inspiration") inspirationInputRef.current?.click();
-  };
-
-  const promptPasteLinkForPanel = (panel: UploadPanelKey) => {
-    const txt = window.prompt("Paste an image URL (https://...)", "");
-    if (!txt) return;
-    if (!looksLikeImageUrl(txt)) return;
-    addUrlToPanel(panel, txt);
-  };
-
-  const handleProductFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files && e.target.files[0];
-    if (file) addFilesToPanel("product", [file]);
-    e.target.value = "";
-  };
-
-  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files && e.target.files[0];
-    if (file) addFilesToPanel("logo", [file]);
-    e.target.value = "";
-  };
-
-  const handleInspirationFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    if (files.length) addFilesToPanel("inspiration", files);
-    e.target.value = "";
-  };
-  // ========================================================================
-  // [PART 8 END]
-  // ========================================================================
+  
 
   // ========================================================================
   // [PART 9 START] Stills (editorial)
@@ -978,19 +763,6 @@ useEffect(() => {
       setStillError("Missing API base URL (VITE_MINA_API_BASE_URL).");
       return;
     }
-      const productUrl = uploads.product[0]?.url;
-      if (productUrl && isHttpUrl(productUrl)) {
-        payload.productImageUrl = productUrl;
-      }
-      
-      const inspirationUrls = uploads.inspiration
-        .map((u) => u.url)
-        .filter((u) => isHttpUrl(u))
-        .slice(0, 4);
-      
-      if (inspirationUrls.length) {
-        payload.styleImageUrls = inspirationUrls;
-      }
 
     const sid = await ensureSession();
     if (!sid) {
@@ -1026,15 +798,22 @@ useEffect(() => {
         aspectRatio: safeAspectRatio,
       };
 
-      // Only forward if product image is a real http(s) URL
-      if (productImageThumb && safeIsHttpUrl(productImageThumb)) {
-        payload.productImageUrl = productImageThumb;
-      }
+      // Forward product (http only)
+        const productUrl = uploads.product[0]?.url;
+        if (productUrl && isHttpUrl(productUrl)) {
+          payload.productImageUrl = productUrl;
+        }
+        
+        // Forward inspiration up to 4 (http only)
+        const inspirationUrls = uploads.inspiration
+          .map((u) => u.url)
+          .filter((u) => isHttpUrl(u))
+          .slice(0, 4);
+        
+        if (inspirationUrls.length) {
+          payload.styleImageUrls = inspirationUrls;
+        }
 
-      // Inspiration: forward ONLY http(s) urls
-      if (styleImageUrls.length) {
-        payload.styleImageUrls = styleImageUrls.slice(0, 4);
-      }
 
       const res = await fetch(`${API_BASE_URL}/editorial/generate`, {
         method: "POST",
@@ -1520,6 +1299,9 @@ const deleteCustomStyle = (key: string) => {
     if (!motionDescription.trim()) await handleSuggestMotion();
     await handleGenerateMotion();
   };
+  const handleBriefScroll = () => {
+    // fade is handled by CSS mask on .studio-brief-shell
+  };
 
   const handleBriefChange = (value: string) => {
     setBrief(value);
@@ -1672,199 +1454,6 @@ const deleteCustomStyle = (key: string) => {
   // ========================================================================
   // [PART 14 START] Render – LEFT side (Input1 + pills + panels + style + Input3)
   // ========================================================================
-  const renderUploadPanel = (panel: UploadPanelKey) => {
-    const items = getPanelItems(panel);
-    const limit = PANEL_LIMITS[panel];
-    const title =
-      panel === "product" ? "Add your product" : panel === "logo" ? "Add your logo" : "Add inspiration";
-
-    const showAddSquare = items.length < limit;
-
-    return (
-      <div className="studio-step visible">
-        <div className="studio-style-title" style={{ cursor: "default", textDecoration: "none" }}>
-          {title}
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-          <button type="button" className="link-button" onClick={() => openFilePickerForPanel(panel)}>
-            Browse
-          </button>
-          <button type="button" className="link-button subtle" onClick={() => promptPasteLinkForPanel(panel)}>
-            Paste https link
-          </button>
-          <span style={{ fontSize: 11, opacity: 0.55 }}>
-            Drag & drop anywhere on the page (or paste an image).
-          </span>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          {items.map((it, idx) => (
-            <button
-              key={it.id}
-              type="button"
-              title="Click to delete"
-              style={{
-                width: 64,
-                height: 64,
-                border: "1px solid rgba(8,10,0,0.16)",
-                background: "rgba(8,10,0,0.04)",
-                overflow: "hidden",
-                padding: 0,
-              }}
-              onClick={() => removePanelItem(panel, it.id)}
-              draggable={limit > 1}
-              onDragStart={() => {
-                dragThumbRef.current = { panel, index: idx };
-              }}
-              onDragOver={(e) => {
-                if (limit <= 1) return;
-                e.preventDefault();
-              }}
-              onDrop={(e) => {
-                if (limit <= 1) return;
-                e.preventDefault();
-                const src = dragThumbRef.current;
-                if (!src || src.panel !== panel) return;
-                reorderPanelItems(panel, src.index, idx);
-                dragThumbRef.current = null;
-              }}
-            >
-              <img
-                src={it.url}
-                alt=""
-                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-              />
-            </button>
-          ))}
-
-          {showAddSquare && (
-            <button
-              type="button"
-              title="Add image"
-              style={{
-                width: 64,
-                height: 64,
-                border: "1px dashed rgba(8,10,0,0.35)",
-                background: "rgba(8,10,0,0.02)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 18,
-                fontWeight: 600,
-              }}
-              onClick={() => openFilePickerForPanel(panel)}
-            >
-              +
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const renderStyleStep = () => {
-    if (!showPills || !styleStepOpen) return null;
-
-    return (
-      <div className="studio-step visible">
-        <button type="button" className="studio-style-title" onClick={() => setStyleStepOpen(false)}>
-          Pick one editorial style
-        </button>
-
-        <div className="studio-style-row">
-          {STYLE_PRESETS.map((preset) => (
-            <button
-              key={preset.key}
-              type="button"
-              className={classNames("studio-style-card", stylePresetKey === preset.key && "active")}
-              onClick={() => setStylePresetKey(preset.key)}
-            >
-              <div className="studio-style-thumb">
-                <img src={preset.thumb} alt="" />
-              </div>
-              <div className="studio-style-label">{preset.label}</div>
-            </button>
-          ))}
-
-          {/* Custom saved presets */}
-          {customPresets.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              className={classNames("studio-style-card", stylePresetKey === p.key && "active")}
-              onClick={() => setStylePresetKey(p.key)}
-              onDoubleClick={() => handleDeleteCustomPreset(p.key)} // your request: double click delete
-              title="Double click to delete"
-            >
-              <div className="studio-style-thumb">
-                <img src={p.thumbDataUrl} alt="" />
-              </div>
-              <div
-                className="studio-style-label"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRenameCustomPreset(p.key); // your request: click name to rename
-                }}
-                title="Click to rename"
-              >
-                {p.label}
-              </div>
-            </button>
-          ))}
-
-          {/* Create style */}
-          <button
-            type="button"
-            className={classNames("studio-style-card", "add")}
-            onClick={handleOpenCustomStylePanel}
-          >
-            <div className="studio-style-thumb">
-              <span>+</span>
-            </div>
-            <div className="studio-style-label">Create style</div>
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  const renderInput3Always = () => {
-    return (
-      <div style={{ marginTop: 14 }}>
-        <div className="studio-style-divider" />
-
-        <button type="button" className="studio-vision-toggle" onClick={() => setMinaVisionEnabled((prev) => !prev)}>
-          Mina Vision Intelligence:{" "}
-          <span className="studio-vision-state">{minaVisionEnabled ? "ON" : "OFF"}</span>
-        </button>
-
-        <div className="studio-create-block">
-          <button
-            type="button"
-            className={classNames("studio-create-link", !canCreateStill && "disabled")}
-            disabled={!canCreateStill}
-            onClick={handleGenerateStill}
-          >
-            {stillGenerating ? "Creating…" : "Create"}
-          </button>
-        </div>
-
-        <div className="studio-credits-small">
-          {creditsLoading ? (
-            "Checking credits…"
-          ) : credits ? (
-            <>
-              Credits: {credits.balance} (img −{imageCost} · motion −{motionCost})
-            </>
-          ) : null}
-        </div>
-
-        {stillError && <div className="error-text">{stillError}</div>}
-      </div>
-    );
-  };
-
   const renderStudioLeft = () => {
   // pills are text-only (+ / ✓), except ratio pill keeps its icon
   const pillBaseStyle = (index: number): React.CSSProperties => ({
