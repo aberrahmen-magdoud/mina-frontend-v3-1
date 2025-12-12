@@ -144,9 +144,18 @@ type UploadKind = "file" | "url";
 type UploadItem = {
   id: string;
   kind: UploadKind;
-  url: string; // blob: or http(s)
+
+  // url = UI preview (blob: or http)
+  url: string;
+
+  // remoteUrl = REAL stored URL in R2 (https://...)
+  remoteUrl?: string;
+
   file?: File; // only for kind=file
+  uploading?: boolean;
+  error?: string;
 };
+
 
 type UploadPanelKey = "product" | "logo" | "inspiration";
 
