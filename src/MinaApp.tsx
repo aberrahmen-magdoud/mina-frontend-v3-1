@@ -2229,3 +2229,14 @@ export default MinaApp;
 // ============================================================================
 // [PART 4 END] Component
 // ============================================================================
+/* ===========================================================
+   FINAL OVERRIDE — pills animation speed (single source of truth)
+   Put this at the very end of the file.
+   =========================================================== */
+
+.mina-studio-root .studio-pill {
+  transition:
+    background 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 360ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
