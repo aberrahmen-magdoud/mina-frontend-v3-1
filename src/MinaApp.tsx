@@ -1769,9 +1769,12 @@ const deleteCustomStyle = (key: string) => {
 
         {/* Input 3 (always after typing starts; smooth) */}
         <div className={classNames("mina-slide", !showControls && "hidden")}>
-          <button
+          <div className="studio-controls-divider" />
+
+            <button
             type="button"
             className="studio-vision-toggle"
+
             onClick={() => setMinaVisionEnabled((prev) => !prev)}
           >
             Mina Vision Intelligence:{" "}
