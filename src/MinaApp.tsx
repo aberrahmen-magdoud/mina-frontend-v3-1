@@ -1056,22 +1056,47 @@ const handleCycleAspect = () => {
   });
 };
 
-const openPanel = (key: PanelKey) => {
-  // If user interacts (click) while panels are still hidden, reveal them immediately
+// premium hover open (tiny delay, cancels fast flickers)
+const hoverOpenTimerRef = useRef<number | null>(null);
+
+const cancelHoverOpen = () => {
+  if (hoverOpenTimerRef.current !== null) {
+    window.clearTimeout(hoverOpenTimerRef.current);
+    hoverOpenTimerRef.current = null;
+  }
+};
+
+useEffect(() => {
+  return () => cancelHoverOpen();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
+const scheduleHoverOpen = (key: PanelKey) => {
+  if (!showPills) return;
+  if (!key) return;
+
+  // hover should also reveal the panel area (premium)
   if (uiStage < 2) setUiStage(2);
 
-  setActivePanel((prev) => {
-    if (prev === key) return null;
-    return key;
-  });
+  cancelHoverOpen();
+  hoverOpenTimerRef.current = window.setTimeout(() => {
+    setActivePanel(key);
+    hoverOpenTimerRef.current = null;
+  }, 120); // ✅ premium micro-delay
+};
+
+const openPanel = (key: PanelKey) => {
+  // click should always win over any pending hover
+  cancelHoverOpen();
+
+  if (uiStage < 2) setUiStage(2);
+  setActivePanel((prev) => (prev === key ? null : key));
 };
 
 const hoverSelectPanel = (key: PanelKey) => {
-  // Hover = select + reveal the panel area too
-  if (!showPills) return;
-  if (uiStage < 2) setUiStage(2);
-  setActivePanel(key);
+  scheduleHoverOpen(key);
 };
+
 
 
 const capForPanel = (panel: UploadPanelKey) => {
