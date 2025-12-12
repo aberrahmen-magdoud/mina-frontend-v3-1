@@ -1772,7 +1772,7 @@ const deleteCustomStyle = (key: string) => {
                       onClick={() => removeUploadItem("product", it.id)}
                       title="Click to delete"
                     >
-                      <img src={it.url} alt="" />
+                    <img src={it.remoteUrl || it.url} alt="" />
                     </button>
                   ))}
           
