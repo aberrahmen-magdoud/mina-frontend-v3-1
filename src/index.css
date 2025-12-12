@@ -632,15 +632,19 @@ video {
   gap: 8px;
 }
 
+/* ===========================================================
+   PATCH 1A — Smaller pills (replace .studio-pill block)
+   =========================================================== */
+
 .studio-pill {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px 8px 8px;
+  gap: 8px;
+  padding: 6px 10px 6px 6px; /* smaller */
   border: none;
   background: rgba(8, 10, 0, 0.02);  /* 2% black */
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px; /* smaller */
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.1;
@@ -652,31 +656,35 @@ video {
 
 .studio-pill.active,
 .studio-pill:hover {
-  background: rgba(8, 10, 0, 0.05);  /* 5% when selected / hover */
+  background: rgba(8, 10, 0, 0.05); /* 5% */
 }
 
 .studio-pill:active {
   transform: scale(0.98);
 }
 
+
 /* default icon size (small icons) */
 
+/* ===========================================================
+   PATCH 1B — Smaller pill icons (replace icon blocks)
+   =========================================================== */
+
 .studio-pill-icon {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* upload pills – image/plus thumbnail */
-
+/* non-aspect pills (square icon wrapper) */
 .studio-pill-icon--square {
-  min-width: 26px;
-  min-height: 26px;
-  width: 26px;
-  height: 26px;
-  background: rgba(8, 10, 0, 0.1);   /* 10% black */
+  min-width: 22px;
+  min-height: 22px;
+  width: 22px;
+  height: 22px;
+  background: rgba(8, 10, 0, 0.1); /* 10% */
   border: none;
   display: flex;
   align-items: center;
@@ -691,14 +699,13 @@ video {
   display: block;
 }
 
-/* Aspect pill – 32px block, icon centered */
-
+/* aspect pill */
 .studio-pill--aspect .studio-pill-icon {
-  min-width: 32px;
-  min-height: 32px;
-  width: 32px;
-  height: 32px;
-  background: rgba(8, 10, 0, 0.0);
+  min-width: 28px;
+  min-height: 28px;
+  width: 28px;
+  height: 28px;
+  background: rgba(8, 10, 0, 0);
   border: none;
   display: flex;
   align-items: center;
@@ -706,8 +713,8 @@ video {
 }
 
 .studio-pill--aspect .studio-pill-icon img {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   display: block;
   object-fit: contain;
 }
@@ -737,10 +744,15 @@ video {
   display: block;
 }
 
+/* ===========================================================
+   PATCH 1C — Smaller checkmark
+   =========================================================== */
+
 .studio-pill-check {
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
 }
+
 
 /* brief block */
 
@@ -818,6 +830,52 @@ video {
 /* completely hidden until .visible is added */
 .studio-step {
   display: none;
+}
+/* ===========================================================
+   PATCH 2 — Upload dropzone + thumbs
+   =========================================================== */
+
+.studio-dropzone {
+  border: 1px dashed rgba(8, 10, 0, 0.35);
+  background: rgba(8, 10, 0, 0.03);
+  padding: 12px 12px;
+  transition: background 0.12s ease-out, border-color 0.12s ease-out;
+  cursor: pointer;
+}
+
+.studio-dropzone:hover {
+  background: rgba(8, 10, 0, 0.05);
+}
+
+/* ✅ YOUR REQUEST: while dragging over, background becomes darker 10% */
+.studio-dropzone--dragging {
+  background: rgba(8, 10, 0, 0.10);
+  border-color: rgba(8, 10, 0, 0.55);
+}
+
+.studio-dropzone:focus {
+  outline: 1px solid rgba(8, 10, 0, 0.35);
+  outline-offset: 2px;
+}
+
+/* thumbs */
+.studio-thumbs-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.studio-thumb {
+  border: none;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  transition: transform 0.08s ease-out, opacity 0.08s ease-out;
+}
+
+.studio-thumb:active {
+  transform: scale(0.98);
+  opacity: 0.75;
 }
 
 /* when React adds .visible */
