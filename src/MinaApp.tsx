@@ -1753,7 +1753,7 @@ const deleteCustomStyle = (key: string) => {
         </div>
 
         {/* Panels (smooth open/close, no jumps) */}
-        <div className={classNames("mina-slide", !showPanels && "hidden")}>
+        <div className="mina-slide">
           <Collapse open={activePanel === "product" || activePanel === null} delayMs={80}>
             <div className="studio-panel">
               <div className="studio-panel-title">Add your product</div>
