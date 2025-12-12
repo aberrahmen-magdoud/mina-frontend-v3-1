@@ -729,6 +729,18 @@ video {
 .studio-pill-sub {
   opacity: 0.6;
 }
+/* Shared glyph + check for non-aspect pills */
+
+.studio-pill-glyph {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.studio-pill-check {
+  font-size: 16px;
+  line-height: 1;
+}
 
 /* brief block */
 
