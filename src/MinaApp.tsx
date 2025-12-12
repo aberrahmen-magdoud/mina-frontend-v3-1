@@ -185,6 +185,8 @@ const ASPECT_ICON_URLS: Record<AspectKey, string> = {
   "1-1":
     "https://cdn.shopify.com/s/files/1/0678/9254/3571/files/square_icon_901d47a8-44a8-4ab9-b412-2224e97fd9d9.svg?v=1765425956",
 };
+const NON_ASPECT_PILL_ICON =
+  "https://cdn.shopify.com/s/files/1/0678/9254/3571/files/square_icon_901d47a8-44a8-4ab9-b412-2224e97fd9d9.svg?v=1765425956";
 
 // Map our UI ratios to Replicate-safe values
 const REPLICATE_ASPECT_RATIO_MAP: Record<string, string> = {
