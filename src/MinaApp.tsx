@@ -1678,7 +1678,7 @@ const deleteCustomStyle = (key: string) => {
                 type="button"
                 className={classNames("studio-pill", activePanel === "product" && "active")}
                 style={pillBaseStyle(0)}
-                onMouseEnter={() => hoverSelectPanel("product")}
+               
                 onClick={() => openPanel("product")}
               >
                 <span className="studio-pill-main">Product</span>
