@@ -786,11 +786,21 @@ video {
   );
 }
 
+/* ===========================================================
+   PATCH 1B — Hide scrollbars on the shell too (extra safe)
+   =========================================================== */
+
+.studio-brief-shell {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
 .studio-brief-shell::-webkit-scrollbar {
   width: 0 !important;
   height: 0 !important;
-  background: transparent;
+  display: none !important;
 }
+
 
 .studio-brief-input {
   width: 100%;
@@ -806,6 +816,20 @@ video {
   letter-spacing: -0.02em;
   background: transparent;
   color: var(--mina-text);
+}
+/* ===========================================================
+   PATCH 1A — Hide textarea scrollbar (but keep scroll working)
+   =========================================================== */
+
+.studio-brief-input {
+  scrollbar-width: none;         /* Firefox */
+  -ms-overflow-style: none;      /* old Edge */
+}
+
+.studio-brief-input::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;      /* Safari/Chrome */
 }
 
 .studio-brief-input::placeholder {
