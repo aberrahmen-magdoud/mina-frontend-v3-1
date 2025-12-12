@@ -186,6 +186,14 @@ const ASPECT_ICON_URLS: Record<AspectKey, string> = {
     "https://cdn.shopify.com/s/files/1/0678/9254/3571/files/square_icon_901d47a8-44a8-4ab9-b412-2224e97fd9d9.svg?v=1765425956",
 };
 
+// Map our UI ratios to Replicate-safe values
+const REPLICATE_ASPECT_RATIO_MAP: Record<string, string> = {
+  "9:16": "9:16",
+  "4:5": "3:4", // closest supported ratio
+  "2:3": "2:3",
+  "1:1": "1:1",
+};
+
 const STYLE_PRESETS = [
   {
     key: "vintage",
@@ -363,8 +371,8 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   // 5. Derived values
   // ============================================
   const briefLength = brief.trim().length;
-  const showPills = briefLength >= 3;
-  const showStylesStep = briefLength >= 20;
+  const showPills = briefLength >= 1; // show pills on first character
+  const showStylesStep = showPills; // styles + vision + create appear with pills
   const canCreateStill = briefLength >= 40 && !stillGenerating;
 
   const currentAspect = ASPECT_OPTIONS[aspectIndex];
@@ -553,21 +561,53 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
       setStillGenerating(true);
       setStillError(null);
 
+      // Map UI ratio to Replicate-safe ratio
+      const safeAspectRatio =
+        REPLICATE_ASPECT_RATIO_MAP[currentAspect.ratio] || "1:1";
+
+      // Build payload and only include image URLs if they look like real URIs
+      const payload: {
+        customerId: string;
+        sessionId: string;
+        brief: string;
+        tone: string;
+        platform: string;
+        minaVisionEnabled: boolean;
+        stylePresetKey: string;
+        aspectRatio: string;
+        productImageUrl?: string;
+        styleImageUrls?: string[];
+      } = {
+        customerId,
+        sessionId: sid,
+        brief: trimmed,
+        tone,
+        platform: currentAspect.platformKey,
+        minaVisionEnabled,
+        stylePresetKey,
+        aspectRatio: safeAspectRatio,
+      };
+
+      // Only forward if thumb is http(s) – avoid blob:/local placeholders
+      if (
+        productImageAdded &&
+        productImageThumb &&
+        /^https?:\/\//i.test(productImageThumb)
+      ) {
+        payload.productImageUrl = productImageThumb;
+      }
+      if (
+        brandImageAdded &&
+        brandImageThumb &&
+        /^https?:\/\//i.test(brandImageThumb)
+      ) {
+        payload.styleImageUrls = [brandImageThumb];
+      }
+
       const res = await fetch(`${API_BASE_URL}/editorial/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerId,
-          sessionId: sid,
-          brief: trimmed,
-          tone,
-          platform: currentAspect.platformKey,
-          minaVisionEnabled,
-          stylePresetKey,
-          productImageUrl: productImageAdded ? "local-upload" : "",
-          styleImageUrls: brandImageAdded ? ["local-brand"] : [],
-          aspectRatio: currentAspect.ratio,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -1057,7 +1097,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
                     <span className="studio-pill-main">Product image</span>
                   </button>
 
-                  {/* Inspiration pill */}
+                  {/* Inspiration pill (brand / ref) */}
                   <button
                     type="button"
                     className={classNames(
@@ -1264,124 +1304,128 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   };
 
   const renderStudioRight = () => {
-  const isEmpty = !currentStill && !currentMotion;
+    const isEmpty = !currentStill && !currentMotion;
 
-  // STATE ZERO – just the big placeholder, no buttons / motion / feedback
- if (isEmpty) {
-    return (
-      <div className="studio-right studio-right--full">
-        <div className="studio-output-main studio-output-main--empty">
-          <div className="studio-output-frame">
-            <div className="output-placeholder">
-              New ideas don’t actually exist, just recycle.
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // AFTER YOU HAVE AT LEAST ONE IMAGE / MOTION – keep full UI
-  return (
-    <div className="studio-right">
-      <div className="studio-output-main">
-        <button
-          type="button"
-          className="studio-output-click"
-          onClick={handleDownloadCurrentStill}
-          disabled={!currentStill && !currentMotion}
-        >
-          <div className="studio-output-frame">
-            {currentMotion ? (
-              <video
-                className="studio-output-media"
-                src={currentMotion.url}
-                autoPlay
-                loop
-                muted
-                controls
-              />
-            ) : currentStill ? (
-              <img
-                className="studio-output-media"
-                src={currentStill.url}
-                alt=""
-              />
-            ) : (
+    // STATE ZERO – just the big placeholder, no buttons / motion / feedback
+    if (isEmpty) {
+      return (
+        <div className="studio-right studio-right--full">
+          <div className="studio-output-main studio-output-main--empty">
+            <div className="studio-output-frame">
               <div className="output-placeholder">
                 New ideas don’t actually exist, just recycle.
               </div>
-            )}
+            </div>
           </div>
-        </button>
+        </div>
+      );
+    }
 
-        {stillItems.length > 1 && (
-          <div className="studio-dots-row">
-            {stillItems.map((item, idx) => (
-              <button
-                key={item.id}
-                type="button"
-                className={classNames("studio-dot", idx === stillIndex && "active")}
-                onClick={() => setStillIndex(idx)}
-              />
-            ))}
-          </div>
-        )}
-
-        <div className="studio-motion-helpers">
+    // AFTER YOU HAVE AT LEAST ONE IMAGE / MOTION – keep full UI
+    return (
+      <div className="studio-right">
+        <div className="studio-output-main">
           <button
             type="button"
-            className="link-button subtle"
-            onClick={handleSuggestMotion}
-            disabled={!currentStill || motionSuggestLoading}
+            className="studio-output-click"
+            onClick={handleDownloadCurrentStill}
+            disabled={!currentStill && !currentMotion}
           >
-            {motionSuggestLoading ? "Thinking about motion…" : "Suggest motion"}
+            <div className="studio-output-frame">
+              {currentMotion ? (
+                <video
+                  className="studio-output-media"
+                  src={currentMotion.url}
+                  autoPlay
+                  loop
+                  muted
+                  controls
+                />
+              ) : currentStill ? (
+                <img
+                  className="studio-output-media"
+                  src={currentStill.url}
+                  alt=""
+                />
+              ) : (
+                <div className="output-placeholder">
+                  New ideas don’t actually exist, just recycle.
+                </div>
+              )}
+            </div>
           </button>
-          {motionSuggestError && <span className="error-text">{motionSuggestError}</span>}
-          {motionError && <span className="error-text">{motionError}</span>}
-        </div>
 
-        {motionDescription && (
-          <div className="studio-motion-description">
-            {motionDescription}
-            {" — "}
+          {stillItems.length > 1 && (
+            <div className="studio-dots-row">
+              {stillItems.map((item, idx) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={classNames(
+                    "studio-dot",
+                    idx === stillIndex && "active"
+                  )}
+                  onClick={() => setStillIndex(idx)}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="studio-motion-helpers">
             <button
               type="button"
               className="link-button subtle"
-              onClick={handleGenerateMotion}
-              disabled={motionGenerating}
+              onClick={handleSuggestMotion}
+              disabled={!currentStill || motionSuggestLoading}
             >
-              {motionGenerating ? "Animating…" : "Animate"}
+              {motionSuggestLoading ? "Thinking about motion…" : "Suggest motion"}
+            </button>
+            {motionSuggestError && (
+              <span className="error-text">{motionSuggestError}</span>
+            )}
+            {motionError && <span className="error-text">{motionError}</span>}
+          </div>
+
+          {motionDescription && (
+            <div className="studio-motion-description">
+              {motionDescription}
+              {" — "}
+              <button
+                type="button"
+                className="link-button subtle"
+                onClick={handleGenerateMotion}
+                disabled={motionGenerating}
+              >
+                {motionGenerating ? "Animating…" : "Animate"}
+              </button>
+            </div>
+          )}
+
+          <div className="studio-feedback-row">
+            <div className="studio-feedback-hint">
+              Speak to me, tell me what you like and dislike about my generation
+            </div>
+            <input
+              className="studio-feedback-input"
+              placeholder="Type feedback..."
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+            />
+            <button
+              type="button"
+              className="link-button"
+              onClick={handleSubmitFeedback}
+              disabled={feedbackSending}
+            >
+              {feedbackSending ? "Sending…" : "Send"}
             </button>
           </div>
-        )}
 
-        <div className="studio-feedback-row">
-          <div className="studio-feedback-hint">
-            Speak to me, tell me what you like and dislike about my generation
-          </div>
-          <input
-            className="studio-feedback-input"
-            placeholder="Type feedback..."
-            value={feedbackText}
-            onChange={(e) => setFeedbackText(e.target.value)}
-          />
-          <button
-            type="button"
-            className="link-button"
-            onClick={handleSubmitFeedback}
-            disabled={feedbackSending}
-          >
-            {feedbackSending ? "Sending…" : "Send"}
-          </button>
+          {feedbackError && <div className="error-text">{feedbackError}</div>}
         </div>
-
-        {feedbackError && <div className="error-text">{feedbackError}</div>}
       </div>
-    </div>
-  );
-};
-
+    );
+  };
 
   const renderCustomStyleModal = () => {
     if (!customStylePanelOpen) return null;
@@ -1391,10 +1435,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
         className="mina-modal-backdrop"
         onClick={handleCloseCustomStylePanel}
       >
-        <div
-          className="mina-modal"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="mina-modal" onClick={(e) => e.stopPropagation()}>
           <div className="mina-modal-header">
             <div>Train your own style</div>
             <button
@@ -1495,19 +1536,13 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
         <h2>Profile</h2>
         <div className="profile-row">
           <div className="profile-label">Customer ID</div>
-          <form
-            onSubmit={handleChangeCustomer}
-            className="profile-inline-form"
-          >
+          <form onSubmit={handleChangeCustomer} className="profile-inline-form">
             <input
               className="profile-input"
               value={customerIdInput}
               onChange={(e) => setCustomerIdInput(e.target.value)}
             />
-            <button
-              type="submit"
-              className="link-button primary-button"
-            >
+            <button type="submit" className="link-button primary-button">
               Switch
             </button>
           </form>
@@ -1555,9 +1590,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
       <div className="studio-profile-right">
         <h3>Recent generations</h3>
         {historyLoading && <div>Loading history…</div>}
-        {historyError && (
-          <div className="error-text">{historyError}</div>
-        )}
+        {historyError && <div className="error-text">{historyError}</div>}
         {!historyLoading && !historyGenerations.length && (
           <div>No history yet.</div>
         )}
