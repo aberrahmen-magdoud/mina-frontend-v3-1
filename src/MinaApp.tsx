@@ -549,8 +549,8 @@ const uploadsPending = Object.values(uploads).some((arr) =>
 const canCreateStill = briefLength >= 40 && !stillGenerating && !uploadsPending;
 
 // UI stages
-const showPills = uiStage >= 1;
-const showPanels = uiStage >= 1;
+const showPills = briefLength > 0;
+const showPanels = briefLength > 0;
 const showControls = uiStage >= 3;
 
 // counts for +/✓
