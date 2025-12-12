@@ -1095,7 +1095,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
                           <img src={NON_ASPECT_PILL_ICON} alt="" />
                         )}
                       </span>
-                      <span className="studio-pill-main">Product image</span>
+                      <span className="studio-pill-main">Add Product</span>
                     </button>
 
 
@@ -1117,7 +1117,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
                         )}
                       </span>
                     
-                      <span className="studio-pill-main">Add inspiration</span>
+                      <span className="studio-pill-main">Inspiration</span>
                     </button>
 
 
