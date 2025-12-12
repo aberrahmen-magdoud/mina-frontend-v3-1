@@ -1470,3 +1470,49 @@ video {
     opacity 360ms cubic-bezier(0.16, 1, 0.3, 1),
     transform 360ms cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* ===========================================================
+   PATCH: Pills same height + panels always feel visible + drag overlay
+   =========================================================== */
+
+/* Make the pills row align perfectly */
+.studio-row--pills {
+  align-items: center;
+}
+
+/* Force identical pill height (including the aspect pill) */
+.studio-pill {
+  height: 34px;
+  min-height: 34px;
+  white-space: nowrap;
+}
+
+/* The aspect pill was wrapping and becoming tall */
+.studio-pill--aspect {
+  height: 34px;
+  min-height: 34px;
+  white-space: nowrap;
+}
+
+/* Keep subtitle inline and small so it never wraps to a new line */
+.studio-pill--aspect .studio-pill-sub {
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Whole-screen drag overlay (5% black) */
+.mina-drag-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.05);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease-out;
+  z-index: 9999;
+}
+
+.mina-drag-overlay.show {
+  opacity: 1;
+}
+
