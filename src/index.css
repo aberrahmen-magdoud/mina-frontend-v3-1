@@ -633,35 +633,35 @@ video {
 }
 
 /* ===========================================================
-   PATCH 1A — Smaller pills (replace .studio-pill block)
+   PATCH 2A — Smaller pills
    =========================================================== */
 
 .studio-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px 6px 6px; /* smaller */
-  border: none;
-  background: rgba(8, 10, 0, 0.02);  /* 2% black */
+  gap: 6px;
+  padding: 5px 9px 5px 6px;      /* smaller */
+  background: rgba(8, 10, 0, 0.02);
   cursor: pointer;
-  font-size: 12px; /* smaller */
+  font-size: 11px;               /* smaller */
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.1;
   transition:
-    background 0.08s ease-out,
-    opacity 0.08s ease-out,
-    transform 0.08s ease-out;
+    background 0.14s ease-out,
+    opacity 0.22s ease-out,
+    transform 0.22s ease-out;
 }
 
 .studio-pill.active,
 .studio-pill:hover {
-  background: rgba(8, 10, 0, 0.05); /* 5% */
+  background: rgba(8, 10, 0, 0.05);
 }
 
 .studio-pill:active {
-  transform: scale(0.98);
+  transform: scale(0.985);
 }
+
 
 
 /* default icon size (small icons) */
@@ -1035,6 +1035,35 @@ video {
 .studio-footer {
   margin-top: 24px;
   font-size: 12px;
+}
+/* ===========================================================
+   PATCH 3A — Pills staggered fade-in (needs .pills-visible class)
+   =========================================================== */
+
+/* hidden state */
+.studio-row--pills .studio-pill {
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+}
+
+/* visible state */
+.studio-row--pills.pills-visible .studio-pill {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* stagger delays */
+.studio-row--pills.pills-visible .studio-pill:nth-child(1) { transition-delay: 0ms; }
+.studio-row--pills.pills-visible .studio-pill:nth-child(2) { transition-delay: 40ms; }
+.studio-row--pills.pills-visible .studio-pill:nth-child(3) { transition-delay: 80ms; }
+.studio-row--pills.pills-visible .studio-pill:nth-child(4) { transition-delay: 120ms; }
+.studio-row--pills.pills-visible .studio-pill:nth-child(5) { transition-delay: 160ms; }
+
+/* make sure transition exists */
+.studio-row--pills .studio-pill {
+  transition: opacity 220ms ease-out, transform 220ms ease-out, background 140ms ease-out;
 }
 
 /* ===========================================================
@@ -1415,3 +1444,26 @@ video {
     min-height: 100vh;
   }
 }
+/* ===========================================================
+   PATCH 4A — Hide the dropzone block UI (keep logic in TSX)
+   =========================================================== */
+
+.studio-dropzone {
+  display: none !important;
+}
+/* ===========================================================
+   PATCH 5A — Blurred backdrop for modal
+   =========================================================== */
+
+.mina-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 10, 0, 0.18);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+}
+
