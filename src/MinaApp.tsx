@@ -588,8 +588,8 @@ useEffect(() => {
 }, [customStyles]);
 
 useEffect(() => {
-  // Stage 0: only textarea (until 10 chars)
-  if (briefLength < 10) {
+  // Stage 0: only textarea
+  if (briefLength <= 0) {
     setUiStage(0);
     setActivePanel(null);
     setGlobalDragging(false);
@@ -597,18 +597,22 @@ useEffect(() => {
     return;
   }
 
-  // Premium reveal after 10 chars
+  // Stage 1: pills appear quickly
   setUiStage(1);
   setActivePanel((prev) => prev ?? "product");
 
-  const t2 = window.setTimeout(() => setUiStage(2), 140);
-  const t3 = window.setTimeout(() => setUiStage(3), 280);
+  // Stage 2: panels appear shortly after
+  const t2 = window.setTimeout(() => setUiStage(2), 420);
+
+  // Stage 3: controls (Vision + Create) appear later (premium)
+  const t3 = window.setTimeout(() => setUiStage(3), 2000);
 
   return () => {
     window.clearTimeout(t2);
     window.clearTimeout(t3);
   };
 }, [briefLength]);
+
 
 
   // ========================================================================
@@ -1053,17 +1057,22 @@ const handleCycleAspect = () => {
 };
 
 const openPanel = (key: PanelKey) => {
+  // If user interacts (click) while panels are still hidden, reveal them immediately
+  if (uiStage < 2) setUiStage(2);
+
   setActivePanel((prev) => {
-    if (prev === key) return null; // toggle close
+    if (prev === key) return null;
     return key;
   });
 };
 
 const hoverSelectPanel = (key: PanelKey) => {
-  // Only do hover-select when UI is visible (avoid weird "ghost" opening)
+  // Hover = select + reveal the panel area too
   if (!showPills) return;
+  if (uiStage < 2) setUiStage(2);
   setActivePanel(key);
 };
+
 
 const capForPanel = (panel: UploadPanelKey) => {
   if (panel === "inspiration") return 4;
@@ -2107,10 +2116,6 @@ const deleteCustomStyle = (key: string) => {
             <a href="https://mina.faltastudio.com" className="studio-logo-link">
               Mina
             </a>
-          </div>
-
-          <div className="studio-header-center">
-            {activeTab === "studio" ? "Still life images" : "Profile"}
           </div>
 
           <div className="studio-header-right">
