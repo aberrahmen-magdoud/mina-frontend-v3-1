@@ -1086,16 +1086,25 @@ const scheduleHoverOpen = (key: PanelKey) => {
 };
 
 const openPanel = (key: PanelKey) => {
-  // click should always win over any pending hover
-  cancelHoverOpen();
+  if (!showPills) return;
 
-  if (uiStage < 2) setUiStage(2);
-  setActivePanel((prev) => (prev === key ? null : key));
+  // IMPORTANT: never "toggle close" on click
+  // (because hover already selected it → first click was closing it)
+  setActivePanel(key);
+
+  // Ensure the panel area becomes visible immediately (premium reveal)
+  setUiStage((s) => (s < 2 ? 2 : s));
 };
 
 const hoverSelectPanel = (key: PanelKey) => {
-  scheduleHoverOpen(key);
+  if (!showPills) return;
+
+  setActivePanel(key);
+
+  // Hover must also reveal the drop area
+  setUiStage((s) => (s < 2 ? 2 : s));
 };
+
 
 
 
