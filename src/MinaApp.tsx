@@ -1690,7 +1690,7 @@ const deleteCustomStyle = (key: string) => {
                 type="button"
                 className={classNames("studio-pill", activePanel === "logo" && "active")}
                 style={pillBaseStyle(1)}
-                onMouseEnter={() => hoverSelectPanel("logo")}
+                
                 onClick={() => openPanel("logo")}
               >
                 <span className="studio-pill-main">Logo</span>
@@ -1702,7 +1702,7 @@ const deleteCustomStyle = (key: string) => {
                 type="button"
                 className={classNames("studio-pill", activePanel === "inspiration" && "active")}
                 style={pillBaseStyle(2)}
-                onMouseEnter={() => hoverSelectPanel("inspiration")}
+                
                 onClick={() => openPanel("inspiration")}
               >
                 <span className="studio-pill-main">Inspiration</span>
@@ -1714,7 +1714,7 @@ const deleteCustomStyle = (key: string) => {
                 type="button"
                 className={classNames("studio-pill", activePanel === "style" && "active")}
                 style={pillBaseStyle(3)}
-                onMouseEnter={() => hoverSelectPanel("style")}
+                
                 onClick={() => openPanel("style")}
               >
                 <span className="studio-pill-main">Style</span>
