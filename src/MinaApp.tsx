@@ -4,6 +4,7 @@
 // ============================================================================
 import React, { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { supabase } from "./lib/supabaseClient";
+
 const API_BASE_URL =
   import.meta.env.VITE_MINA_API_BASE_URL ||
   "https://mina-editorial-ai-api.onrender.com";
@@ -156,7 +157,6 @@ type UploadItem = {
   error?: string;
 };
 
-
 type UploadPanelKey = "product" | "logo" | "inspiration";
 
 type AspectKey = "9-16" | "3-4" | "2-3" | "1-1";
@@ -209,20 +209,17 @@ const STYLE_PRESETS = [
   {
     key: "vintage",
     label: "Vintage",
-    thumb:
-      "https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Vintage_1.png?v=1765457775",
+    thumb: "https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Vintage_1.png?v=1765457775",
   },
   {
     key: "gradient",
     label: "Gradient",
-    thumb:
-      "https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Gradient.png?v=1765457775",
+    thumb: "https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Gradient.png?v=1765457775",
   },
   {
     key: "back-light",
     label: "Back light",
-    thumb:
-      "https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Backlight.png?v=1765457775",
+    thumb: "https://cdn.shopify.com/s/files/1/0678/9254/3571/files/Backlight.png?v=1765457775",
   },
 ] as const;
 
@@ -295,7 +292,13 @@ function loadCustomStyles(): CustomStylePreset[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as CustomStylePreset[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((x) => x && typeof x.key === "string" && typeof x.label === "string" && typeof x.thumbDataUrl === "string");
+    return parsed.filter(
+      (x) =>
+        x &&
+        typeof x.key === "string" &&
+        typeof x.label === "string" &&
+        typeof x.thumbDataUrl === "string"
+    );
   } catch {
     return [];
   }
@@ -311,7 +314,7 @@ function saveCustomStyles(styles: CustomStylePreset[]) {
 // ============================================================================
 // [PART 3 END]
 // ============================================================================
-// ==============================================
+
 // ==============================================
 // PART UI HELPERS (pills/panels)
 // ==============================================
@@ -395,7 +398,6 @@ const Collapse: React.FC<{
   );
 };
 
-
 // ============================================================================
 // [PART 4 START] Component
 // ============================================================================
@@ -447,53 +449,52 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackSending, setFeedbackSending] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
-// Panels (only one open at a time)
-const [activePanel, setActivePanel] = useState<PanelKey>(null);
 
-// Stage 0 = only textarea
-// Stage 1 = pills fade in (stagger)
-// Stage 2 = panels area available
-// Stage 3 = vision + create available
-const [uiStage, setUiStage] = useState<0 | 1 | 2 | 3>(0);
+  // Panels (only one open at a time)
+  const [activePanel, setActivePanel] = useState<PanelKey>(null);
 
-// Global drag overlay (whole page)
-const [globalDragging, setGlobalDragging] = useState(false);
-const dragDepthRef = useRef(0);
+  // Stage 0 = only textarea
+  // Stage 1 = pills fade in (stagger)
+  // Stage 2 = panels area available
+  // Stage 3 = vision + create available
+  const [uiStage, setUiStage] = useState<0 | 1 | 2 | 3>(0);
 
-// Upload buckets
-const [uploads, setUploads] = useState<Record<UploadPanelKey, UploadItem[]>>({
-  product: [],
-  logo: [],
-  inspiration: [],
-});
+  // Global drag overlay (whole page)
+  const [globalDragging, setGlobalDragging] = useState(false);
+  const dragDepthRef = useRef(0);
 
-// Style selection (hover selects too)
-const [stylePresetKey, setStylePresetKey] = useState<string>("vintage");
-const [minaVisionEnabled, setMinaVisionEnabled] = useState(true);
+  // Upload buckets
+  const [uploads, setUploads] = useState<Record<UploadPanelKey, UploadItem[]>>({
+    product: [],
+    logo: [],
+    inspiration: [],
+  });
 
-// Inline rename for styles (no new panel)
-const [styleLabelOverrides, setStyleLabelOverrides] = useState<
-  Record<string, string>
->(() => {
-  try {
-    const raw = window.localStorage.getItem("minaStyleLabelOverrides");
-    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
-  } catch {
-    return {};
-  }
-});
+  // Style selection (hover selects too)
+  const [stylePresetKey, setStylePresetKey] = useState<string>("vintage");
+  const [minaVisionEnabled, setMinaVisionEnabled] = useState(true);
 
-const [customStyles, setCustomStyles] = useState<CustomStyle[]>(() => {
-  try {
-    const raw = window.localStorage.getItem("minaCustomStyles");
-    return raw ? (JSON.parse(raw) as CustomStyle[]) : [];
-  } catch {
-    return [];
-  }
-});
+  // Inline rename for styles (no new panel)
+  const [styleLabelOverrides, setStyleLabelOverrides] = useState<Record<string, string>>(() => {
+    try {
+      const raw = window.localStorage.getItem("minaStyleLabelOverrides");
+      return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+    } catch {
+      return {};
+    }
+  });
 
-const [editingStyleKey, setEditingStyleKey] = useState<string | null>(null);
-const [editingStyleValue, setEditingStyleValue] = useState<string>("");
+  const [customStyles, setCustomStyles] = useState<CustomStyle[]>(() => {
+    try {
+      const raw = window.localStorage.getItem("minaCustomStyles");
+      return raw ? (JSON.parse(raw) as CustomStyle[]) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [editingStyleKey, setEditingStyleKey] = useState<string | null>(null);
+  const [editingStyleValue, setEditingStyleValue] = useState<string>("");
 
   // -------------------------
   // 4.4 History (profile)
@@ -506,10 +507,9 @@ const [editingStyleValue, setEditingStyleValue] = useState<string>("");
   // -------------------------
   // 4.5 Upload refs / drag state
   // -------------------------
- const productInputRef = useRef<HTMLInputElement | null>(null);
-const logoInputRef = useRef<HTMLInputElement | null>(null);
-const inspirationInputRef = useRef<HTMLInputElement | null>(null);
-
+  const productInputRef = useRef<HTMLInputElement | null>(null);
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const inspirationInputRef = useRef<HTMLInputElement | null>(null);
 
   // -------------------------
   // 4.6 Brief helper hint ("Describe more")
@@ -538,97 +538,105 @@ const inspirationInputRef = useRef<HTMLInputElement | null>(null);
     return loadCustomStyles();
   });
 
+  // -------------------------
+  // 4.9 Stable refs for unmount cleanup (avoid undefined productItems/etc)
+  // -------------------------
+  const uploadsRef = useRef(uploads);
+  const customStyleHeroThumbRef = useRef<string | null>(customStyleHeroThumb);
+  const customStyleImagesRef = useRef<CustomStyleImage[]>(customStyleImages);
+
+  useEffect(() => {
+    uploadsRef.current = uploads;
+  }, [uploads]);
+
+  useEffect(() => {
+    customStyleHeroThumbRef.current = customStyleHeroThumb;
+  }, [customStyleHeroThumb]);
+
+  useEffect(() => {
+    customStyleImagesRef.current = customStyleImages;
+  }, [customStyleImages]);
+
   // ========================================================================
-// [PART 5 START] Derived values (the “rules” you requested)
-// ========================================================================
-const briefLength = brief.trim().length;
-const uploadsPending = Object.values(uploads).some((arr) =>
-  arr.some((it) => it.uploading)
-);
+  // [PART 5 START] Derived values (the “rules” you requested)
+  // ========================================================================
+  const briefLength = brief.trim().length;
+  const uploadsPending = Object.values(uploads).some((arr) => arr.some((it) => it.uploading));
 
-const canCreateStill = briefLength >= 40 && !stillGenerating && !uploadsPending;
+  const canCreateStill = briefLength >= 40 && !stillGenerating && !uploadsPending;
 
-// UI stages
-const showPills = briefLength > 0;
-const showPanels = briefLength > 0;
-const showControls = uiStage >= 3;
+  // UI stages
+  const showPills = uiStage >= 1;
+  const showPanels = uiStage >= 2;
+  const showControls = uiStage >= 3;
 
-// counts for +/✓
-const productCount = uploads.product.length;
-const logoCount = uploads.logo.length;
-const inspirationCount = uploads.inspiration.length;
+  // counts for +/✓
+  const productCount = uploads.product.length;
+  const logoCount = uploads.logo.length;
+  const inspirationCount = uploads.inspiration.length;
 
-const currentAspect = ASPECT_OPTIONS[aspectIndex];
-const currentStill: StillItem | null =
-  stillItems[stillIndex] || stillItems[0] || null;
-const currentMotion: MotionItem | null =
-  motionItems[motionIndex] || motionItems[0] || null;
+  const currentAspect = ASPECT_OPTIONS[aspectIndex];
+  const currentStill: StillItem | null = stillItems[stillIndex] || stillItems[0] || null;
+  const currentMotion: MotionItem | null = motionItems[motionIndex] || motionItems[0] || null;
 
-const imageCost = credits?.meta?.imageCost ?? 1;
-const motionCost = credits?.meta?.motionCost ?? 5;
+  const imageCost = credits?.meta?.imageCost ?? 1;
+  const motionCost = credits?.meta?.motionCost ?? 5;
 
-const briefHintVisible = showDescribeMore;
+  const briefHintVisible = showDescribeMore;
 
-// Style key for API (avoid unknown custom keys)
-const stylePresetKeyForApi = stylePresetKey.startsWith("custom-")
-  ? "custom-style"
-  : stylePresetKey;
-// ========================================================================
-// [PART 5 END]
-// ========================================================================
+  // Style key for API (avoid unknown custom keys)
+  const stylePresetKeyForApi = stylePresetKey.startsWith("custom-") ? "custom-style" : stylePresetKey;
+  // ========================================================================
+  // [PART 5 END]
+  // ========================================================================
 
-// ============================================
-// PART UI STAGING (premium reveal / no jumping)
-// ============================================
-useEffect(() => {
-  // Persist style storage
-  try {
-    window.localStorage.setItem(
-      "minaStyleLabelOverrides",
-      JSON.stringify(styleLabelOverrides)
-    );
-  } catch {
-    // ignore
-  }
-}, [styleLabelOverrides]);
+  // ============================================
+  // PART UI STAGING (premium reveal / no jumping)
+  // ============================================
+  useEffect(() => {
+    // Persist style storage
+    try {
+      window.localStorage.setItem("minaStyleLabelOverrides", JSON.stringify(styleLabelOverrides));
+    } catch {
+      // ignore
+    }
+  }, [styleLabelOverrides]);
 
-useEffect(() => {
-  try {
-    window.localStorage.setItem("minaCustomStyles", JSON.stringify(customStyles));
-  } catch {
-    // ignore
-  }
-}, [customStyles]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("minaCustomStyles", JSON.stringify(customStyles));
+    } catch {
+      // ignore
+    }
+  }, [customStyles]);
 
-useEffect(() => {
-  // Stage 0: only textarea
-  if (briefLength <= 0) {
-    setUiStage(0);
-    setActivePanel(null);
-    setGlobalDragging(false);
-    dragDepthRef.current = 0;
-    return;
-  }
+  useEffect(() => {
+    // Stage 0: only textarea
+    if (briefLength <= 0) {
+      setUiStage(0);
+      setActivePanel(null);
+      setGlobalDragging(false);
+      dragDepthRef.current = 0;
+      return;
+    }
 
-  // Stage 1: pills appear quickly
-  setUiStage(1);
-  setActivePanel((prev) => prev ?? "product");
+    // IMPORTANT: never go backwards while user keeps typing
+    setUiStage((s) => (s < 1 ? 1 : s));
+    setActivePanel((prev) => prev ?? "product");
 
-  // Stage 2: panels appear shortly after
- const t2 = window.setTimeout(() => setUiStage(2), 900);
+    const t2 = window.setTimeout(() => {
+      setUiStage((s) => (s < 2 ? 2 : s));
+    }, 900);
 
+    const t3 = window.setTimeout(() => {
+      setUiStage((s) => (s < 3 ? 3 : s));
+    }, 3200);
 
-  // Stage 3: controls (Vision + Create) appear later (premium)
- const t3 = window.setTimeout(() => setUiStage(3), 3200);
-
-
-  return () => {
-    window.clearTimeout(t2);
-    window.clearTimeout(t3);
-  };
-}, [briefLength]);
-
-
+    return () => {
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+    };
+  }, [briefLength]);
 
   // ========================================================================
   // [PART 6 START] Effects – persist customer + bootstrap
@@ -665,18 +673,25 @@ useEffect(() => {
   useEffect(() => {
     return () => {
       const revokeIfBlob = (u?: string) => {
-        if (u && u.startsWith("blob:")) URL.revokeObjectURL(u);
+        if (u && u.startsWith("blob:")) {
+          try {
+            URL.revokeObjectURL(u);
+          } catch {
+            // ignore
+          }
+        }
       };
 
-      productItems.forEach((x) => revokeIfBlob(x.url));
-      logoItems.forEach((x) => revokeIfBlob(x.url));
-      inspirationItems.forEach((x) => revokeIfBlob(x.url));
+      // Use refs so we always cleanup the latest state on unmount
+      const snap = uploadsRef.current;
+      snap.product.forEach((x) => revokeIfBlob(x.url));
+      snap.logo.forEach((x) => revokeIfBlob(x.url));
+      snap.inspiration.forEach((x) => revokeIfBlob(x.url));
 
-      if (customStyleHeroThumb && customStyleHeroThumb.startsWith("blob:")) {
-        URL.revokeObjectURL(customStyleHeroThumb);
-      }
-      customStyleImages.forEach((img) => {
-        if (img.url.startsWith("blob:")) URL.revokeObjectURL(img.url);
+      revokeIfBlob(customStyleHeroThumbRef.current || undefined);
+
+      customStyleImagesRef.current.forEach((img) => {
+        revokeIfBlob(img.url);
       });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -768,93 +783,92 @@ useEffect(() => {
   // ========================================================================
   // [PART 7 END]
   // ========================================================================
-// ==============================
-// R2 helpers (upload + store)
-// ==============================
-function pickUrlFromR2Response(json: any): string | null {
-  if (!json) return null;
-  if (typeof json.url === "string" && json.url.startsWith("http")) return json.url;
-  if (typeof json.signedUrl === "string" && json.signedUrl.startsWith("http")) return json.signedUrl;
-  if (typeof json.publicUrl === "string" && json.publicUrl.startsWith("http")) return json.publicUrl;
-  if (json.result && typeof json.result.url === "string" && json.result.url.startsWith("http")) return json.result.url;
-  if (json.data && typeof json.data.url === "string" && json.data.url.startsWith("http")) return json.data.url;
-  return null;
-}
 
-async function uploadFileToR2(panel: UploadPanelKey, file: File): Promise<string> {
-  if (!API_BASE_URL) throw new Error("Missing API base URL");
-  const dataUrl = await fileToDataUrl(file);
-
-  const res = await fetch(`${API_BASE_URL}/api/r2/upload-signed`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      dataUrl,
-      kind: panel,          // "product" | "logo" | "inspiration"
-      customerId,           // so you can track who uploaded
-    }),
-  });
-
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok || json?.ok === false) {
-    throw new Error(json?.message || json?.error || `Upload failed (${res.status})`);
+  // ==============================
+  // R2 helpers (upload + store)
+  // ==============================
+  function pickUrlFromR2Response(json: any): string | null {
+    if (!json) return null;
+    if (typeof json.url === "string" && json.url.startsWith("http")) return json.url;
+    if (typeof json.signedUrl === "string" && json.signedUrl.startsWith("http")) return json.signedUrl;
+    if (typeof json.publicUrl === "string" && json.publicUrl.startsWith("http")) return json.publicUrl;
+    if (json.result && typeof json.result.url === "string" && json.result.url.startsWith("http")) return json.result.url;
+    if (json.data && typeof json.data.url === "string" && json.data.url.startsWith("http")) return json.data.url;
+    return null;
   }
 
-  const url = pickUrlFromR2Response(json);
-  if (!url) throw new Error("Upload succeeded but no URL returned");
-  return url;
-}
+  async function uploadFileToR2(panel: UploadPanelKey, file: File): Promise<string> {
+    if (!API_BASE_URL) throw new Error("Missing API base URL");
+    const dataUrl = await fileToDataUrl(file);
 
-async function storeRemoteToR2(url: string, kind: string): Promise<string> {
-  if (!API_BASE_URL) throw new Error("Missing API base URL");
+    const res = await fetch(`${API_BASE_URL}/api/r2/upload-signed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dataUrl,
+        kind: panel, // "product" | "logo" | "inspiration"
+        customerId, // so you can track who uploaded
+      }),
+    });
 
-  const res = await fetch(`${API_BASE_URL}/api/r2/store-remote-signed`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      url,
-      kind,        // "generations" | "motions" | etc.
-      customerId,
-    }),
-  });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json?.ok === false) {
+      throw new Error(json?.message || json?.error || `Upload failed (${res.status})`);
+    }
 
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok || json?.ok === false) {
-    // if storing fails, just return original url (non-blocking)
+    const url = pickUrlFromR2Response(json);
+    if (!url) throw new Error("Upload succeeded but no URL returned");
     return url;
   }
 
-  return pickUrlFromR2Response(json) || url;
-}
+  async function storeRemoteToR2(url: string, kind: string): Promise<string> {
+    if (!API_BASE_URL) throw new Error("Missing API base URL");
 
-function patchUploadItem(panel: UploadPanelKey, id: string, patch: Partial<UploadItem>) {
-  setUploads((prev) => ({
-    ...prev,
-    [panel]: prev[panel].map((it) => (it.id === id ? { ...it, ...patch } : it)),
-  }));
-}
+    const res = await fetch(`${API_BASE_URL}/api/r2/store-remote-signed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url,
+        kind, // "generations" | "motions" | etc.
+        customerId,
+      }),
+    });
 
-async function startUploadForFileItem(panel: UploadPanelKey, id: string, file: File) {
-  try {
-    patchUploadItem(panel, id, { uploading: true, error: undefined });
-    const remoteUrl = await uploadFileToR2(panel, file);
-    patchUploadItem(panel, id, { remoteUrl, uploading: false });
-  } catch (err: any) {
-    patchUploadItem(panel, id, { uploading: false, error: err?.message || "Upload failed" });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json?.ok === false) {
+      // if storing fails, just return original url (non-blocking)
+      return url;
+    }
+
+    return pickUrlFromR2Response(json) || url;
   }
-}
 
-async function startStoreForUrlItem(panel: UploadPanelKey, id: string, url: string) {
-  try {
-    patchUploadItem(panel, id, { uploading: true, error: undefined });
-    const remoteUrl = await storeRemoteToR2(url, panel);
-    patchUploadItem(panel, id, { remoteUrl, uploading: false });
-  } catch (err: any) {
-    patchUploadItem(panel, id, { uploading: false, error: err?.message || "Store failed" });
+  function patchUploadItem(panel: UploadPanelKey, id: string, patch: Partial<UploadItem>) {
+    setUploads((prev) => ({
+      ...prev,
+      [panel]: prev[panel].map((it) => (it.id === id ? { ...it, ...patch } : it)),
+    }));
   }
-}
 
-  
+  async function startUploadForFileItem(panel: UploadPanelKey, id: string, file: File) {
+    try {
+      patchUploadItem(panel, id, { uploading: true, error: undefined });
+      const remoteUrl = await uploadFileToR2(panel, file);
+      patchUploadItem(panel, id, { remoteUrl, uploading: false });
+    } catch (err: any) {
+      patchUploadItem(panel, id, { uploading: false, error: err?.message || "Upload failed" });
+    }
+  }
+
+  async function startStoreForUrlItem(panel: UploadPanelKey, id: string, url: string) {
+    try {
+      patchUploadItem(panel, id, { uploading: true, error: undefined });
+      const remoteUrl = await storeRemoteToR2(url, panel);
+      patchUploadItem(panel, id, { remoteUrl, uploading: false });
+    } catch (err: any) {
+      patchUploadItem(panel, id, { uploading: false, error: err?.message || "Store failed" });
+    }
+  }
 
   // ========================================================================
   // [PART 9 START] Stills (editorial)
@@ -903,23 +917,21 @@ async function startStoreForUrlItem(panel: UploadPanelKey, id: string, url: stri
       };
 
       // Forward product (R2 first, then http only)
-            const productItem = uploads.product[0];
-            const productUrl = productItem?.remoteUrl || productItem?.url;
-            if (productUrl && isHttpUrl(productUrl)) {
-              payload.productImageUrl = productUrl;
-            }
-            
-            // Forward inspiration up to 4 (R2 first, then http only)
-            const inspirationUrls = uploads.inspiration
-              .map((u) => u.remoteUrl || u.url)
-              .filter((u) => isHttpUrl(u))
-              .slice(0, 4);
-            
-            if (inspirationUrls.length) {
-              payload.styleImageUrls = inspirationUrls;
-            }
+      const productItem = uploads.product[0];
+      const productUrl = productItem?.remoteUrl || productItem?.url;
+      if (productUrl && isHttpUrl(productUrl)) {
+        payload.productImageUrl = productUrl;
+      }
 
+      // Forward inspiration up to 4 (R2 first, then http only)
+      const inspirationUrls = uploads.inspiration
+        .map((u) => u.remoteUrl || u.url)
+        .filter((u) => isHttpUrl(u))
+        .slice(0, 4);
 
+      if (inspirationUrls.length) {
+        payload.styleImageUrls = inspirationUrls;
+      }
 
       const res = await fetch(`${API_BASE_URL}/editorial/generate`, {
         method: "POST",
@@ -929,28 +941,30 @@ async function startStoreForUrlItem(panel: UploadPanelKey, id: string, url: stri
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => null);
-        const msg =
-          errJson?.message || `Error ${res.status}: Failed to generate editorial still.`;
+        const msg = errJson?.message || `Error ${res.status}: Failed to generate editorial still.`;
         throw new Error(msg);
       }
 
       const data = (await res.json()) as EditorialResponse;
       const url = data.imageUrl || data.imageUrls?.[0];
-            if (!url) throw new Error("No image URL in Mina response.");
-            
-            const storedUrl = await storeRemoteToR2(url, "generations");
-            
-            const item: StillItem = {
-              id: data.generationId || `still_${Date.now()}`,
-              url: storedUrl,
-              createdAt: new Date().toISOString(),
-              prompt: data.prompt || trimmed,
-              aspectRatio: currentAspect.ratio,
-            };
+      if (!url) throw new Error("No image URL in Mina response.");
 
+      const storedUrl = await storeRemoteToR2(url, "generations");
 
-      setStillItems((prev) => [...prev, item]);
-      setStillIndex((prev) => prev + 1);
+      const item: StillItem = {
+        id: data.generationId || `still_${Date.now()}`,
+        url: storedUrl,
+        createdAt: new Date().toISOString(),
+        prompt: data.prompt || trimmed,
+        aspectRatio: currentAspect.ratio,
+      };
+
+      setStillItems((prev) => {
+        const next = [...prev, item];
+        setStillIndex(next.length - 1); // always select newest
+        return next;
+      });
+
       setLastStillPrompt(item.prompt);
 
       if (data.credits?.balance !== undefined) {
@@ -1043,9 +1057,9 @@ async function startStoreForUrlItem(panel: UploadPanelKey, id: string, url: stri
       const data = (await res.json()) as MotionResponse;
       const url = data.videoUrl;
       if (!url) throw new Error("No video URL in Mina response.");
-      
+
       const storedUrl = await storeRemoteToR2(url, "motions");
-      
+
       const item: MotionItem = {
         id: data.generationId || `motion_${Date.now()}`,
         url: storedUrl,
@@ -1053,9 +1067,11 @@ async function startStoreForUrlItem(panel: UploadPanelKey, id: string, url: stri
         prompt: data.prompt || motionDescription.trim(),
       };
 
-
-      setMotionItems((prev) => [...prev, item]);
-      setMotionIndex((prev) => prev + 1);
+      setMotionItems((prev) => {
+        const next = [...prev, item];
+        setMotionIndex(next.length - 1); // always select newest
+        return next;
+      });
 
       if (data.credits?.balance !== undefined) {
         setCredits((prev) => ({
@@ -1154,301 +1170,271 @@ async function startStoreForUrlItem(panel: UploadPanelKey, id: string, url: stri
   // ========================================================================
 
   // ==============================================
-// 12. UI helpers – aspect + uploads + logout
-// ==============================================
-const handleCycleAspect = () => {
-  setAspectIndex((prev) => {
-    const next = (prev + 1) % ASPECT_OPTIONS.length;
-    setPlatform(ASPECT_OPTIONS[next].platformKey);
-    return next;
-  });
-};
+  // 12. UI helpers – aspect + uploads + logout
+  // ==============================================
+  const handleCycleAspect = () => {
+    setAspectIndex((prev) => {
+      const next = (prev + 1) % ASPECT_OPTIONS.length;
+      setPlatform(ASPECT_OPTIONS[next].platformKey);
+      return next;
+    });
+  };
 
-// premium hover open (tiny delay, cancels fast flickers)
-const hoverOpenTimerRef = useRef<number | null>(null);
+  // Open panel (click only)
+  const openPanel = (key: PanelKey) => {
+    if (!showPills) return;
+    if (!key) return;
 
-const cancelHoverOpen = () => {
-  if (hoverOpenTimerRef.current !== null) {
-    window.clearTimeout(hoverOpenTimerRef.current);
-    hoverOpenTimerRef.current = null;
-  }
-};
-
-useEffect(() => {
-  return () => cancelHoverOpen();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
-
-const scheduleHoverOpen = (key: PanelKey) => {
-  if (!showPills) return;
-  if (!key) return;
-
-  // hover should also reveal the panel area (premium)
-  if (uiStage < 2) setUiStage(2);
-
-  cancelHoverOpen();
-  hoverOpenTimerRef.current = window.setTimeout(() => {
     setActivePanel(key);
-    hoverOpenTimerRef.current = null;
-  }, 120); // ✅ premium micro-delay
-};
 
-const openPanel = (key: PanelKey) => {
-  if (!showPills) return;
+    // Clicking a pill should reveal panels immediately
+    setUiStage((s) => (s < 2 ? 2 : s));
+  };
 
-  // IMPORTANT: never "toggle close" on click
-  // (because hover already selected it → first click was closing it)
-  setActivePanel(key);
+  const capForPanel = (panel: UploadPanelKey) => {
+    if (panel === "inspiration") return 4;
+    return 1; // product + logo
+  };
 
-  // Ensure the panel area becomes visible immediately (premium reveal)
-  setUiStage((s) => (s < 2 ? 2 : s));
-};
+  const addFilesToPanel = (panel: UploadPanelKey, files: FileList) => {
+    const max = capForPanel(panel);
+    const incoming = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (!incoming.length) return;
 
-const capForPanel = (panel: UploadPanelKey) => {
-  if (panel === "inspiration") return 4;
-  return 1; // product + logo
-};
+    // For product/logo, we replace the current item (only 1)
+    const replace = panel !== "inspiration";
 
-const addFilesToPanel = (panel: UploadPanelKey, files: FileList) => {
-  const max = capForPanel(panel);
-  const incoming = Array.from(files).filter((f) => f.type.startsWith("image/"));
-  if (!incoming.length) return;
+    // Compute how many we can accept right now
+    const existingCount = uploads[panel].length;
+    const remaining = replace ? max : Math.max(0, max - existingCount);
+    const slice = incoming.slice(0, remaining);
+    if (!slice.length) return;
 
-  // For product/logo, we replace the current item (only 1)
-  const replace = panel !== "inspiration";
+    const created: Array<{ id: string; file: File }> = [];
 
-  // Compute how many we can accept right now
-  const existingCount = uploads[panel].length;
-  const remaining = replace ? max : Math.max(0, max - existingCount);
-  const slice = incoming.slice(0, remaining);
-  if (!slice.length) return;
+    setUploads((prev) => {
+      // Revoke old blobs if replacing product/logo
+      if (replace) {
+        prev[panel].forEach((it) => {
+          if (it.kind === "file" && it.url.startsWith("blob:")) {
+            try {
+              URL.revokeObjectURL(it.url);
+            } catch {}
+          }
+        });
+      }
 
-  const created: Array<{ id: string; file: File }> = [];
+      const base = replace ? [] : prev[panel];
 
-  setUploads((prev) => {
-    // Revoke old blobs if replacing product/logo
-    if (replace) {
-      prev[panel].forEach((it) => {
-        if (it.kind === "file" && it.url.startsWith("blob:")) {
-          try { URL.revokeObjectURL(it.url); } catch {}
-        }
+      const nextItems: UploadItem[] = slice.map((file) => {
+        const id = `${panel}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        const previewUrl = URL.createObjectURL(file);
+        created.push({ id, file });
+
+        return {
+          id,
+          kind: "file",
+          url: previewUrl, // blob preview
+          remoteUrl: undefined, // will become https after upload
+          file,
+          uploading: true,
+        };
       });
-    }
-
-    const base = replace ? [] : prev[panel];
-
-    const nextItems: UploadItem[] = slice.map((file) => {
-      const id = `${panel}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-      const previewUrl = URL.createObjectURL(file);
-      created.push({ id, file });
 
       return {
-        id,
-        kind: "file",
-        url: previewUrl,     // blob preview
-        remoteUrl: undefined, // will become https after upload
-        file,
-        uploading: true,
+        ...prev,
+        [panel]: [...base, ...nextItems].slice(0, max),
       };
     });
 
-    return {
-      ...prev,
-      [panel]: [...base, ...nextItems].slice(0, max),
-    };
-  });
+    // Kick off uploads AFTER state update
+    created.forEach(({ id, file }) => {
+      void startUploadForFileItem(panel, id, file);
+    });
+  };
 
-  // Kick off uploads AFTER state update
-  created.forEach(({ id, file }) => {
-    void startUploadForFileItem(panel, id, file);
-  });
-};
+  const addUrlToPanel = (panel: UploadPanelKey, url: string) => {
+    const max = capForPanel(panel);
+    const replace = panel !== "inspiration";
 
-const addUrlToPanel = (panel: UploadPanelKey, url: string) => {
-  const max = capForPanel(panel);
+    const id = `${panel}_url_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
-  const replace = panel !== "inspiration";
+    setUploads((prev) => {
+      const base = replace ? [] : prev[panel];
 
-  const id = `${panel}_url_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      const next: UploadItem = {
+        id,
+        kind: "url",
+        url, // original http url (preview)
+        remoteUrl: undefined, // will become R2 url
+        uploading: true,
+      };
 
-  setUploads((prev) => {
-    const base = replace ? [] : prev[panel];
+      return {
+        ...prev,
+        [panel]: [...base, next].slice(0, max),
+      };
+    });
 
-    const next: UploadItem = {
-      id,
-      kind: "url",
-      url,                 // original http url (preview)
-      remoteUrl: undefined, // will become R2 url
-      uploading: true,
-    };
+    void startStoreForUrlItem(panel, id, url);
+  };
 
-    return {
-      ...prev,
-      [panel]: [...base, next].slice(0, max),
-    };
-  });
-
-  void startStoreForUrlItem(panel, id, url);
-};
-
-
-const removeUploadItem = (panel: UploadPanelKey, id: string) => {
-  setUploads((prev) => {
-    const item = prev[panel].find((x) => x.id === id);
-    if (item?.kind === "file" && item.url.startsWith("blob:")) {
-      try {
-        URL.revokeObjectURL(item.url);
-      } catch {
-        // ignore
+  const removeUploadItem = (panel: UploadPanelKey, id: string) => {
+    setUploads((prev) => {
+      const item = prev[panel].find((x) => x.id === id);
+      if (item?.kind === "file" && item.url.startsWith("blob:")) {
+        try {
+          URL.revokeObjectURL(item.url);
+        } catch {
+          // ignore
+        }
       }
-    }
-    return {
-      ...prev,
-      [panel]: prev[panel].filter((x) => x.id !== id),
-    };
-  });
-};
-
-const moveUploadItem = (panel: UploadPanelKey, from: number, to: number) => {
-  setUploads((prev) => {
-    const arr = [...prev[panel]];
-    if (from < 0 || to < 0 || from >= arr.length || to >= arr.length) return prev;
-    const [moved] = arr.splice(from, 1);
-    arr.splice(to, 0, moved);
-    return { ...prev, [panel]: arr };
-  });
-};
-
-const triggerPick = (panel: UploadPanelKey) => {
-  if (panel === "product") productInputRef.current?.click();
-  if (panel === "logo") logoInputRef.current?.click();
-  if (panel === "inspiration") inspirationInputRef.current?.click();
-};
-
-const handleFileInput = (panel: UploadPanelKey, e: React.ChangeEvent<HTMLInputElement>) => {
-  const files = e.target.files;
-  if (files && files.length) addFilesToPanel(panel, files);
-  e.target.value = "";
-};
-
-// Whole-page drag/drop + paste (silent, no big text)
-useEffect(() => {
-  if (uiStage === 0) return;
-
-  const targetPanel: UploadPanelKey =
-    activePanel === "logo" ? "logo" : activePanel === "inspiration" ? "inspiration" : "product";
-
-  const onDragEnter = (e: DragEvent) => {
-    if (!e.dataTransfer) return;
-    if (!Array.from(e.dataTransfer.types || []).includes("Files")) return;
-    e.preventDefault();
-    dragDepthRef.current += 1;
-    setGlobalDragging(true);
+      return {
+        ...prev,
+        [panel]: prev[panel].filter((x) => x.id !== id),
+      };
+    });
   };
 
-  const onDragOver = (e: DragEvent) => {
-    if (!e.dataTransfer) return;
-    if (!Array.from(e.dataTransfer.types || []).includes("Files")) return;
-    e.preventDefault();
+  const moveUploadItem = (panel: UploadPanelKey, from: number, to: number) => {
+    setUploads((prev) => {
+      const arr = [...prev[panel]];
+      if (from < 0 || to < 0 || from >= arr.length || to >= arr.length) return prev;
+      const [moved] = arr.splice(from, 1);
+      arr.splice(to, 0, moved);
+      return { ...prev, [panel]: arr };
+    });
   };
 
-  const onDragLeave = (e: DragEvent) => {
-    if (!e.dataTransfer) return;
-    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
-    if (dragDepthRef.current === 0) setGlobalDragging(false);
+  const triggerPick = (panel: UploadPanelKey) => {
+    if (panel === "product") productInputRef.current?.click();
+    if (panel === "logo") logoInputRef.current?.click();
+    if (panel === "inspiration") inspirationInputRef.current?.click();
   };
 
-  const onDrop = (e: DragEvent) => {
-    if (!e.dataTransfer) return;
-    if (!Array.from(e.dataTransfer.types || []).includes("Files")) return;
-    e.preventDefault();
-    dragDepthRef.current = 0;
-    setGlobalDragging(false);
-
-    const files = e.dataTransfer.files;
-    if (files && files.length) addFilesToPanel(targetPanel, files);
+  const handleFileInput = (panel: UploadPanelKey, e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length) addFilesToPanel(panel, files);
+    e.target.value = "";
   };
 
-  const onPaste = (e: ClipboardEvent) => {
-    if (!e.clipboardData) return;
+  // Whole-page drag/drop + paste (silent, no big text)
+  useEffect(() => {
+    if (uiStage === 0) return;
 
-    // image paste
-    const items = Array.from(e.clipboardData.items || []);
-    const imgItem = items.find((it) => it.type && it.type.startsWith("image/"));
-    if (imgItem) {
-      const file = imgItem.getAsFile();
-      if (file) {
-        e.preventDefault();
-        const list = {
-          0: file,
-          length: 1,
-          item: (i: number) => (i === 0 ? file : null),
-        } as unknown as FileList;
-        addFilesToPanel(targetPanel, list);
-        return;
-      }
-    }
+    const targetPanel: UploadPanelKey =
+      activePanel === "logo" ? "logo" : activePanel === "inspiration" ? "inspiration" : "product";
 
-    // url paste (silent)
-    const text = e.clipboardData.getData("text/plain") || "";
-    const url = extractFirstHttpUrl(text);
-    if (url && /\.(png|jpe?g|webp|gif|avif)(\?.*)?$/i.test(url)) {
+    const onDragEnter = (e: DragEvent) => {
+      if (!e.dataTransfer) return;
+      if (!Array.from(e.dataTransfer.types || []).includes("Files")) return;
       e.preventDefault();
-      addUrlToPanel(targetPanel, url);
-    }
+      dragDepthRef.current += 1;
+      setGlobalDragging(true);
+    };
+
+    const onDragOver = (e: DragEvent) => {
+      if (!e.dataTransfer) return;
+      if (!Array.from(e.dataTransfer.types || []).includes("Files")) return;
+      e.preventDefault();
+    };
+
+    const onDragLeave = (e: DragEvent) => {
+      if (!e.dataTransfer) return;
+      dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+      if (dragDepthRef.current === 0) setGlobalDragging(false);
+    };
+
+    const onDrop = (e: DragEvent) => {
+      if (!e.dataTransfer) return;
+      if (!Array.from(e.dataTransfer.types || []).includes("Files")) return;
+      e.preventDefault();
+      dragDepthRef.current = 0;
+      setGlobalDragging(false);
+
+      const files = e.dataTransfer.files;
+      if (files && files.length) addFilesToPanel(targetPanel, files);
+    };
+
+    const onPaste = (e: ClipboardEvent) => {
+      if (!e.clipboardData) return;
+
+      // image paste
+      const items = Array.from(e.clipboardData.items || []);
+      const imgItem = items.find((it) => it.type && it.type.startsWith("image/"));
+      if (imgItem) {
+        const file = imgItem.getAsFile();
+        if (file) {
+          e.preventDefault();
+          const list = {
+            0: file,
+            length: 1,
+            item: (i: number) => (i === 0 ? file : null),
+          } as unknown as FileList;
+          addFilesToPanel(targetPanel, list);
+          return;
+        }
+      }
+
+      // url paste (silent)
+      const text = e.clipboardData.getData("text/plain") || "";
+      const url = extractFirstHttpUrl(text);
+      if (url && /\.(png|jpe?g|webp|gif|avif)(\?.*)?$/i.test(url)) {
+        e.preventDefault();
+        addUrlToPanel(targetPanel, url);
+      }
+    };
+
+    window.addEventListener("dragenter", onDragEnter);
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("drop", onDrop);
+    window.addEventListener("paste", onPaste);
+
+    return () => {
+      window.removeEventListener("dragenter", onDragEnter);
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("drop", onDrop);
+      window.removeEventListener("paste", onPaste);
+    };
+  }, [uiStage, activePanel]);
+
+  // Style hover-select + inline rename
+  const getStyleLabel = (key: string, fallback: string) =>
+    (styleLabelOverrides[key] || fallback).trim() || fallback;
+
+  const beginRenameStyle = (key: string, currentLabel: string) => {
+    setEditingStyleKey(key);
+    setEditingStyleValue(currentLabel);
   };
 
-  window.addEventListener("dragenter", onDragEnter);
-  window.addEventListener("dragover", onDragOver);
-  window.addEventListener("dragleave", onDragLeave);
-  window.addEventListener("drop", onDrop);
-  window.addEventListener("paste", onPaste);
-
-  return () => {
-    window.removeEventListener("dragenter", onDragEnter);
-    window.removeEventListener("dragover", onDragOver);
-    window.removeEventListener("dragleave", onDragLeave);
-    window.removeEventListener("drop", onDrop);
-    window.removeEventListener("paste", onPaste);
+  const commitRenameStyle = () => {
+    if (!editingStyleKey) return;
+    const next = editingStyleValue.trim();
+    setStyleLabelOverrides((prev) => ({
+      ...prev,
+      [editingStyleKey]: next,
+    }));
+    setEditingStyleKey(null);
+    setEditingStyleValue("");
   };
-}, [uiStage, activePanel]);
 
-// Style hover-select + inline rename
-const getStyleLabel = (key: string, fallback: string) =>
-  (styleLabelOverrides[key] || fallback).trim() || fallback;
+  const cancelRenameStyle = () => {
+    setEditingStyleKey(null);
+    setEditingStyleValue("");
+  };
 
-const beginRenameStyle = (key: string, currentLabel: string) => {
-  setEditingStyleKey(key);
-  setEditingStyleValue(currentLabel);
-};
-
-const commitRenameStyle = () => {
-  if (!editingStyleKey) return;
-  const next = editingStyleValue.trim();
-  setStyleLabelOverrides((prev) => ({
-    ...prev,
-    [editingStyleKey]: next,
-  }));
-  setEditingStyleKey(null);
-  setEditingStyleValue("");
-};
-
-const cancelRenameStyle = () => {
-  setEditingStyleKey(null);
-  setEditingStyleValue("");
-};
-
-const deleteCustomStyle = (key: string) => {
-  setCustomStyles((prev) => prev.filter((s) => s.key !== key));
-  setStyleLabelOverrides((prev) => {
-    const copy = { ...prev };
-    delete copy[key];
-    return copy;
-  });
-  // if deleting selected, fall back to vintage
-  if (stylePresetKey === key) setStylePresetKey("vintage");
-};
-
+  const deleteCustomStyle = (key: string) => {
+    setCustomStyles((prev) => prev.filter((s) => s.key !== key));
+    setStyleLabelOverrides((prev) => {
+      const copy = { ...prev };
+      delete copy[key];
+      return copy;
+    });
+    // if deleting selected, fall back to vintage
+    if (stylePresetKey === key) setStylePresetKey("vintage");
+  };
 
   const handleChangeCustomer = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1472,6 +1458,7 @@ const deleteCustomStyle = (key: string) => {
     if (!motionDescription.trim()) await handleSuggestMotion();
     await handleGenerateMotion();
   };
+
   const handleBriefScroll = () => {
     // fade is handled by CSS mask on .studio-brief-shell
   };
@@ -1561,39 +1548,38 @@ const deleteCustomStyle = (key: string) => {
   };
 
   const handleTrainCustomStyle = async () => {
-  if (!customStyleImages.length || !customStyleHeroId) return;
+    if (!customStyleImages.length || !customStyleHeroId) return;
 
-  try {
-    setCustomStyleTraining(true);
-    setCustomStyleError(null);
+    try {
+      setCustomStyleTraining(true);
+      setCustomStyleError(null);
 
-    const hero = customStyleImages.find((x) => x.id === customStyleHeroId);
-    if (!hero?.file) throw new Error("Pick a hero image.");
+      const hero = customStyleImages.find((x) => x.id === customStyleHeroId);
+      if (!hero?.file) throw new Error("Pick a hero image.");
 
-    // Persistable thumb (dataURL)
-    const thumbUrl = await fileToDataUrl(hero.file);
+      // Persistable thumb (dataURL)
+      const thumbUrl = await fileToDataUrl(hero.file);
 
-    const newKey = `custom-${Date.now()}`;
-    const newStyle: CustomStyle = {
-      id: newKey,
-      key: newKey,
-      label: `Style ${customStyles.length + 1}`,
-      thumbUrl,
-      createdAt: new Date().toISOString(),
-    };
+      const newKey = `custom-${Date.now()}`;
+      const newStyle: CustomStyle = {
+        id: newKey,
+        key: newKey,
+        label: `Style ${customStyles.length + 1}`,
+        thumbUrl,
+        createdAt: new Date().toISOString(),
+      };
 
-    setCustomStyles((prev) => [newStyle, ...prev]);
-    setStylePresetKey(newKey);
+      setCustomStyles((prev) => [newStyle, ...prev]);
+      setStylePresetKey(newKey);
 
-    // close modal
-    setCustomStylePanelOpen(false);
-  } catch (err: any) {
-    setCustomStyleError(err?.message || "Unable to create style right now.");
-  } finally {
-    setCustomStyleTraining(false);
-  }
-};
-
+      // close modal
+      setCustomStylePanelOpen(false);
+    } catch (err: any) {
+      setCustomStyleError(err?.message || "Unable to create style right now.");
+    } finally {
+      setCustomStyleTraining(false);
+    }
+  };
 
   const handleRenameCustomPreset = (key: string) => {
     const preset = customPresets.find((p) => p.key === key);
@@ -1628,389 +1614,365 @@ const deleteCustomStyle = (key: string) => {
   // [PART 14 START] Render – LEFT side (Input1 + pills + panels + style + Input3)
   // ========================================================================
   const renderStudioLeft = () => {
-  // pills are text-only (+ / ✓), except ratio pill keeps its icon
-  const pillBaseStyle = (index: number): React.CSSProperties => ({
-    transitionDelay: showPills ? `${index * 140}ms` : "0ms",
-  });
+    // pills are text-only (+ / ✓), except ratio pill keeps its icon
+    const pillBaseStyle = (index: number): React.CSSProperties => ({
+      transitionDelay: showPills ? `${index * 140}ms` : "0ms",
+    });
 
-  const plusOrTick = (n: number) => (n > 0 ? "✓" : "+");
+    const plusOrTick = (n: number) => (n > 0 ? "✓" : "+");
+    const effectivePanel: PanelKey = activePanel ?? "product";
 
-  const allStyleCards: Array<{
-    key: string;
-    label: string;
-    thumb: string;
-    isCustom: boolean;
-  }> = [
-    ...STYLE_PRESETS.map((p) => ({
-      key: p.key,
-      label: getStyleLabel(p.key, p.label),
-      thumb: p.thumb,
-      isCustom: false,
-    })),
-    ...customStyles.map((s) => ({
-      key: s.key,
-      label: getStyleLabel(s.key, s.label),
-      thumb: s.thumbUrl,
-      isCustom: true,
-    })),
-  ];
+    const allStyleCards: Array<{
+      key: string;
+      label: string;
+      thumb: string;
+      isCustom: boolean;
+    }> = [
+      ...STYLE_PRESETS.map((p) => ({
+        key: p.key,
+        label: getStyleLabel(p.key, p.label),
+        thumb: p.thumb,
+        isCustom: false,
+      })),
+      ...customStyles.map((s) => ({
+        key: s.key,
+        label: getStyleLabel(s.key, s.label),
+        thumb: s.thumbUrl,
+        isCustom: true,
+      })),
+    ];
 
-  return (
-    <div className={classNames("studio-left", globalDragging && "drag-active")}>
-      <div className="studio-left-main">
-        {/* Input 1 */}
-        <div className="studio-input1-block">
-          {/* Pills slot (staggered + smooth) */}
-          <div className="studio-pills-slot">
-            <div className={classNames("studio-row", "studio-row--pills", "mina-slide", !showPills && "hidden")}>
-              {/* Product */}
-              <button
-                type="button"
-                className={classNames("studio-pill", activePanel === "product" && "active")}
-                style={pillBaseStyle(0)}
-               
-                onClick={() => openPanel("product")}
-              >
-                <span className="studio-pill-main">Product</span>
-                <span aria-hidden="true">{plusOrTick(productCount)}</span>
-              </button>
-
-              {/* Logo */}
-              <button
-                type="button"
-                className={classNames("studio-pill", activePanel === "logo" && "active")}
-                style={pillBaseStyle(1)}
-                
-                onClick={() => openPanel("logo")}
-              >
-                <span className="studio-pill-main">Logo</span>
-                <span aria-hidden="true">{plusOrTick(logoCount)}</span>
-              </button>
-
-              {/* Inspiration */}
-              <button
-                type="button"
-                className={classNames("studio-pill", activePanel === "inspiration" && "active")}
-                style={pillBaseStyle(2)}
-                
-                onClick={() => openPanel("inspiration")}
-              >
-                <span className="studio-pill-main">Inspiration</span>
-                <span aria-hidden="true">{plusOrTick(inspirationCount)}</span>
-              </button>
-
-              {/* Style (same system as others — NOT an extra step) */}
-              <button
-                type="button"
-                className={classNames("studio-pill", activePanel === "style" && "active")}
-                style={pillBaseStyle(3)}
-                
-                onClick={() => openPanel("style")}
-              >
-                <span className="studio-pill-main">Style</span>
-                <span aria-hidden="true">✓</span>
-              </button>
-
-              {/* Ratio (keeps icon) */}
-              <button
-                type="button"
-                className={classNames("studio-pill", "studio-pill--aspect")}
-                style={pillBaseStyle(4)}
-                onClick={handleCycleAspect}
-              >
-                <span className="studio-pill-icon">
-                  <img
-                    src={ASPECT_ICON_URLS[currentAspect.key]}
-                    alt=""
-                  />
-                </span>
-                <span className="studio-pill-main">{currentAspect.label}</span>
-                <span className="studio-pill-sub">{currentAspect.subtitle}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Textarea (state zero shows only this) */}
-          <div className="studio-brief-block">
-            <div
-              className={classNames(
-                "studio-brief-shell",
-                briefHintVisible && "has-brief-hint"
-              )}
-              ref={briefShellRef}
-              onScroll={handleBriefScroll}
-            >
-              <textarea
-                className="studio-brief-input"
-                placeholder="Describe how you want your still life image to look like"
-                value={brief}
-                onChange={(e) => handleBriefChange(e.target.value)}
-                rows={4}
-              />
-              {briefHintVisible && (
-                <div className="studio-brief-hint">Describe more</div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Panels (smooth open/close, no jumps) */}
-        <div className="mina-slide">
-          <Collapse open={activePanel === "product" || activePanel === null} delayMs={80}>
-            <div className="studio-panel">
-              <div className="studio-panel-title">Add your product</div>
-          
-              <div className="studio-panel-row">
-                <div className="studio-thumbs studio-thumbs--inline">
-                  {uploads.product.map((it) => (
-                    <button
-                      key={it.id}
-                      type="button"
-                      className="studio-thumb"
-                      onClick={() => removeUploadItem("product", it.id)}
-                      title="Click to delete"
-                    >
-                    <img src={it.remoteUrl || it.url} alt="" />
-                    </button>
-                  ))}
-          
-                  {/* Product: 1 image → once uploaded, + disappears */}
-                  {uploads.product.length === 0 && (
-                    <button
-                      type="button"
-                      className="studio-plusbox studio-plusbox--inline"
-                      onClick={() => triggerPick("product")}
-                      title="Add image"
-                    >
-                      <span aria-hidden="true">+</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </Collapse>
-
-
-          <Collapse open={activePanel === "logo"} delayMs={110}>
-          <div className="studio-panel">
-            <div className="studio-panel-title">Add your logo</div>
-        
-            <div className="studio-panel-row">
-              <div className="studio-thumbs studio-thumbs--inline">
-                {uploads.logo.map((it) => (
-                  <button
-                    key={it.id}
-                    type="button"
-                    className="studio-thumb"
-                    onClick={() => removeUploadItem("logo", it.id)}
-                    title="Click to delete"
-                  >
-                    <img src={it.url} alt="" />
-                  </button>
-                ))}
-        
-                {/* Logo: 1 image → once uploaded, + disappears */}
-                {uploads.logo.length === 0 && (
-                  <button
-                    type="button"
-                    className="studio-plusbox studio-plusbox--inline"
-                    onClick={() => triggerPick("logo")}
-                    title="Add image"
-                  >
-                    <span aria-hidden="true">+</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </Collapse>
-
-
-          <Collapse open={activePanel === "inspiration"} delayMs={140}>
-            <div className="studio-panel">
-              <div className="studio-panel-title">Add inspiration</div>
-          
-              <div className="studio-panel-row">
-                <div className="studio-thumbs studio-thumbs--inline">
-                  {uploads.inspiration.map((it, idx) => (
-                    <button
-                      key={it.id}
-                      type="button"
-                      className="studio-thumb"
-                      draggable
-                      onDragStart={() => {
-                        (window as any).__minaDragIndex = idx;
-                      }}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        const from = Number((window as any).__minaDragIndex);
-                        const to = idx;
-                        if (Number.isFinite(from) && from !== to) {
-                          moveUploadItem("inspiration", from, to);
-                        }
-                        (window as any).__minaDragIndex = null;
-                      }}
-                      onClick={() => removeUploadItem("inspiration", it.id)}
-                      title="Click to delete • Drag to reorder"
-                    >
-                      <img src={it.url} alt="" />
-                    </button>
-                  ))}
-          
-                  {/* Inspiration: + stays and gets pushed right until limit */}
-                  {uploads.inspiration.length < 4 && (
-                    <button
-                      type="button"
-                      className="studio-plusbox studio-plusbox--inline"
-                      onClick={() => triggerPick("inspiration")}
-                      title="Add image"
-                    >
-                      <span aria-hidden="true">+</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </Collapse>
-
-
-          <Collapse open={activePanel === "style"} delayMs={170}>
-            <div className="studio-panel">
-              <div className="studio-panel-title">Pick a style</div>
-
-              <div className="studio-style-row">
-                {allStyleCards.map((s) => (
-                  <button
-                    key={s.key}
-                    type="button"
-                    className={classNames(
-                      "studio-style-card",
-                      stylePresetKey === s.key && "active"
-                    )}
-                    onMouseEnter={() => setStylePresetKey(s.key)}
-                    onClick={() => setStylePresetKey(s.key)}
-                  >
-                    <div className="studio-style-thumb">
-                      <img src={s.thumb} alt="" />
-                    </div>
-
-                    {/* Inline rename (no new panel) */}
-                    <div
-                      className="studio-style-label"
-                      onDoubleClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (s.isCustom) deleteCustomStyle(s.key);
-                      }}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        beginRenameStyle(s.key, s.label);
-                      }}
-                    >
-                      {editingStyleKey === s.key ? (
-                        <input
-                          autoFocus
-                          value={editingStyleValue}
-                          onChange={(e) => setEditingStyleValue(e.target.value)}
-                          onBlur={commitRenameStyle}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") commitRenameStyle();
-                            if (e.key === "Escape") cancelRenameStyle();
-                          }}
-                          style={{ width: 90 }}
-                        />
-                      ) : (
-                        s.label
-                      )}
-                    </div>
-                  </button>
-                ))}
-
-                {/* Create style (opens modal) */}
+    return (
+      <div className={classNames("studio-left", globalDragging && "drag-active")}>
+        <div className="studio-left-main">
+          {/* Input 1 */}
+          <div className="studio-input1-block">
+            {/* Pills slot (staggered + smooth) */}
+            <div className="studio-pills-slot">
+              <div className={classNames("studio-row", "studio-row--pills", "mina-slide", !showPills && "hidden")}>
+                {/* Product */}
                 <button
                   type="button"
-                  className={classNames("studio-style-card", "add")}
-                  onMouseEnter={() => {}}
-                  onClick={handleOpenCustomStylePanel}
+                  className={classNames("studio-pill", effectivePanel === "product" && "active")}
+                  style={pillBaseStyle(0)}
+                  onClick={() => openPanel("product")}
                 >
-                  <div className="studio-style-thumb">
-                    <span aria-hidden="true">+</span>
-                  </div>
-                  <div className="studio-style-label">Create style</div>
+                  <span className="studio-pill-main">Product</span>
+                  <span aria-hidden="true">{plusOrTick(productCount)}</span>
+                </button>
+
+                {/* Logo */}
+                <button
+                  type="button"
+                  className={classNames("studio-pill", activePanel === "logo" && "active")}
+                  style={pillBaseStyle(1)}
+                  onClick={() => openPanel("logo")}
+                >
+                  <span className="studio-pill-main">Logo</span>
+                  <span aria-hidden="true">{plusOrTick(logoCount)}</span>
+                </button>
+
+                {/* Inspiration */}
+                <button
+                  type="button"
+                  className={classNames("studio-pill", activePanel === "inspiration" && "active")}
+                  style={pillBaseStyle(2)}
+                  onClick={() => openPanel("inspiration")}
+                >
+                  <span className="studio-pill-main">Inspiration</span>
+                  <span aria-hidden="true">{plusOrTick(inspirationCount)}</span>
+                </button>
+
+                {/* Style (same system as others — NOT an extra step) */}
+                <button
+                  type="button"
+                  className={classNames("studio-pill", activePanel === "style" && "active")}
+                  style={pillBaseStyle(3)}
+                  onClick={() => openPanel("style")}
+                >
+                  <span className="studio-pill-main">Style</span>
+                  <span aria-hidden="true">✓</span>
+                </button>
+
+                {/* Ratio (keeps icon) */}
+                <button
+                  type="button"
+                  className={classNames("studio-pill", "studio-pill--aspect")}
+                  style={pillBaseStyle(4)}
+                  onClick={handleCycleAspect}
+                >
+                  <span className="studio-pill-icon">
+                    <img src={ASPECT_ICON_URLS[currentAspect.key]} alt="" />
+                  </span>
+                  <span className="studio-pill-main">{currentAspect.label}</span>
+                  <span className="studio-pill-sub">{currentAspect.subtitle}</span>
                 </button>
               </div>
             </div>
-          </Collapse>
-        </div>
 
-        {/* Input 3 (always after typing starts; smooth) */}
-        <div className={classNames("mina-slide", !showControls && "hidden")}>
-          <div className="studio-controls-divider" />
-
-            <button
-            type="button"
-            className="studio-vision-toggle"
-
-            onClick={() => setMinaVisionEnabled((prev) => !prev)}
-          >
-            Mina Vision Intelligence:{" "}
-            <span className="studio-vision-state">
-              {minaVisionEnabled ? "ON" : "OFF"}
-            </span>
-          </button>
-
-          <div className="studio-create-block">
-            <button
-              type="button"
-              className={classNames("studio-create-link", !canCreateStill && "disabled")}
-              disabled={!canCreateStill}
-              onClick={handleGenerateStill}
-            >
-              {stillGenerating ? "Creating…" : "Create"}
-            </button>
+            {/* Textarea (state zero shows only this) */}
+            <div className="studio-brief-block">
+              <div
+                className={classNames("studio-brief-shell", briefHintVisible && "has-brief-hint")}
+                ref={briefShellRef}
+                onScroll={handleBriefScroll}
+              >
+                <textarea
+                  className="studio-brief-input"
+                  placeholder="Describe how you want your still life image to look like"
+                  value={brief}
+                  onChange={(e) => handleBriefChange(e.target.value)}
+                  rows={4}
+                />
+                {briefHintVisible && <div className="studio-brief-hint">Describe more</div>}
+              </div>
+            </div>
           </div>
 
-          {stillError && <div className="error-text">{stillError}</div>}
+          {/* Panels (smooth open/close, no jumps) */}
+          <div className="mina-slide">
+            <Collapse open={effectivePanel === "product" || activePanel === null} delayMs={80}>
+              <div className="studio-panel">
+                <div className="studio-panel-title">Add your product</div>
+
+                <div className="studio-panel-row">
+                  <div className="studio-thumbs studio-thumbs--inline">
+                    {uploads.product.map((it) => (
+                      <button
+                        key={it.id}
+                        type="button"
+                        className="studio-thumb"
+                        onClick={() => removeUploadItem("product", it.id)}
+                        title="Click to delete"
+                      >
+                        <img src={it.remoteUrl || it.url} alt="" />
+                      </button>
+                    ))}
+
+                    {/* Product: 1 image → once uploaded, + disappears */}
+                    {uploads.product.length === 0 && (
+                      <button
+                        type="button"
+                        className="studio-plusbox studio-plusbox--inline"
+                        onClick={() => triggerPick("product")}
+                        title="Add image"
+                      >
+                        <span aria-hidden="true">+</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Collapse>
+
+            <Collapse open={activePanel === "logo"} delayMs={110}>
+              <div className="studio-panel">
+                <div className="studio-panel-title">Add your logo</div>
+
+                <div className="studio-panel-row">
+                  <div className="studio-thumbs studio-thumbs--inline">
+                    {uploads.logo.map((it) => (
+                      <button
+                        key={it.id}
+                        type="button"
+                        className="studio-thumb"
+                        onClick={() => removeUploadItem("logo", it.id)}
+                        title="Click to delete"
+                      >
+                        <img src={it.remoteUrl || it.url} alt="" />
+                      </button>
+                    ))}
+
+                    {/* Logo: 1 image → once uploaded, + disappears */}
+                    {uploads.logo.length === 0 && (
+                      <button
+                        type="button"
+                        className="studio-plusbox studio-plusbox--inline"
+                        onClick={() => triggerPick("logo")}
+                        title="Add image"
+                      >
+                        <span aria-hidden="true">+</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Collapse>
+
+            <Collapse open={activePanel === "inspiration"} delayMs={140}>
+              <div className="studio-panel">
+                <div className="studio-panel-title">Add inspiration</div>
+
+                <div className="studio-panel-row">
+                  <div className="studio-thumbs studio-thumbs--inline">
+                    {uploads.inspiration.map((it, idx) => (
+                      <button
+                        key={it.id}
+                        type="button"
+                        className="studio-thumb"
+                        draggable
+                        onDragStart={() => {
+                          (window as any).__minaDragIndex = idx;
+                        }}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const from = Number((window as any).__minaDragIndex);
+                          const to = idx;
+                          if (Number.isFinite(from) && from !== to) {
+                            moveUploadItem("inspiration", from, to);
+                          }
+                          (window as any).__minaDragIndex = null;
+                        }}
+                        onClick={() => removeUploadItem("inspiration", it.id)}
+                        title="Click to delete • Drag to reorder"
+                      >
+                        <img src={it.remoteUrl || it.url} alt="" />
+                      </button>
+                    ))}
+
+                    {/* Inspiration: + stays and gets pushed right until limit */}
+                    {uploads.inspiration.length < 4 && (
+                      <button
+                        type="button"
+                        className="studio-plusbox studio-plusbox--inline"
+                        onClick={() => triggerPick("inspiration")}
+                        title="Add image"
+                      >
+                        <span aria-hidden="true">+</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Collapse>
+
+            <Collapse open={activePanel === "style"} delayMs={170}>
+              <div className="studio-panel">
+                <div className="studio-panel-title">Pick a style</div>
+
+                <div className="studio-style-row">
+                  {allStyleCards.map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      className={classNames("studio-style-card", stylePresetKey === s.key && "active")}
+                      onMouseEnter={() => setStylePresetKey(s.key)}
+                      onClick={() => setStylePresetKey(s.key)}
+                    >
+                      <div className="studio-style-thumb">
+                        <img src={s.thumb} alt="" />
+                      </div>
+
+                      {/* Inline rename (no new panel) */}
+                      <div
+                        className="studio-style-label"
+                        onDoubleClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (s.isCustom) deleteCustomStyle(s.key);
+                        }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          beginRenameStyle(s.key, s.label);
+                        }}
+                      >
+                        {editingStyleKey === s.key ? (
+                          <input
+                            autoFocus
+                            value={editingStyleValue}
+                            onChange={(e) => setEditingStyleValue(e.target.value)}
+                            onBlur={commitRenameStyle}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") commitRenameStyle();
+                              if (e.key === "Escape") cancelRenameStyle();
+                            }}
+                            style={{ width: 90 }}
+                          />
+                        ) : (
+                          s.label
+                        )}
+                      </div>
+                    </button>
+                  ))}
+
+                  {/* Create style (opens modal) */}
+                  <button
+                    type="button"
+                    className={classNames("studio-style-card", "add")}
+                    onMouseEnter={() => {}}
+                    onClick={handleOpenCustomStylePanel}
+                  >
+                    <div className="studio-style-thumb">
+                      <span aria-hidden="true">+</span>
+                    </div>
+                    <div className="studio-style-label">Create style</div>
+                  </button>
+                </div>
+              </div>
+            </Collapse>
+          </div>
+
+          {/* Input 3 (always after typing starts; smooth) */}
+          <div className={classNames("mina-slide", !showControls && "hidden")}>
+            <div className="studio-controls-divider" />
+
+            <button
+              type="button"
+              className="studio-vision-toggle"
+              onClick={() => setMinaVisionEnabled((prev) => !prev)}
+            >
+              Mina Vision Intelligence:{" "}
+              <span className="studio-vision-state">{minaVisionEnabled ? "ON" : "OFF"}</span>
+            </button>
+
+            <div className="studio-create-block">
+              <button
+                type="button"
+                className={classNames("studio-create-link", !canCreateStill && "disabled")}
+                disabled={!canCreateStill}
+                onClick={handleGenerateStill}
+              >
+                {stillGenerating ? "Creating…" : "Create"}
+              </button>
+            </div>
+
+            {stillError && <div className="error-text">{stillError}</div>}
+          </div>
+
+          {/* Hidden file inputs */}
+          <input
+            ref={productInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={(e) => handleFileInput("product", e)}
+          />
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={(e) => handleFileInput("logo", e)}
+          />
+          <input
+            ref={inspirationInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => handleFileInput("inspiration", e)}
+          />
         </div>
 
-        {/* Hidden file inputs */}
-        <input
-          ref={productInputRef}
-          type="file"
-          accept="image/*"
-          style={{ display: "none" }}
-          onChange={(e) => handleFileInput("product", e)}
-        />
-        <input
-          ref={logoInputRef}
-          type="file"
-          accept="image/*"
-          style={{ display: "none" }}
-          onChange={(e) => handleFileInput("logo", e)}
-        />
-        <input
-          ref={inspirationInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          style={{ display: "none" }}
-          onChange={(e) => handleFileInput("inspiration", e)}
-        />
+        {/* Profile button: bottom-left, no underline (CSS will handle) */}
+        <button type="button" className="studio-profile-float" onClick={() => setActiveTab("profile")}>
+          Profile
+        </button>
       </div>
-
-      {/* Profile button: bottom-left, no underline (CSS will handle) */}
-      <button
-        type="button"
-        className="studio-profile-float"
-        onClick={() => setActiveTab("profile")}
-      >
-        Profile
-      </button>
-    </div>
-  );
-};
+    );
+  };
 
   // ========================================================================
   // [PART 14 END]
@@ -2027,9 +1989,7 @@ const deleteCustomStyle = (key: string) => {
         <div className="studio-right studio-right--full">
           <div className="studio-output-main studio-output-main--empty">
             <div className="studio-output-frame">
-              <div className="output-placeholder">
-                New ideas don’t actually exist, just recycle.
-              </div>
+              <div className="output-placeholder">New ideas don’t actually exist, just recycle.</div>
             </div>
           </div>
         </div>
@@ -2047,14 +2007,7 @@ const deleteCustomStyle = (key: string) => {
           >
             <div className="studio-output-frame">
               {currentMotion ? (
-                <video
-                  className="studio-output-media"
-                  src={currentMotion.url}
-                  autoPlay
-                  loop
-                  muted
-                  controls
-                />
+                <video className="studio-output-media" src={currentMotion.url} autoPlay loop muted controls />
               ) : currentStill ? (
                 <img className="studio-output-media" src={currentStill.url} alt="" />
               ) : (
@@ -2093,33 +2046,21 @@ const deleteCustomStyle = (key: string) => {
             <div className="studio-motion-description">
               {motionDescription}
               {" — "}
-              <button
-                type="button"
-                className="link-button subtle"
-                onClick={handleGenerateMotion}
-                disabled={motionGenerating}
-              >
+              <button type="button" className="link-button subtle" onClick={handleGenerateMotion} disabled={motionGenerating}>
                 {motionGenerating ? "Animating…" : "Animate"}
               </button>
             </div>
           )}
 
           <div className="studio-feedback-row">
-            <div className="studio-feedback-hint">
-              Speak to me, tell me what you like and dislike about my generation
-            </div>
+            <div className="studio-feedback-hint">Speak to me, tell me what you like and dislike about my generation</div>
             <input
               className="studio-feedback-input"
               placeholder="Type feedback..."
               value={feedbackText}
               onChange={(e) => setFeedbackText(e.target.value)}
             />
-            <button
-              type="button"
-              className="link-button"
-              onClick={handleSubmitFeedback}
-              disabled={feedbackSending}
-            >
+            <button type="button" className="link-button" onClick={handleSubmitFeedback} disabled={feedbackSending}>
               {feedbackSending ? "Sending…" : "Send"}
             </button>
           </div>
@@ -2221,11 +2162,7 @@ const deleteCustomStyle = (key: string) => {
         <div className="profile-row">
           <div className="profile-label">Customer ID</div>
           <form onSubmit={handleChangeCustomer} className="profile-inline-form">
-            <input
-              className="profile-input"
-              value={customerIdInput}
-              onChange={(e) => setCustomerIdInput(e.target.value)}
-            />
+            <input className="profile-input" value={customerIdInput} onChange={(e) => setCustomerIdInput(e.target.value)} />
             <button type="submit" className="link-button primary-button">
               Switch
             </button>
@@ -2264,13 +2201,7 @@ const deleteCustomStyle = (key: string) => {
 
         <div className="profile-history-grid">
           {historyGenerations.map((g) => (
-            <a
-              key={g.id}
-              href={g.outputUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="profile-history-card"
-            >
+            <a key={g.id} href={g.outputUrl} target="_blank" rel="noreferrer" className="profile-history-card">
               <div className="profile-history-thumb" />
               <div className="profile-history-meta">
                 <div className="profile-history-type">{g.type}</div>
@@ -2290,9 +2221,9 @@ const deleteCustomStyle = (key: string) => {
   // [PART 18 START] Final layout
   // ========================================================================
   return (
-     <div className="mina-studio-root">
-    <div className={classNames("mina-drag-overlay", globalDragging && "show")} />
-    <div className="studio-frame">
+    <div className="mina-studio-root">
+      <div className={classNames("mina-drag-overlay", globalDragging && "show")} />
+      <div className="studio-frame">
         <div className="studio-header-overlay">
           <div className="studio-header-left">
             <a href="https://mina.faltastudio.com" className="studio-logo-link">
@@ -2311,12 +2242,7 @@ const deleteCustomStyle = (key: string) => {
                 >
                   Animate this
                 </button>
-                <button
-                  type="button"
-                  className="link-button"
-                  onClick={handleLikeCurrentStill}
-                  disabled={!currentStill}
-                >
+                <button type="button" className="link-button" onClick={handleLikeCurrentStill} disabled={!currentStill}>
                   ♡ more of this
                 </button>
                 <button
