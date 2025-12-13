@@ -1519,7 +1519,7 @@ video {
 /* === PATCH: push left column content inward + stop bottom/left cropping === */
 .studio-left-main{
   /* nudge content away from the viewport edges */
-  padding-left: 56px;
+ 
   padding-bottom: 72px;
 
   /* safety: if content grows, scroll instead of clipping */
@@ -1530,7 +1530,7 @@ video {
 /* extra safety: prevents the + tile from being clipped by parent wrappers */
 .studio-panel-row,
 .studio-thumbs--inline{
-  padding-left: 6px;
+  padding-left: 0px;
   padding-bottom: 6px;
   box-sizing: border-box;
 }
