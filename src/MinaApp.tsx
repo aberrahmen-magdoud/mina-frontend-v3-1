@@ -532,11 +532,13 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
 
   useEffect(() => {
     if (animateMode) {
-      setStillBrief(brief);
-      setBrief(motionDescription);
+      const currentBrief = brief;
+      setStillBrief(currentBrief);
+      setBrief(motionDescription || currentBrief);
     } else {
-      setMotionDescription(brief);
-      setBrief(stillBrief);
+      const currentBrief = brief;
+      setMotionDescription(currentBrief);
+      setBrief(stillBrief || currentBrief);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [animateMode]);
