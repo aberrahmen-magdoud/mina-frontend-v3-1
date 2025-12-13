@@ -995,8 +995,8 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
       };
 
       setStillItems((prev) => {
-        const next = [...prev, item];
-        setStillIndex(next.length - 1); // always select newest
+        const next = [item, ...prev]; // ✅ newest first
+        setStillIndex(0); // ✅ always show the newest immediately
         return next;
       });
 
