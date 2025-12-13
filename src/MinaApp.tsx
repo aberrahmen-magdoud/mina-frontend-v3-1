@@ -1927,11 +1927,7 @@ const renderStudioLeft = () => {
 
         {/* EVERYTHING BELOW will auto-hide/show with animation */}
         <div className="mina-lower-wrap">
-          <div className="studio-debug-line" style={{ fontSize: 11, opacity: 0.6, marginTop: 8 }}>
-            stage={uiStage} briefLength={briefLength} showPanels={String(showPanels)} activePanel={String(activePanel)}
-          </div>
-
-          {/* Panels */}
+         {/* Panels */}
           <div className="mina-slide">
             <Collapse open={showPanels && (effectivePanel === "product" || activePanel === null)} delayMs={PANEL_REVEAL_DELAY_MS}>
               <div className="studio-panel">
