@@ -1,6 +1,4 @@
-// =============================================================
-// FILE: src/StudioRight.tsx
-// =============================================================
+// src/StudioRight.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import "./StudioRight.css";
 
@@ -20,6 +18,11 @@ type StudioRightProps = {
   feedbackSending: boolean;
   feedbackError: string | null;
   onSubmitFeedback: () => void;
+
+  // ✅ new (optional)
+  liked?: boolean;
+  onToggleLike?: () => void;
+  onDownload?: () => void;
 };
 
 export default function StudioRight(props: StudioRightProps) {
@@ -34,6 +37,9 @@ export default function StudioRight(props: StudioRightProps) {
     feedbackSending,
     feedbackError,
     onSubmitFeedback,
+    liked = false,
+    onToggleLike,
+    onDownload,
   } = props;
 
   const isEmpty = !currentStill && !currentMotion;
@@ -66,7 +72,7 @@ export default function StudioRight(props: StudioRightProps) {
     setStillIndex((stillIndex + 1) % n);
   };
 
-  // ✅ Click zones:
+  // Click zones:
   // - left 18% => previous
   // - right 18% => next
   // - middle => zoom toggle
@@ -94,47 +100,26 @@ export default function StudioRight(props: StudioRightProps) {
 
   const canSend = !feedbackSending && feedbackText.trim().length > 0;
 
-  // ✅ Right-side buttons (Like + Download) styled like "Send"
-  const handleLike = () => {
+  const defaultDownload = () => {
     if (!media) return;
-    if (feedbackSending) return;
-
-    // If user hasn't typed anything, prefill a minimal like phrase and send
-    if (!feedbackText.trim()) {
-      setFeedbackText("more of this");
-      setTimeout(() => onSubmitFeedback(), 0);
-      return;
-    }
-
-    onSubmitFeedback();
+    const a = document.createElement("a");
+    a.href = media.url;
+    a.target = "_blank";
+    a.rel = "noreferrer";
+    a.download = media.type === "video" ? "mina-motion.mp4" : "mina-still.png";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
   const handleDownload = () => {
-    if (!media) return;
-
-    const a = document.createElement("a");
-    a.href = media.url;
-    a.download = "mina-output";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    if (onDownload) onDownload();
+    else defaultDownload();
   };
 
   return (
     <div className="studio-right">
       <div className="studio-right-surface">
-        {/* ✅ top-right actions */}
-        {!isEmpty && (
-          <div className="studio-right-top-actions">
-            <button type="button" className="studio-right-cta" onClick={handleLike} disabled={feedbackSending}>
-              ♡ more of this
-            </button>
-            <button type="button" className="studio-right-cta" onClick={handleDownload} disabled={!media}>
-              Download
-            </button>
-          </div>
-        )}
-
         {isEmpty ? (
           <div className="studio-empty-text">New ideas don’t actually exist, just recycle.</div>
         ) : (
@@ -178,9 +163,25 @@ export default function StudioRight(props: StudioRightProps) {
             }}
           />
 
-          <button type="button" className="studio-feedback-send" onClick={onSubmitFeedback} disabled={!canSend}>
-            Send
-          </button>
+          <div className="studio-feedback-actions">
+            <button
+              type="button"
+              className={`studio-action-btn ${liked ? "is-on" : ""}`}
+              onClick={() => onToggleLike?.()}
+              disabled={!onToggleLike}
+              title={!onToggleLike ? "Wire onToggleLike in MinaApp" : undefined}
+            >
+              {liked ? "Liked" : "Like"}
+            </button>
+
+            <button type="button" className="studio-action-btn" onClick={handleDownload} disabled={!media}>
+              Download
+            </button>
+
+            <button type="button" className="studio-action-btn" onClick={onSubmitFeedback} disabled={!canSend}>
+              Send
+            </button>
+          </div>
 
           {feedbackError && <div className="studio-feedback-error">{feedbackError}</div>}
         </div>
