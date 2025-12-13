@@ -2052,10 +2052,31 @@ const renderStudioLeft = () => {
 
 
     // ========================================================================
-  // [PART 15 START] Render – RIGHT side (separate component)
-  // ========================================================================
-  const renderStudioRight = () => {
-    return (
+// [PART 15 START] Render – RIGHT side (separate component)
+// ========================================================================
+
+// Keep lazy component stable across renders (no remounting)
+const StudioRightLazyRef = useRef<
+  React.LazyExoticComponent<React.ComponentType<any>> | null
+>(null);
+
+if (!StudioRightLazyRef.current) {
+  StudioRightLazyRef.current = React.lazy(() => import("./StudioRight"));
+}
+
+const renderStudioRight = () => {
+  const StudioRight = StudioRightLazyRef.current!;
+
+  return (
+    <React.Suspense
+      fallback={
+        <div className="studio-right">
+          <div className="studio-right-surface">
+            <div className="studio-empty-text">New ideas don’t actually exist, just recycle.</div>
+          </div>
+        </div>
+      }
+    >
       <StudioRight
         currentStill={currentStill}
         currentMotion={currentMotion}
@@ -2064,15 +2085,18 @@ const renderStudioLeft = () => {
         setStillIndex={setStillIndex}
         feedbackText={feedbackText}
         setFeedbackText={setFeedbackText}
-        onSubmitFeedback={handleSubmitFeedback}
         feedbackSending={feedbackSending}
         feedbackError={feedbackError}
+        onSubmitFeedback={handleSubmitFeedback}
       />
-    );
-  };
-  // ========================================================================
-  // [PART 15 END]
-  // ========================================================================
+    </React.Suspense>
+  );
+};
+
+// ========================================================================
+// [PART 15 END]
+// ========================================================================
+
 
   // ========================================================================
   // [PART 16 START] Render – Custom style modal (blur handled in CSS)
