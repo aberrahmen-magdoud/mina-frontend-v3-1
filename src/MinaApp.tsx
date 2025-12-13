@@ -5,6 +5,7 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "./lib/supabaseClient";
 import StudioLeft from "./StudioLeft";
+import { ADMIN_ALLOWLIST, loadAdminConfig } from "./lib/adminConfig";
 
 const API_BASE_URL =
   import.meta.env.VITE_MINA_API_BASE_URL ||
@@ -209,10 +210,7 @@ const REPLICATE_ASPECT_RATIO_MAP: Record<string, string> = {
   "1:1": "1:1",
 };
 
-const ADMIN_EMAILS = (import.meta.env.VITE_MINA_ADMIN_EMAILS || "")
-  .split(",")
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
+const ADMIN_EMAILS = ADMIN_ALLOWLIST;
 
 const STYLE_PRESETS = [
   {
@@ -407,6 +405,8 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   const [briefFocused, setBriefFocused] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [adminConfig, setAdminConfig] = useState(loadAdminConfig());
+  const [computedStylePresets, setComputedStylePresets] = useState(STYLE_PRESETS);
 
   // -------------------------
   // 4.2 Health / credits / session
@@ -512,6 +512,25 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
 
   const [editingStyleKey, setEditingStyleKey] = useState<string | null>(null);
   const [editingStyleValue, setEditingStyleValue] = useState<string>("");
+
+  useEffect(() => {
+    setAdminConfig(loadAdminConfig());
+    const handler = () => setAdminConfig(loadAdminConfig());
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, []);
+
+  useEffect(() => {
+    const allowedMotionKeys: MotionStyleKey[] = ["melt", "drop", "expand", "satisfying", "slow_motion", "fix_camera"];
+    const fromConfig = adminConfig.styles?.movementKeywords || [];
+    const filtered = fromConfig.filter((k): k is MotionStyleKey => allowedMotionKeys.includes(k as MotionStyleKey));
+    if (filtered.length) setMotionStyleKeys(filtered);
+
+    const publishedPresets = (adminConfig.styles?.presets || [])
+      .filter((p) => p.status === "published")
+      .map((p) => ({ key: p.id, label: p.name, thumb: p.heroImage || p.images[0] || "" }));
+    setComputedStylePresets([...STYLE_PRESETS, ...publishedPresets]);
+  }, [adminConfig]);
 
   // -------------------------
   // 4.4 History (profile)
@@ -688,8 +707,8 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
       : "";
   const motionReferenceImageUrl = animateImageHttp || latestStill?.url || "";
 
-  const imageCost = credits?.meta?.imageCost ?? 1;
-  const motionCost = credits?.meta?.motionCost ?? 5;
+  const imageCost = credits?.meta?.imageCost ?? adminConfig.pricing?.imageCost ?? 1;
+  const motionCost = credits?.meta?.motionCost ?? adminConfig.pricing?.motionCost ?? 5;
 
   const briefHintVisible = showDescribeMore;
 
@@ -2359,7 +2378,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
               inspirationInputRef={inspirationInputRef}
               stylePresetKey={stylePresetKey}
               setStylePresetKey={setStylePresetKey}
-              stylePresets={STYLE_PRESETS}
+              stylePresets={computedStylePresets}
               customStyles={customStyles}
               getStyleLabel={getStyleLabel}
               editingStyleKey={editingStyleKey}
