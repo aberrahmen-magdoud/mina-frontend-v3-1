@@ -87,11 +87,6 @@
   opacity: 0.85;
 }
 
-.studio-pill:disabled {
-  cursor: default;
-  opacity: 0.55;
-}
-
 .studio-pill-icon {
   min-width: 24px;
   min-height: 24px;
@@ -292,6 +287,79 @@
 }
 
 /* ------------------------------------------
+   Style cards
+------------------------------------------ */
+.studio-style-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  overflow: visible;
+  padding-bottom: 12px;
+}
+
+.studio-style-card {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+
+  border-radius: 0;
+}
+
+.studio-style-thumb {
+  width: 72px;
+  height: 72px;
+  background: rgba(8, 10, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+
+  border-radius: 0;
+}
+
+.studio-style-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.studio-style-card.add .studio-style-thumb span {
+  font-size: 18px;
+}
+
+.studio-style-card.active .studio-style-thumb {
+  outline: 1px solid rgba(8, 10, 0, 0.7);
+}
+
+.studio-style-label {
+  margin-top: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+
+  max-width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: text;
+}
+
+.studio-style-label input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  padding: 0;
+  width: 110px;
+}
+
+/* ------------------------------------------
    Controls
 ------------------------------------------ */
 .studio-controls {
@@ -318,10 +386,6 @@
   cursor: pointer;
 
   opacity: 0.9;
-}
-
-.studio-vision-state {
-  color: var(--mina-accent, #858e47); /* ✅ green, never black */
 }
 
 .studio-create-block {
@@ -358,79 +422,24 @@
 }
 
 /* ------------------------------------------
-   ✅ NEW: Animate motion style tiles (GREEN accent)
+   Profile button bottom-left
 ------------------------------------------ */
-.motion-style-row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding-bottom: 12px;
+.studio-profile-float {
+  position: absolute;
+  left: 64px;
+  bottom: 24px;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.7;
+  text-decoration: none;
 }
 
-.motion-style-tile {
-  width: 72px;
-  border: none;
-  background: rgba(8, 10, 0, 0.04);
-  padding: 0;
-  cursor: pointer;
-
-  border-radius: 0;
-  outline: 1px solid rgba(8, 10, 0, 0.08);
-
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-
-  transition: transform 220ms ease, opacity 220ms ease,
-    outline-color 220ms ease, background 220ms ease;
+.studio-profile-float:hover {
+  opacity: 0.9;
 }
 
-.motion-style-tile:active {
-  transform: scale(0.985);
-  opacity: 0.85;
-}
-
-.motion-style-letter {
-  height: 48px;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  font-weight: 700;
-  font-size: 16px;
-  color: rgba(8, 10, 0, 0.55);
-}
-
-.motion-style-label {
-  width: 100%;
-  padding: 6px 6px 10px;
-
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: rgba(8, 10, 0, 0.85);
-
-  /* ✅ always 1 line */
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: center;
-}
-
-/* ✅ Active = GREEN, never black */
-.motion-style-tile.active {
-  outline-color: var(--mina-accent, #858e47);
-  background: rgba(133, 142, 71, 0.08);
-}
-
-.motion-style-tile.active .motion-style-letter {
-  color: var(--mina-accent, #858e47);
-}
-
-.motion-style-tile.active .motion-style-label {
-  color: rgba(8, 10, 0, 0.92);
+.studio-profile-float:active {
+  opacity: 0.6;
 }
 
 /* ------------------------------------------
@@ -439,6 +448,11 @@
 @media (max-width: 960px) {
   .studio-left {
     padding: 80px 20px 32px;
+  }
+
+  .studio-profile-float {
+    left: 20px;
+    bottom: 18px;
   }
 }
 
@@ -450,7 +464,7 @@
   .studio-plusbox,
   .studio-plusbox--inline,
   .studio-thumb,
-  .motion-style-tile {
+  .studio-style-thumb {
     width: 64px;
     height: 64px;
   }
@@ -459,4 +473,4 @@
     font-size: 26px;
     line-height: 1.08;
   }
-}
+} understand my code
