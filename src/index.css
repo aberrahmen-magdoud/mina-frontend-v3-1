@@ -1,4 +1,4 @@
-// src/index.css
+/* src/index.css */
 /* ===========================================================
    0. Root + resets
    =========================================================== */
@@ -845,13 +845,13 @@ video {
     min-height: 100vh;
   }
 
- .studio-left,
-.studio-right {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
+  .studio-left,
+  .studio-right {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
 
   .studio-profile-body {
     grid-template-columns: minmax(0, 1fr);
@@ -1034,8 +1034,8 @@ video {
 }
 
 /* ===========================================================
-   HEADER CTAs — bold, no underline (match StudioRight "Send")
-   (ONLY affects buttons we tag with .studio-header-cta)
+   ✅ ADD THIS: Header buttons (Animate / Like / Download)
+   Bold + NOT underlined, like "Send"
    =========================================================== */
 .studio-header-cta {
   border: 0;
