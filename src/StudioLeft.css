@@ -373,6 +373,20 @@
   opacity: 0.4;
   cursor: default;
 }
+/* Create CTA states */
+.studio-create-link.state-describe {
+  opacity: 0.6;
+}
+
+.studio-create-link.state-describe:hover {
+  opacity: 0.8;
+}
+
+.studio-create-link.state-describe:active {
+  opacity: 0.5;
+}
+
+/* uploading/creating already get .disabled -> opacity 0.4 */
 
 /* profile button */
 .studio-profile-float {
