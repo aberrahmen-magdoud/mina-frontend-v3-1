@@ -4,8 +4,7 @@
 // ============================================================================
 import React, { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { supabase } from "./lib/supabaseClient";
-import StudioRight from "./StudioRight";
-
+import StudioLeft from "./StudioLeft";
 
 const API_BASE_URL =
   import.meta.env.VITE_MINA_API_BASE_URL ||
