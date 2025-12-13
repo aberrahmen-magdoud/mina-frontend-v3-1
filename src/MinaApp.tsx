@@ -1648,8 +1648,9 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
 // ========================================================================
 const renderStudioLeft = () => {
   const pillBaseStyle = (index: number): React.CSSProperties => ({
-    transitionDelay: showPills ? `${PILL_INITIAL_DELAY_MS + index * PILL_STAGGER_MS}ms` : "0ms",
-  });
+  ["--pillDelay" as any]: showPills ? `${PILL_INITIAL_DELAY_MS + index * PILL_STAGGER_MS}ms` : "0ms",
+});
+
 
   const plusOrTick = (n: number) => (n > 0 ? "✓" : "+");
   const effectivePanel: PanelKey = uiStage === 0 ? null : (activePanel ?? "product");
