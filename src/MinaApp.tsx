@@ -811,7 +811,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
     if (!API_BASE_URL) throw new Error("Missing API base URL");
     const dataUrl = await fileToDataUrl(file);
 
-    const res = await fetch(`${API_BASE_URL}/api/r2/upload-signed`, {
+    const res = await fetch(`${API_BASE_URL}/api/r2/upload`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -834,7 +834,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   async function storeRemoteToR2(url: string, kind: string): Promise<string> {
     if (!API_BASE_URL) throw new Error("Missing API base URL");
 
-    const res = await fetch(`${API_BASE_URL}/api/r2/store-remote-signed`, {
+    const res = await fetch(`${API_BASE_URL}/api/r2/store-remote`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -902,7 +902,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
       setStillGenerating(true);
       setStillError(null);
 
-      const safeAspectRatio = REPLICATE_ASPECT_RATIO_MAP[currentAspect.ratio] || "1:1";
+      const safeAspectRatio = REPLICATE_ASPECT_RATIO_MAP[currentAspect.ratio] || "2:3";
 
       const payload: {
         customerId: string;
