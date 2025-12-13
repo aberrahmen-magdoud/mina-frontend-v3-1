@@ -4,6 +4,8 @@
 // ============================================================================
 import React, { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { supabase } from "./lib/supabaseClient";
+import StudioRight from "./StudioRight";
+
 
 const API_BASE_URL =
   import.meta.env.VITE_MINA_API_BASE_URL ||
@@ -2049,96 +2051,23 @@ const renderStudioLeft = () => {
 // ========================================================================
 
 
-  // ========================================================================
-  // [PART 15 START] Render – RIGHT side (unchanged logic)
+    // ========================================================================
+  // [PART 15 START] Render – RIGHT side (separate component)
   // ========================================================================
   const renderStudioRight = () => {
-    const isEmpty = !currentStill && !currentMotion;
-
-    if (isEmpty) {
-      return (
-        <div className="studio-right studio-right--full">
-          <div className="studio-output-main studio-output-main--empty">
-            <div className="studio-output-frame">
-              <div className="output-placeholder">New ideas don’t actually exist, just recycle.</div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
     return (
-      <div className="studio-right">
-        <div className="studio-output-main">
-          <button
-            type="button"
-            className="studio-output-click"
-            onClick={handleDownloadCurrentStill}
-            disabled={!currentStill && !currentMotion}
-          >
-            <div className="studio-output-frame">
-              {currentMotion ? (
-                <video className="studio-output-media" src={currentMotion.url} autoPlay loop muted controls />
-              ) : currentStill ? (
-                <img className="studio-output-media" src={currentStill.url} alt="" />
-              ) : (
-                <div className="output-placeholder">New ideas don’t actually exist, just recycle.</div>
-              )}
-            </div>
-          </button>
-
-          {stillItems.length > 1 && (
-            <div className="studio-dots-row">
-              {stillItems.map((item, idx) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={classNames("studio-dot", idx === stillIndex && "active")}
-                  onClick={() => setStillIndex(idx)}
-                />
-              ))}
-            </div>
-          )}
-
-          <div className="studio-motion-helpers">
-            <button
-              type="button"
-              className="link-button subtle"
-              onClick={handleSuggestMotion}
-              disabled={!currentStill || motionSuggestLoading}
-            >
-              {motionSuggestLoading ? "Thinking about motion…" : "Suggest motion"}
-            </button>
-            {motionSuggestError && <span className="error-text">{motionSuggestError}</span>}
-            {motionError && <span className="error-text">{motionError}</span>}
-          </div>
-
-          {motionDescription && (
-            <div className="studio-motion-description">
-              {motionDescription}
-              {" — "}
-              <button type="button" className="link-button subtle" onClick={handleGenerateMotion} disabled={motionGenerating}>
-                {motionGenerating ? "Animating…" : "Animate"}
-              </button>
-            </div>
-          )}
-
-          <div className="studio-feedback-row">
-            <div className="studio-feedback-hint">Speak to me, tell me what you like and dislike about my generation</div>
-            <input
-              className="studio-feedback-input"
-              placeholder="Type feedback..."
-              value={feedbackText}
-              onChange={(e) => setFeedbackText(e.target.value)}
-            />
-            <button type="button" className="link-button" onClick={handleSubmitFeedback} disabled={feedbackSending}>
-              {feedbackSending ? "Sending…" : "Send"}
-            </button>
-          </div>
-
-          {feedbackError && <div className="error-text">{feedbackError}</div>}
-        </div>
-      </div>
+      <StudioRight
+        currentStill={currentStill}
+        currentMotion={currentMotion}
+        stillItems={stillItems}
+        stillIndex={stillIndex}
+        setStillIndex={setStillIndex}
+        feedbackText={feedbackText}
+        setFeedbackText={setFeedbackText}
+        onSubmitFeedback={handleSubmitFeedback}
+        feedbackSending={feedbackSending}
+        feedbackError={feedbackError}
+      />
     );
   };
   // ========================================================================
@@ -2303,7 +2232,8 @@ const renderStudioLeft = () => {
           </div>
 
           <div className="studio-header-right">
-            {activeTab === "studio" && (
+          {activeTab === "studio" && (currentStill || currentMotion) && (
+
               <>
                 <button
                   type="button"
