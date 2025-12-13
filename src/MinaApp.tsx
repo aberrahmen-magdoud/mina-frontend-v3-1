@@ -230,6 +230,11 @@ const PANEL_LIMITS: Record<UploadPanelKey, number> = {
 };
 
 const CUSTOM_STYLES_LS_KEY = "minaCustomStyles_v1";
+// Premium reveal timing
+const PILL_INITIAL_DELAY_MS = 520;   // when the first pill starts appearing
+const PILL_STAGGER_MS = 240;         // delay between each pill
+const PANEL_REVEAL_DELAY_MS = PILL_INITIAL_DELAY_MS; // panel shows with first pill
+const CONTROLS_REVEAL_DELAY_MS = 3800; // vision + create show later
 
 function classNames(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -458,6 +463,8 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   // Stage 2 = panels area available
   // Stage 3 = vision + create available
   const [uiStage, setUiStage] = useState<0 | 1 | 2 | 3>(0);
+  const stageT2Ref = useRef<number | null>(null);
+  const stageT3Ref = useRef<number | null>(null);
 
   // Global drag overlay (whole page)
   const [globalDragging, setGlobalDragging] = useState(false);
@@ -611,32 +618,35 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   }, [customStyles]);
 
   useEffect(() => {
-    // Stage 0: only textarea
-    if (briefLength <= 0) {
-      setUiStage(0);
-      setActivePanel(null);
-      setGlobalDragging(false);
-      dragDepthRef.current = 0;
-      return;
-    }
+  // Stage 0: only textarea (no pills, no panels)
+  if (briefLength <= 0) {
+    if (stageT2Ref.current !== null) window.clearTimeout(stageT2Ref.current);
+    if (stageT3Ref.current !== null) window.clearTimeout(stageT3Ref.current);
+    stageT2Ref.current = null;
+    stageT3Ref.current = null;
 
-    // IMPORTANT: never go backwards while user keeps typing
-    setUiStage((s) => (s < 1 ? 1 : s));
+    setUiStage(0);
+    setActivePanel(null);
+    setGlobalDragging(false);
+    dragDepthRef.current = 0;
+    return;
+  }
+
+  // Start the reveal ONLY once (when transitioning 0 -> typing)
+  if (uiStage === 0) {
+    setUiStage(1);
     setActivePanel((prev) => prev ?? "product");
 
-    const t2 = window.setTimeout(() => {
+    stageT2Ref.current = window.setTimeout(() => {
       setUiStage((s) => (s < 2 ? 2 : s));
-    }, 900);
+    }, PANEL_REVEAL_DELAY_MS);
 
-    const t3 = window.setTimeout(() => {
+    stageT3Ref.current = window.setTimeout(() => {
       setUiStage((s) => (s < 3 ? 3 : s));
-    }, 3200);
+    }, CONTROLS_REVEAL_DELAY_MS);
+  }
+}, [briefLength, uiStage]);
 
-    return () => {
-      window.clearTimeout(t2);
-      window.clearTimeout(t3);
-    };
-  }, [briefLength]);
 
   // ========================================================================
   // [PART 6 START] Effects – persist customer + bootstrap
@@ -1616,11 +1626,14 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   const renderStudioLeft = () => {
     // pills are text-only (+ / ✓), except ratio pill keeps its icon
     const pillBaseStyle = (index: number): React.CSSProperties => ({
-      transitionDelay: showPills ? `${index * 140}ms` : "0ms",
-    });
+  transitionDelay: showPills
+    ? `${PILL_INITIAL_DELAY_MS + index * PILL_STAGGER_MS}ms`
+    : "0ms",
+});
+
 
     const plusOrTick = (n: number) => (n > 0 ? "✓" : "+");
-    const effectivePanel: PanelKey = activePanel ?? "product";
+    const effectivePanel: PanelKey = uiStage === 0 ? null : (activePanel ?? "product");
 
     const allStyleCards: Array<{
       key: string;
@@ -1731,7 +1744,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
 
           {/* Panels (smooth open/close, no jumps) */}
           <div className="mina-slide">
-            <Collapse open={effectivePanel === "product" || activePanel === null} delayMs={80}>
+            <Collapse open={showPanels && (effectivePanel === "product" || activePanel === null)} delayMs={80}>
               <div className="studio-panel">
                 <div className="studio-panel-title">Add your product</div>
 
@@ -1765,7 +1778,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
               </div>
             </Collapse>
 
-            <Collapse open={activePanel === "logo"} delayMs={110}>
+           <Collapse open={showPanels && activePanel === "logo"} delayMs={110}>
               <div className="studio-panel">
                 <div className="studio-panel-title">Add your logo</div>
 
@@ -1799,7 +1812,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
               </div>
             </Collapse>
 
-            <Collapse open={activePanel === "inspiration"} delayMs={140}>
+            <Collapse open={showPanels && activePanel === "inspiration"} delayMs={140}>
               <div className="studio-panel">
                 <div className="studio-panel-title">Add inspiration</div>
 
@@ -1847,7 +1860,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
               </div>
             </Collapse>
 
-            <Collapse open={activePanel === "style"} delayMs={170}>
+            <Collapse open={showPanels && activePanel === "style"} delayMs={170}>
               <div className="studio-panel">
                 <div className="studio-panel-title">Pick a style</div>
 
