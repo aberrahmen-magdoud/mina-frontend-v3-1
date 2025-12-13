@@ -1544,7 +1544,7 @@ video {
 
 /* nudge the whole panel content a bit so nothing is cut on the left */
 .studio-panel{
-  padding-left: 10px;
+  padding-left: 0px;
   box-sizing: border-box;
 }
 
@@ -1567,8 +1567,8 @@ video {
 .studio-style-label{
   display: block;
   margin-top: 8px;
-  width: 100%;
-  max-width: 92px;          /* keep label aligned with thumb width */
+  width: 80%;
+  max-width: 48px;          /* keep label aligned with thumb width */
   white-space: normal;
   word-break: break-word;
   cursor: text;
