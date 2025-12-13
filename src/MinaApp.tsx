@@ -1746,7 +1746,7 @@ const renderStudioLeft = () => {
         if (isBriefFocused && stillActivelyTyping) {
           root.setAttribute("data-lower-hidden", "1");
         }
-      }, 2000);
+      }, 10);
     }
   };
 
