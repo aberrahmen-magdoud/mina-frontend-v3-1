@@ -1,6 +1,4 @@
-/* ============================================================= */
-/* FILE: src/StudioRight.css                                     */
-/* ============================================================= */
+/* src/StudioRight.css */
 
 /* Right side NEVER scrolls */
 .studio-right {
@@ -29,39 +27,6 @@
 
   /* ✅ same “black opacity system” */
   background: rgba(0, 0, 0, 0.06);
-}
-
-/* ✅ NEW: top-right actions row */
-.studio-right-top-actions {
-  position: absolute;
-  top: 18px;
-  right: 18px;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-/* ✅ same styling spirit as Send: bold, no underline */
-.studio-right-cta {
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-
-  font-weight: 700;
-  font-size: 13px;
-  color: rgba(0, 0, 0, 0.9);
-
-  text-decoration: none !important;
-}
-
-.studio-right-cta:disabled {
-  cursor: default;
-  opacity: 0.35;
-}
-
-.studio-right-cta:active {
-  opacity: 0.6;
 }
 
 /* Stage 0 center text */
@@ -159,7 +124,7 @@
   gap: 14px;
 }
 
-/* ✅ “Speak to me” = 16pt bold, black 20% opacity (placeholder) */
+/* “Speak to me” */
 .studio-feedback-input--compact {
   flex: 1 1 auto;
   height: 26px;
@@ -178,8 +143,16 @@
   font-weight: 700;
 }
 
-/* Send bold, and disabled = lower opacity */
-.studio-feedback-send {
+/* ✅ actions aligned right */
+.studio-feedback-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  flex: 0 0 auto;
+}
+
+/* ✅ Like / Download / Send = same vibe as old Send */
+.studio-action-btn {
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -187,11 +160,17 @@
   font-weight: 700;
   font-size: 13px;
   color: rgba(0, 0, 0, 0.9);
+
+  text-decoration: none; /* ✅ no underline */
 }
 
-.studio-feedback-send:disabled {
+.studio-action-btn:disabled {
   cursor: default;
   opacity: 0.35;
+}
+
+.studio-action-btn.is-on {
+  color: var(--mina-accent, #858e47);
 }
 
 /* Error (if any) floats above bar without changing layout */
