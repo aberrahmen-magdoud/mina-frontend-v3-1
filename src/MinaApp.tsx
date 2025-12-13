@@ -2,7 +2,7 @@
 // ============================================================================
 // [PART 1 START] Imports & environment
 // ============================================================================
-import React, { useEffect, useState, useRef  from "react";
+import React, { useEffect, useState, useRef}  from "react";
 import { supabase } from "./lib/supabaseClient";
 import StudioLeft from "./StudioLeft";
 
