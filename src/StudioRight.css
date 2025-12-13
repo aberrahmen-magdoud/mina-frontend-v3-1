@@ -1,0 +1,114 @@
+/* Right side must NEVER scroll */
+.studio-right {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Grey panel fills the whole right area */
+.studio-right-surface {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgba(8, 10, 0, 0.06);
+}
+
+/* Click area */
+.studio-output-click {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+}
+
+/* Frame always full size */
+.studio-output-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: rgba(8, 10, 0, 0.06);
+}
+
+/* Media fills frame by default */
+.studio-output-media {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transform: scale(1);
+  transform-origin: center;
+  transition: transform 520ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* “See whole image/video” */
+.studio-output-frame.is-contain .studio-output-media {
+  object-fit: contain;
+  transform: scale(0.92);
+}
+
+/* Stage 0 placeholder (bottom-left) */
+.output-placeholder {
+  position: absolute;
+  left: 40px;
+  bottom: 16px;
+  font-size: 11px;
+  color: rgba(8, 10, 0, 0.4);
+  pointer-events: none;
+}
+
+/* Dots overlay INSIDE the grey panel (no layout push) */
+.studio-right-surface .studio-dots-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+/* Feedback bar: beige, always fits, one-line input */
+.studio-feedback-bar {
+  flex: 0 0 auto;
+  margin-top: 12px;
+  background: rgba(238, 230, 211, 0.92);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.studio-feedback-input--compact {
+  flex: 1 1 auto;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(8, 10, 0, 0.12);
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.45);
+  outline: none;
+  font-size: 13px;
+}
+
+.studio-feedback-send {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(8, 10, 0, 0.14);
+  background: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.studio-feedback-send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
