@@ -414,11 +414,14 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   const [animateAspectRotated, setAnimateAspectRotated] = useState(false);
   const [motionGenerating, setMotionGenerating] = useState(false);
   const [motionError, setMotionError] = useState<string | null>(null);
+  const [isRightMediaDark, setIsRightMediaDark] = useState(false);
 
   // Feedback
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackSending, setFeedbackSending] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [likedMap, setLikedMap] = useState<Record<string, boolean>>({});
+  const [likeSubmitting, setLikeSubmitting] = useState(false);
 
   // Panels (only one open at a time)
   const [activePanel, setActivePanel] = useState<PanelKey>(null);
@@ -1199,26 +1202,43 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   // ========================================================================
   // [PART 11 START] Feedback / like / download
   // ========================================================================
+  const getCurrentMediaKey = () =>
+    currentMotion?.id || currentStill?.id || currentMotion?.url || currentStill?.url || null;
+
   const handleLikeCurrentStill = async () => {
-    if (!API_BASE_URL || !currentStill) return;
+    if (!API_BASE_URL) return;
+
+    const targetMedia = currentMotion || currentStill;
+    if (!targetMedia) return;
+
+    const resultType = currentMotion ? "motion" : "image";
+    const likeKey = getCurrentMediaKey();
+    if (likeKey && likedMap[likeKey]) return;
 
     try {
+      setLikeSubmitting(true);
       await fetch(`${API_BASE_URL}/feedback/like`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerId,
-          resultType: "image",
+          resultType,
           platform: currentAspect.platformKey,
           prompt: currentStill.prompt || lastStillPrompt || stillBrief || brief,
           comment: "",
-          imageUrl: currentStill.url,
-          videoUrl: "",
+          imageUrl: currentMotion ? "" : targetMedia.url,
+          videoUrl: currentMotion ? targetMedia.url : "",
           sessionId,
         }),
       });
+
+      if (likeKey) {
+        setLikedMap((prev) => ({ ...prev, [likeKey]: true }));
+      }
     } catch {
       // non-blocking
+    } finally {
+      setLikeSubmitting(false);
     }
   };
 
@@ -1260,6 +1280,24 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
     const target = currentMotion?.url || currentStill?.url;
     if (!target) return;
 
+    let filename = "";
+    try {
+      const parsed = new URL(target);
+      const last = parsed.pathname.split("/").filter(Boolean).pop();
+      if (last && last.includes(".")) filename = last;
+    } catch {
+      // fallback below
+    }
+
+    if (!filename) {
+      const safePrompt =
+        (lastStillPrompt || brief || "Mina-image")
+          .replace(/[^a-z0-9]+/gi, "-")
+          .toLowerCase()
+          .slice(0, 80) || "mina-image";
+      filename = currentMotion ? `mina-motion-${safePrompt}.mp4` : `mina-image-${safePrompt}.png`;
+    }
+
     const a = document.createElement("a");
     a.href = target;
     const safePrompt =
@@ -1272,6 +1310,9 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
     a.click();
     document.body.removeChild(a);
   };
+
+  const currentMediaKey = getCurrentMediaKey();
+  const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
   // ========================================================================
   // [PART 11 END]
   // ========================================================================
@@ -1920,7 +1961,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
     <div className="mina-studio-root">
       <div className={classNames("mina-drag-overlay", globalDragging && "show")} />
       <div className="studio-frame">
-        <div className="studio-header-overlay">
+        <div className={classNames("studio-header-overlay", isRightMediaDark && "is-dark")}>
           <div className="studio-header-left">
             <a href="https://mina.faltastudio.com" className="studio-logo-link">
               Mina
@@ -1928,24 +1969,21 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
           </div>
 
           <div className="studio-header-right">
-            {activeTab === "studio" && (currentStill || currentMotion) && (
+            {activeTab === "studio" && (
               <>
-                {/* ✅ ONLY CHANGE: className -> studio-header-cta */}
+                <button type="button" className="studio-header-cta" onClick={() => setAnimateMode((v) => !v)}>
+                  {animateMode ? "Create" : "Animate this"}
+                </button>
+
                 <button
                   type="button"
                   className="studio-header-cta"
                   onClick={handleAnimateHeaderClick}
                   disabled={!motionReferenceImageUrl || motionGenerating || motionSuggestLoading || motionSuggestTyping}
                 >
-                  Animate this
+                  {isCurrentLiked ? "ok" : "♡ more of this"}
                 </button>
 
-                {/* ✅ ONLY CHANGE: className -> studio-header-cta */}
-                <button type="button" className="studio-header-cta" onClick={handleLikeCurrentStill} disabled={!currentStill}>
-                  ♡ more of this
-                </button>
-
-                {/* ✅ ONLY CHANGE: className -> studio-header-cta */}
                 <button
                   type="button"
                   className="studio-header-cta"
