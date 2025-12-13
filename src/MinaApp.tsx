@@ -780,7 +780,7 @@ const stylePresetKeyForApi = stylePresetKey.startsWith("custom-") ? "custom-styl
     if (!API_BASE_URL) throw new Error("Missing API base URL");
     const dataUrl = await fileToDataUrl(file);
 
-    const res = await fetch(`${API_BASE_URL}/api/r2/upload`, {
+    const res = await fetch(`${API_BASE_URL}/api/r2/upload-signed`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -803,7 +803,7 @@ const stylePresetKeyForApi = stylePresetKey.startsWith("custom-") ? "custom-styl
   async function storeRemoteToR2(url: string, kind: string): Promise<string> {
     if (!API_BASE_URL) throw new Error("Missing API base URL");
 
-    const res = await fetch(`${API_BASE_URL}/api/r2/store-remote`, {
+    const res = await fetch(`${API_BASE_URL}/api/r2/store-remote-signed`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
