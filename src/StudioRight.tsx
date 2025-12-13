@@ -1,20 +1,9 @@
-import React, { useEffect, useState } from "react";
+// src/StudioRight.tsx
+import React, { useEffect, useMemo, useState } from "react";
 import "./StudioRight.css";
 
-type StillItem = {
-  id: string;
-  url: string;
-  createdAt: string;
-  prompt: string;
-  aspectRatio?: string;
-};
-
-type MotionItem = {
-  id: string;
-  url: string;
-  createdAt: string;
-  prompt: string;
-};
+type StillItem = { id: string; url: string };
+type MotionItem = { id: string; url: string };
 
 type StudioRightProps = {
   currentStill: StillItem | null;
@@ -26,102 +15,105 @@ type StudioRightProps = {
 
   feedbackText: string;
   setFeedbackText: (v: string) => void;
-  onSubmitFeedback: () => void;
-
   feedbackSending: boolean;
   feedbackError: string | null;
+  onSubmitFeedback: () => void;
 };
 
-const StudioRight: React.FC<StudioRightProps> = ({
-  currentStill,
-  currentMotion,
-  stillItems,
-  stillIndex,
-  setStillIndex,
-  feedbackText,
-  setFeedbackText,
-  onSubmitFeedback,
-  feedbackSending,
-  feedbackError,
-}) => {
-  const hasOutput = Boolean(currentStill || currentMotion);
+export default function StudioRight(props: StudioRightProps) {
+  const {
+    currentStill,
+    currentMotion,
+    stillItems,
+    stillIndex,
+    setStillIndex,
+    feedbackText,
+    setFeedbackText,
+    feedbackSending,
+    feedbackError,
+    onSubmitFeedback,
+  } = props;
 
-  // cover (default) -> contain (see full) toggle
-  const [previewMode, setPreviewMode] = useState<"cover" | "contain">("cover");
+  const isEmpty = !currentStill && !currentMotion;
 
+  const media = useMemo(() => {
+    if (currentMotion) return { type: "video" as const, url: currentMotion.url };
+    if (currentStill) return { type: "image" as const, url: currentStill.url };
+    return null;
+  }, [currentMotion, currentStill]);
+
+  // Click-to-toggle: cover <-> contain (scale down centered)
+  const [containMode, setContainMode] = useState(false);
   useEffect(() => {
-    // whenever output changes, go back to cover
-    setPreviewMode("cover");
-  }, [currentStill?.url, currentMotion?.url]);
+    // reset when switching to another generation
+    setContainMode(false);
+  }, [media?.url]);
 
-  const handleTogglePreview = () => {
-    if (!hasOutput) return;
-    setPreviewMode((m) => (m === "cover" ? "contain" : "cover"));
-  };
-
-  const cursor = !hasOutput ? "default" : previewMode === "cover" ? "zoom-out" : "zoom-in";
+  const canSend = !feedbackSending && feedbackText.trim().length > 0;
 
   return (
-    <div className={`studio-right mina-slide ${!hasOutput ? "studio-right--empty" : ""}`}>
+    <div className="studio-right">
       <div className="studio-right-surface">
-        <button
-          type="button"
-          className="studio-output-click"
-          onClick={handleTogglePreview}
-          disabled={!hasOutput}
-          style={{ cursor }}
-          aria-label={hasOutput ? "Toggle preview mode" : "No output yet"}
-        >
-          <div className={`studio-output-frame ${previewMode === "contain" ? "is-contain" : ""}`}>
-            {currentMotion ? (
-              <video className="studio-output-media" src={currentMotion.url} autoPlay loop muted playsInline />
-            ) : currentStill ? (
-              <img className="studio-output-media" src={currentStill.url} alt="" />
-            ) : (
-              <div className="output-placeholder">New ideas don’t actually exist, just recycle.</div>
-            )}
-          </div>
-        </button>
+        {isEmpty ? (
+          <div className="studio-empty-text">New ideas don’t actually exist, just recycle.</div>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="studio-output-click"
+              onClick={() => setContainMode((v) => !v)}
+              aria-label="Toggle fit"
+            >
+              <div className={`studio-output-frame ${containMode ? "is-contain" : ""}`}>
+                {media?.type === "video" ? (
+                  <video className="studio-output-media" src={media.url} autoPlay loop muted controls />
+                ) : (
+                  <img className="studio-output-media" src={media?.url || ""} alt="" />
+                )}
+              </div>
+            </button>
 
-        {stillItems.length > 1 && (
-          <div className="studio-dots-row">
-            {stillItems.map((item, idx) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`studio-dot ${idx === stillIndex ? "active" : ""}`}
-                onClick={() => setStillIndex(idx)}
-                aria-label={`Go to generation ${idx + 1}`}
-              />
-            ))}
-          </div>
+            {stillItems.length > 1 && (
+              <div className="studio-dots-row">
+                {stillItems.map((item, idx) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`studio-dot ${idx === stillIndex ? "active" : ""}`}
+                    onClick={() => setStillIndex(idx)}
+                    aria-label={`Go to image ${idx + 1}`}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      {hasOutput && (
-        <>
-          <div className="studio-feedback-bar">
-            <input
-              className="studio-feedback-input--compact"
-              placeholder="Type feedback..."
-              value={feedbackText}
-              onChange={(e) => setFeedbackText(e.target.value)}
-            />
-            <button
-              type="button"
-              className="studio-feedback-send"
-              onClick={onSubmitFeedback}
-              disabled={feedbackSending}
-            >
-              {feedbackSending ? "Sending…" : "Send"}
-            </button>
-          </div>
+      {!isEmpty && (
+        <div className="studio-feedback-bar">
+          <input
+            className="studio-feedback-input--compact"
+            placeholder="Speak to me tell me, what you like and dislike about my generation"
+            value={feedbackText}
+            onChange={(e) => setFeedbackText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && canSend) onSubmitFeedback();
+            }}
+          />
 
-          {feedbackError && <div className="error-text">{feedbackError}</div>}
-        </>
+          <button
+            type="button"
+            className="studio-feedback-send"
+            onClick={onSubmitFeedback}
+            disabled={!canSend}
+          >
+            Send
+          </button>
+
+          {feedbackError && <div className="studio-feedback-error">{feedbackError}</div>}
+        </div>
       )}
     </div>
   );
-};
-
-export default StudioRight;
+}
