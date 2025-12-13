@@ -1,4 +1,6 @@
-import React, { useMemo, useState } from "react";
+// src/StudioRight.tsx
+import React, { useEffect, useMemo, useState } from "react";
+import "./StudioRight.css";
 
 type StillItem = {
   id: string;
