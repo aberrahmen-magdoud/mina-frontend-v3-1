@@ -1326,3 +1326,59 @@ video {
   color: #fff;
   opacity: 0.6;
 }
+/* =====================================================================
+   PATCH: Profile design – match the minimalist left side (no shadows,
+   tinted backgrounds, minimal color). These overrides adjust the
+   editorial profile page to feel cohesive with the Studio left column.
+   ===================================================================== */
+
+/* Use the global paper tone and text colour for the entire profile page */
+.profile-editorial-shell {
+  background: var(--mina-bg);
+  color: var(--mina-text);
+}
+
+/* Lightly tinted panel instead of bright white card */
+.profile-editorial-block {
+  background: rgba(8, 10, 0, 0.02);
+  border: 1px solid rgba(8, 10, 0, 0.08);
+  box-shadow: none;
+}
+
+/* Right editorial card – tinted a bit darker but still minimal */
+.profile-editorial-block--right {
+  background: rgba(8, 10, 0, 0.04);
+  color: var(--mina-text);
+  border: none;
+  box-shadow: none;
+}
+
+/* Cards in the history gallery: remove strong gradients and use subtle tints */
+.profile-card-media {
+  border: 1px solid rgba(8, 10, 0, 0.08);
+  background: rgba(8, 10, 0, 0.05);
+}
+
+/* Soften the overlay gradient on actions */
+.profile-card-actions {
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.1));
+}
+
+/* Refine CTAs to match Studio pills */
+.profile-cta {
+  border-color: rgba(8, 10, 0, 0.6);
+  color: rgba(8, 10, 0, 0.9);
+}
+.profile-cta:hover {
+  background: rgba(8, 10, 0, 0.05);
+  color: var(--mina-text);
+}
+.profile-cta.ghost {
+  border-color: rgba(8, 10, 0, 0.18);
+  color: rgba(8, 10, 0, 0.6);
+}
+
+/* Remove scaling on hover for media */
+.profile-card-media:hover img {
+  transform: none;
+}
