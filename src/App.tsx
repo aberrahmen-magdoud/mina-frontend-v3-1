@@ -4,14 +4,11 @@ import { AuthGate } from "./components/AuthGate";
 import MinaApp from "./MinaApp";
 import AdminDashboard from "./AdminDashboard";
 
-function App() {
+export default function App() {
   const pathname = typeof window !== "undefined" ? window.location.pathname : "/";
 
-  return (
-    <AuthGate>
-      {pathname === "/admin" ? <AdminDashboard /> : <MinaApp />}
-    </AuthGate>
-  );
-}
+  // support /admin and /admin/anything
+  const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
 
-export default App;
+  return <AuthGate>{isAdminPath ? <AdminDashboard /> : <MinaApp />}</AuthGate>;
+}
