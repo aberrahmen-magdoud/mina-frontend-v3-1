@@ -1393,7 +1393,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   if (logoUrl && isHttpUrl(logoUrl)) {
     payload.logoImageUrl = logoUrl;
   }
-insprationUrls = uploads.inspiration
+inspirationUrls = uploads.inspiration
         .map((u) => u.remoteUrl || u.url)
         .filter((u) => isHttpUrl(u))
         .slice(0, 4);
