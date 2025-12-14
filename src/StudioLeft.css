@@ -489,7 +489,7 @@
   font-weight: 600;
   letter-spacing: -0.02em;
 
-  max-width: 110px;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
