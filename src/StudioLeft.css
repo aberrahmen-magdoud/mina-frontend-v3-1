@@ -84,7 +84,8 @@
 }
 
 .studio-row--pills {
-  transition: opacity var(--group-fade-duration, 320ms) ease, transform var(--group-fade-duration, 320ms) ease;
+  transition: opacity var(--group-fade-duration, 320ms) ease-in-out,
+    transform var(--group-fade-duration, 320ms) ease-in-out;
   transform: translateY(0);
 }
 
@@ -96,7 +97,8 @@
 
 .mina-left-block,
 .studio-controls {
-  transition: opacity var(--group-fade-duration, 320ms) ease, transform var(--group-fade-duration, 320ms) ease;
+  transition: opacity var(--group-fade-duration, 320ms) ease-in-out,
+    transform var(--group-fade-duration, 320ms) ease-in-out;
   transform: translateY(0);
 }
 
@@ -104,7 +106,7 @@
 .studio-left.is-typing-hidden .mina-left-block,
 .studio-left.is-typing-hidden .studio-controls {
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(6px);
   pointer-events: none;
 }
 
@@ -228,19 +230,6 @@
   margin-top: 8px;
 }
 
-.studio-mina-typing {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #858e47;
-  min-height: 16px;
-  transition: opacity 240ms ease;
-  opacity: 0.8;
-}
-
-.studio-mina-typing.is-active {
-  opacity: 1;
-}
-
 .studio-brief-shell {
   position: relative;
   max-height: 260px;
@@ -282,8 +271,8 @@
 
   border-radius: 0;
 
-  transition: opacity var(--group-fade-duration, 320ms) ease,
-    transform var(--group-fade-duration, 320ms) ease;
+  transition: opacity var(--group-fade-duration, 320ms) ease-in-out,
+    transform var(--group-fade-duration, 320ms) ease-in-out;
 }
 
 .studio-left.is-typing-hidden .studio-brief-input {
@@ -306,8 +295,8 @@
   color: #858e47;
   opacity: 0;
   transform: translateY(var(--textarea-float-distance, 4px));
-  transition: opacity var(--group-fade-duration, 320ms) ease,
-    transform var(--group-fade-duration, 320ms) ease;
+  transition: opacity var(--group-fade-duration, 320ms) ease-in-out,
+    transform var(--group-fade-duration, 320ms) ease-in-out;
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
