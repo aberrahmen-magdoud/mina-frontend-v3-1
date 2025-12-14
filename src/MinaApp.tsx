@@ -259,11 +259,11 @@ const PILL_INITIAL_DELAY_MS = 260; // when the first pill starts appearing
 const PILL_STAGGER_MS = 90; // delay between each pill (accordion / wave)
 const PILL_SLIDE_DURATION_MS = 320; // slide + fade duration (must exceed stagger for smoothness)
 const PANEL_REVEAL_DELAY_MS = PILL_INITIAL_DELAY_MS; // panel shows with first pill
-const CONTROLS_REVEAL_DELAY_MS = 00; // vision + create show later
+const CONTROLS_REVEAL_DELAY_MS = 0; // vision + create show later
 const GROUP_FADE_DURATION_MS = 420; // shared fade timing for pills/panels/controls/textarea
 const TYPING_HIDE_DELAY_MS = 2000; // wait before hiding UI when typing starts
-const TYPING_REVEAL_DELAY_MS = 1000; // wait before showing UI after typing stops
-const TEXTAREA_FLOAT_DISTANCE_PX = 4; // tiny translate to avoid layout jump
+const TYPING_REVEAL_DELAY_MS = 600; // wait before showing UI after typing stops
+const TEXTAREA_FLOAT_DISTANCE_PX = 12; // tiny translate to avoid layout jump
 
 function classNames(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
