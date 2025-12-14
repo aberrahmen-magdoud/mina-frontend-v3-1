@@ -446,7 +446,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   // -------------------------
   const [brief, setBrief] = useState("");
   const [stillBrief, setStillBrief] = useState("");
-  const [tone] = useState("Poetic");
+  const [tone] = useState("still-life");
   const [, setPlatform] = useState("tiktok");
   const [aspectIndex, setAspectIndex] = useState(2);
   const [animateAspectKey, setAnimateAspectKey] = useState<AspectKey>(ASPECT_OPTIONS[aspectIndex].key);
