@@ -461,6 +461,8 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
 
   const [minaMessage, setMinaMessage] = useState("");
   const [minaTalking, setMinaTalking] = useState(false);
+// When set, we show THIS instead of placeholder thinking text
+const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
 
   // Motion
   const [motionItems, setMotionItems] = useState<MotionItem[]>([]);
@@ -942,41 +944,94 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   }, [likedMap]);
 
   useEffect(() => {
-    if (!minaBusy) {
+  // 1) Placeholder “thinking out loud” WHILE busy, only if no override text
+useEffect(() => {
+  if (!minaBusy) return;
+  if (minaOverrideText) return; // don't overwrite the real message
+
+  setMinaTalking(true);
+
+  const phrases = [...personalityThinking, ...personalityFiller];
+  let phraseIndex = 0;
+  let charIndex = 0;
+  let t: number | null = null;
+
+  const CHAR_MS = 70;          // faster than before (was ~140)
+  const END_PAUSE_MS = 220;    // faster than before (was ~360)
+
+  const tick = () => {
+    const phrase = phrases[phraseIndex % phrases.length] || "";
+    const nextChar = charIndex + 1;
+    const nextSlice = phrase.slice(0, Math.min(nextChar, phrase.length));
+
+    setMinaMessage(nextSlice || personalityFiller[0] || "typing…");
+
+    const reachedEnd = nextChar > phrase.length;
+    charIndex = reachedEnd ? 0 : nextChar;
+    if (reachedEnd) phraseIndex += 1;
+
+    t = window.setTimeout(tick, reachedEnd ? END_PAUSE_MS : CHAR_MS);
+  };
+
+  t = window.setTimeout(tick, CHAR_MS);
+
+  return () => {
+    if (t !== null) window.clearTimeout(t);
+  };
+}, [minaBusy, minaOverrideText, personalityThinking, personalityFiller]);
+
+// 2) When override text arrives, type it FAST and stop placeholders
+useEffect(() => {
+  if (!minaOverrideText) return;
+
+  setMinaTalking(true);
+  setMinaMessage("");
+
+  let cancelled = false;
+  let i = 0;
+  let t: number | null = null;
+
+  const text = minaOverrideText;
+  const CHAR_MS = 8; // very fast
+
+  const tick = () => {
+    if (cancelled) return;
+    i += 1;
+    setMinaMessage(text.slice(0, i));
+
+    if (i < text.length) {
+      t = window.setTimeout(tick, CHAR_MS);
+    }
+  };
+
+  t = window.setTimeout(tick, CHAR_MS);
+
+  return () => {
+    cancelled = true;
+    if (t !== null) window.clearTimeout(t);
+  };
+}, [minaOverrideText]);
+
+// 3) When Mina stops being busy, keep the override visible briefly, then clear
+useEffect(() => {
+  if (minaBusy) return;
+
+  // if we just showed a real message, keep it for a moment
+  if (minaOverrideText) {
+    const hold = window.setTimeout(() => {
       setMinaTalking(false);
       setMinaMessage("");
-      return undefined;
-    }
+      setMinaOverrideText(null);
+    }, 2500);
 
-    setMinaTalking(true);
-    const phrases = [...personalityThinking, ...personalityFiller];
-    let phraseIndex = 0;
-    let charIndex = 0;
-    let raf: number;
+    return () => window.clearTimeout(hold);
+  }
 
-    const typeTick = () => {
-      const phrase = phrases[phraseIndex % phrases.length] || "";
-      const nextChar = charIndex + 1;
-      const nextSlice = phrase.slice(0, Math.min(nextChar, phrase.length));
+  // otherwise, clear immediately
+  setMinaTalking(false);
+  setMinaMessage("");
+}, [minaBusy, minaOverrideText]);
 
-      setMinaMessage(nextSlice || personalityFiller[0] || "typing…");
-
-      const reachedEnd = nextChar > phrase.length;
-      charIndex = reachedEnd ? 0 : nextChar;
-      if (reachedEnd) {
-        phraseIndex += 1;
-      }
-
-      const pause = reachedEnd ? 360 : 140;
-      raf = window.setTimeout(typeTick, pause);
-    };
-
-    raf = window.setTimeout(typeTick, 140);
-
-    return () => {
-      window.clearTimeout(raf);
-    };
-  }, [minaBusy, personalityThinking, personalityFiller]);
 
   useEffect(() => {
     // Stage 0: only textarea (no pills, no panels)
@@ -1344,7 +1399,8 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
       return;
     }
 
-    try {
+    try {setMinaOverrideText(null);
+
       setStillGenerating(true);
       setStillError(null);
 
@@ -1450,9 +1506,9 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
     if (typeof userMessage === "string" && userMessage.trim()) {
       overlay = overlay ? `${overlay}\n\n${userMessage}` : userMessage;
     }
-    if (overlay) {
-      setMinaMessage(overlay);
-      setMinaTalking(true);
+   if (overlay) {
+  setMinaOverrideText(overlay); // ✅ this will replace placeholder & type fast
+
     }
   }
 ;
