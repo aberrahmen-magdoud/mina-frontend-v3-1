@@ -862,7 +862,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                         <div className="studio-style-thumb">
                           <span aria-hidden="true">+</span>
                         </div>
-                        <div className="studio-style-label">Create style</div>
+                        <div className="studio-style-label">Your style</div>
                       </button>
                     </div>
                   </div>
