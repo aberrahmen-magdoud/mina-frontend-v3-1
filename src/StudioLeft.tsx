@@ -134,6 +134,10 @@ type StudioLeftProps = {
   motionGenerating?: boolean;
   motionError?: string | null;
   onCreateMotion?: () => void;
+  onTypeForMe?: () => void;
+
+  minaMessage?: string;
+  minaTalking?: boolean;
 
   onGoProfile: () => void;
 };
@@ -288,6 +292,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
     deleteCustomStyle,
 
     onOpenCustomStylePanel,
+    onImageUrlPasted,
 
     minaVisionEnabled,
     onToggleVision,
@@ -297,6 +302,13 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
     onCreateStill,
 
     motionHasImage,
+    motionGenerating,
+    motionError,
+    onCreateMotion,
+    onTypeForMe,
+
+    minaMessage,
+    minaTalking,
 
     onGoProfile,
   } = props;
@@ -377,8 +389,6 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
   // -------------------------
   // Create CTA state machine
   // -------------------------
-  const motionGenerating = !!props.motionGenerating;
-  const motionError = props.motionError ?? null;
   const hasMotionHandler = typeof props.onCreateMotion === "function";
 
   const imageCreateState: "creating" | "uploading" | "describe_more" | "ready" =
@@ -549,6 +559,24 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                     <span className="studio-pill-main">Image</span>
                   </button>
 
+                  {/* Type for me */}
+                  <button
+                    type="button"
+                    className={classNames(
+                      "studio-pill",
+                      "studio-pill--ghost",
+                      motionSuggesting && "active"
+                    )}
+                    style={pillBaseStyle(1)}
+                    onClick={() => onTypeForMe?.()}
+                    disabled={motionSuggesting || motionGenerating || !motionHasImage}
+                  >
+                    <span className="studio-pill-icon studio-pill-icon-mark" aria-hidden="true">
+                      ✎
+                    </span>
+                    <span className="studio-pill-main">Type for me</span>
+                  </button>
+
                   {/* Mouvement style */}
                   <button
                     type="button"
@@ -564,7 +592,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                   <button
                     type="button"
                     className={classNames("studio-pill", "studio-pill--aspect")}
-                    style={pillBaseStyle(2)}
+                    style={pillBaseStyle(3)}
                     disabled
                   >
                     <span className="studio-pill-icon">
@@ -602,9 +630,20 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                 rows={4}
                 onFocus={() => setBriefFocused(true)}
                 onBlur={() => setBriefFocused(false)}
+                onPaste={(e) => {
+                  const text = e.clipboardData?.getData("text/plain") || "";
+                  if (!text) return;
+                  const url = text.match(/https?:\/\/[^\s)]+/i)?.[0];
+                  if (url && /\.(png|jpe?g|webp|gif|avif)(\?.*)?$/i.test(url)) {
+                    onImageUrlPasted?.(url);
+                  }
+                }}
               />
               {briefHintVisible && <div className="studio-brief-hint">Describe more</div>}
             </div>
+            {minaMessage && (
+              <div className={classNames("studio-mina-typing", minaTalking && "is-active")}>{minaMessage}</div>
+            )}
           </div>
         </div>
 

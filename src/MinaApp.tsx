@@ -210,6 +210,21 @@ const REPLICATE_ASPECT_RATIO_MAP: Record<string, string> = {
   "1:1": "1:1",
 };
 
+const MINA_THINKING_DEFAULT = [
+  "Sketching ideas…",
+  "Let me weave a scene…",
+  "Curating tiny details…",
+  "Whispering to the lens…",
+  "Layering mood + motion…",
+  "Painting with light…",
+  "Mixing silk, glass, shine…",
+  "Checking the perfect drip…",
+  "Setting the camera drift…",
+  "Dreaming in slow loops…",
+];
+
+const MINA_FILLER_DEFAULT = ["typing…", "breathing…", "thinking aloud…", "refining…"];
+
 const ADMIN_EMAILS = ADMIN_ALLOWLIST;
 
 const STYLE_PRESETS = [
@@ -437,6 +452,9 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   const [stillGenerating, setStillGenerating] = useState(false);
   const [stillError, setStillError] = useState<string | null>(null);
   const [lastStillPrompt, setLastStillPrompt] = useState<string>("");
+
+  const [minaMessage, setMinaMessage] = useState("");
+  const [minaTalking, setMinaTalking] = useState(false);
 
   // Motion
   const [motionItems, setMotionItems] = useState<MotionItem[]>([]);
@@ -723,6 +741,22 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
       : "";
   const motionReferenceImageUrl = animateImageHttp || latestStill?.url || "";
 
+  const personalityThinking = useMemo(
+    () =>
+      adminConfig.ai?.personality?.thinking?.length
+        ? adminConfig.ai.personality.thinking
+        : MINA_THINKING_DEFAULT,
+    [adminConfig.ai?.personality?.thinking]
+  );
+
+  const personalityFiller = useMemo(
+    () =>
+      adminConfig.ai?.personality?.filler?.length
+        ? adminConfig.ai.personality.filler
+        : MINA_FILLER_DEFAULT,
+    [adminConfig.ai?.personality?.filler]
+  );
+
   const imageCost = credits?.meta?.imageCost ?? adminConfig.pricing?.imageCost ?? 1;
   const motionCost = credits?.meta?.motionCost ?? adminConfig.pricing?.motionCost ?? 5;
 
@@ -784,8 +818,49 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
     };
   }, [animateImage?.remoteUrl, animateImage?.url, latestStill?.aspectRatio, latestStill?.url, currentAspect.ratio]);
 
+  useEffect(() => {
+    const url = currentMotion?.url || currentStill?.url;
+    if (!url) {
+      setIsRightMediaDark(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      if (cancelled) return;
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = 10;
+        canvas.height = 10;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, 10, 10);
+        const data = ctx.getImageData(0, 0, 10, 10).data;
+        let total = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          total += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        }
+        const avg = total / (data.length / 4 || 1);
+        setIsRightMediaDark(avg < 90);
+      } catch {
+        setIsRightMediaDark(false);
+      }
+    };
+    img.onerror = () => {
+      if (!cancelled) setIsRightMediaDark(false);
+    };
+    img.src = url;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentMotion?.url, currentStill?.url]);
+
   const motionTextTrimmed = motionDescription.trim();
   const canCreateMotion = !!motionReferenceImageUrl && motionTextTrimmed.length > 0 && !motionSuggestTyping;
+  const minaBusy = stillGenerating || motionGenerating || motionSuggestLoading || motionSuggestTyping;
   // ========================================================================
   // [PART 5 END]
   // ========================================================================
@@ -817,6 +892,38 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
       // ignore
     }
   }, [likedMap]);
+
+  useEffect(() => {
+    if (!minaBusy) {
+      setMinaTalking(false);
+      setMinaMessage("");
+      return undefined;
+    }
+
+    setMinaTalking(true);
+    const phrases = [...personalityThinking, ...personalityFiller];
+    let phraseIndex = 0;
+    let charIndex = 0;
+    let raf: number;
+
+    const typeTick = () => {
+      const phrase = phrases[phraseIndex % phrases.length] || "";
+      charIndex = (charIndex + 1) % (phrase.length + 1 || 1);
+      setMinaMessage(phrase.slice(0, charIndex) || personalityFiller[0] || "typing…");
+
+      if (charIndex >= phrase.length) {
+        phraseIndex += 1;
+      }
+
+      raf = window.setTimeout(typeTick, 55);
+    };
+
+    raf = window.setTimeout(typeTick, 55);
+
+    return () => {
+      window.clearTimeout(raf);
+    };
+  }, [minaBusy, personalityThinking, personalityFiller]);
 
   useEffect(() => {
     // Stage 0: only textarea (no pills, no panels)
@@ -1530,6 +1637,27 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
     });
   };
 
+  const handleToggleAnimateMode = () => {
+    setAnimateMode((prev) => {
+      const next = !prev;
+      if (!prev && !uploads.product.length && latestStill?.url) {
+        setUploads((curr) => ({
+          ...curr,
+          product: [
+            {
+              id: `product_auto_${Date.now()}`,
+              kind: "url",
+              url: latestStill.url,
+              remoteUrl: latestStill.url,
+              uploading: false,
+            },
+          ],
+        }));
+      }
+      return next;
+    });
+  };
+
   // Open panel (click only)
   const openPanel = (key: PanelKey) => {
     if (!stageHasPills) return;
@@ -1545,6 +1673,9 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
     if (panel === "inspiration") return 4;
     return 1; // product + logo
   };
+
+  const pickTargetPanel = (): UploadPanelKey =>
+    activePanel === "logo" ? "logo" : activePanel === "inspiration" ? "inspiration" : "product";
 
   const addFilesToPanel = (panel: UploadPanelKey, files: FileList) => {
     const max = capForPanel(panel);
@@ -1629,6 +1760,11 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
     void startStoreForUrlItem(panel, id, url);
   };
 
+  const handlePasteImageUrl = (url: string) => {
+    const targetPanel = pickTargetPanel();
+    addUrlToPanel(targetPanel, url);
+  };
+
   const removeUploadItem = (panel: UploadPanelKey, id: string) => {
     setUploads((prev) => {
       const item = prev[panel].find((x) => x.id === id);
@@ -1672,8 +1808,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   useEffect(() => {
     if (uiStage === 0) return;
 
-    const targetPanel: UploadPanelKey =
-      activePanel === "logo" ? "logo" : activePanel === "inspiration" ? "inspiration" : "product";
+    const targetPanel: UploadPanelKey = pickTargetPanel();
 
     const onDragEnter = (e: DragEvent) => {
       if (!e.dataTransfer) return;
@@ -1708,6 +1843,8 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
 
     const onPaste = (e: ClipboardEvent) => {
       if (!e.clipboardData) return;
+      const targetEl = e.target as HTMLElement | null;
+      const isTypingField = !!targetEl?.closest("textarea, input, [contenteditable='true']");
 
       // image paste
       const items = Array.from(e.clipboardData.items || []);
@@ -1715,7 +1852,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
       if (imgItem) {
         const file = imgItem.getAsFile();
         if (file) {
-          e.preventDefault();
+          if (!isTypingField) e.preventDefault();
           const list = {
             0: file,
             length: 1,
@@ -1730,7 +1867,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
       const text = e.clipboardData.getData("text/plain") || "";
       const url = extractFirstHttpUrl(text);
       if (url && /\.(png|jpe?g|webp|gif|avif)(\?.*)?$/i.test(url)) {
-        e.preventDefault();
+        if (!isTypingField) e.preventDefault();
         addUrlToPanel(targetPanel, url);
       }
     };
@@ -2330,7 +2467,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
           <div className="studio-header-right">
             {activeTab === "studio" && (
               <>
-                <button type="button" className="studio-header-cta" onClick={() => setAnimateMode((v) => !v)}>
+                <button type="button" className="studio-header-cta" onClick={handleToggleAnimateMode}>
                   {animateMode ? "Create" : "Animate this"}
                 </button>
 
@@ -2378,7 +2515,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
               briefFocused={briefFocused}
               setBriefFocused={setBriefFocused}
               animateMode={animateMode}
-              onToggleAnimateMode={setAnimateMode}
+              onToggleAnimateMode={handleToggleAnimateMode}
               activePanel={activePanel}
               openPanel={openPanel}
               pillInitialDelayMs={PILL_INITIAL_DELAY_MS}
@@ -2412,6 +2549,7 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
               cancelRenameStyle={cancelRenameStyle}
               deleteCustomStyle={deleteCustomStyle}
               onOpenCustomStylePanel={handleOpenCustomStylePanel}
+              onImageUrlPasted={handlePasteImageUrl}
               minaVisionEnabled={minaVisionEnabled}
               onToggleVision={() => setMinaVisionEnabled((p) => !p)}
               stillGenerating={stillGenerating}
@@ -2425,6 +2563,9 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
               motionGenerating={motionGenerating}
               motionError={motionError}
               onCreateMotion={handleGenerateMotion}
+              onTypeForMe={handleSuggestMotion}
+              minaMessage={minaMessage}
+              minaTalking={minaTalking}
               onGoProfile={() => setActiveTab("profile")}
             />
             {renderStudioRight()}

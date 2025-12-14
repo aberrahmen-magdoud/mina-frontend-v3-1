@@ -25,6 +25,10 @@ export type AdminConfig = {
     context: string;
     providerParams: ProviderParam[];
     futureReplicateNotes: string;
+    personality?: {
+      thinking: string[];
+      filler: string[];
+    };
   };
   pricing: {
     defaultCredits: number;
@@ -90,6 +94,21 @@ export function getDefaultAdminConfig(): AdminConfig {
       context: "You are Mina, an editorial AI assistant.",
       providerParams: [{ key: "seadream_mode", value: "fast" }],
       futureReplicateNotes: "Paste replicate snippets for future SVG/audio here.",
+      personality: {
+        thinking: [
+          "Sketching ideas…",
+          "Let me weave a scene…",
+          "Curating tiny details…",
+          "Whispering to the lens…",
+          "Layering mood + motion…",
+          "Painting with light…",
+          "Mixing silk, glass, shine…",
+          "Checking the perfect drip…",
+          "Setting the camera drift…",
+          "Dreaming in slow loops…",
+        ],
+        filler: ["typing…", "breathing…", "thinking aloud…", "refining…"],
+      },
     },
     pricing: {
       defaultCredits: 15,
@@ -127,7 +146,14 @@ export function loadAdminConfig(): AdminConfig {
     return {
       ...getDefaultAdminConfig(),
       ...parsed,
-      ai: { ...getDefaultAdminConfig().ai, ...parsed.ai },
+      ai: {
+        ...getDefaultAdminConfig().ai,
+        ...parsed.ai,
+        personality: {
+          ...getDefaultAdminConfig().ai.personality,
+          ...(parsed.ai?.personality ?? {}),
+        },
+      },
       pricing: { ...getDefaultAdminConfig().pricing, ...parsed.pricing },
       styles: { ...getDefaultAdminConfig().styles, ...parsed.styles },
       generations: { ...getDefaultAdminConfig().generations, ...parsed.generations },
