@@ -138,6 +138,10 @@ export function createDefaultAdminConfig(): AdminConfig {
   };
 }
 
+export function loadAdminConfig(): AdminConfig {
+  return createDefaultAdminConfig();
+}
+
 function sanitizeConfigForSave(cfg: AdminConfig): AdminConfig {
   const copy: AdminConfig = JSON.parse(JSON.stringify(cfg));
 

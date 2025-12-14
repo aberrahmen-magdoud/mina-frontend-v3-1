@@ -62,9 +62,6 @@ type StudioLeftProps = {
   onBriefScroll: () => void;
   onBriefChange: (value: string) => void;
 
-  briefFocused: boolean;
-  setBriefFocused: (v: boolean) => void;
-
   activePanel: PanelKey;
   openPanel: (key: PanelKey) => void;
 
@@ -251,9 +248,6 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
     briefShellRef,
     onBriefScroll,
     onBriefChange,
-
-    briefFocused,
-    setBriefFocused,
 
     activePanel,
     openPanel,
@@ -458,7 +452,6 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
       return;
     }
     if (createState === "describe_more") {
-      setBriefFocused(true);
       requestAnimationFrame(() => briefInputRef.current?.focus());
     }
   };
@@ -679,8 +672,6 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                 value={brief}
                 onChange={(e) => onBriefChange(e.target.value)}
                 rows={4}
-                onFocus={() => setBriefFocused(true)}
-                onBlur={() => setBriefFocused(false)}
                 onPaste={(e) => {
                   const text = e.clipboardData?.getData("text/plain") || "";
                   if (!text) return;
@@ -698,17 +689,13 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
               </div>
               {briefHintVisible && <div className="studio-brief-hint">Describe more</div>}
             </div>
-            {minaMessage && (
-              <div className={classNames("studio-mina-typing", minaTalking && "is-active")}>{minaMessage}</div>
-            )}
           </div>
         </div>
 
         {/* Panels */}
-        {!briefFocused && (
-          <div className="mina-left-block">
-            {!isMotion ? (
-              <>
+        <div className="mina-left-block">
+          {!isMotion ? (
+            <>
                 <Collapse open={showPanels && (effectivePanel === "product" || activePanel === null)} delayMs={panelRevealDelayMs}>
                   <div className="studio-panel">
                     <div className="studio-panel-title">Add your product</div>
@@ -974,8 +961,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                 {isMotion && motionError && <div className="error-text">{motionError}</div>}
               </div>
             )}
-          </div>
-        )}
+        </div>
 
         {/* Hidden file inputs */}
         <input

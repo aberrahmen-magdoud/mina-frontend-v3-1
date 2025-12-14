@@ -225,7 +225,10 @@ const MINA_THINKING_DEFAULT = [
 
 const MINA_FILLER_DEFAULT = ["typing…", "breathing…", "thinking aloud…", "refining…"];
 
-const ADMIN_EMAILS = ADMIN_ALLOWLIST;
+const ADMIN_EMAILS = (import.meta.env.VITE_MINA_ADMIN_EMAILS || "")
+  .split(",")
+  .map((email) => email.trim())
+  .filter(Boolean);
 
 const STYLE_PRESETS = [
   {
@@ -258,7 +261,7 @@ const PILL_STAGGER_MS = 90; // delay between each pill (accordion / wave)
 const PILL_SLIDE_DURATION_MS = 320; // slide + fade duration (must exceed stagger for smoothness)
 const PANEL_REVEAL_DELAY_MS = PILL_INITIAL_DELAY_MS; // panel shows with first pill
 const CONTROLS_REVEAL_DELAY_MS = 3800; // vision + create show later
-const GROUP_FADE_DURATION_MS = 320; // shared fade timing for pills/panels/controls/textarea
+const GROUP_FADE_DURATION_MS = 420; // shared fade timing for pills/panels/controls/textarea
 const TYPING_HIDE_DELAY_MS = 2000; // wait before hiding UI when typing starts
 const TYPING_REVEAL_DELAY_MS = 1000; // wait before showing UI after typing stops
 const TEXTAREA_FLOAT_DISTANCE_PX = 4; // tiny translate to avoid layout jump
@@ -422,7 +425,6 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   const [activeTab, setActiveTab] = useState<"studio" | "profile">("studio");
   const [customerId, setCustomerId] = useState<string>(() => getInitialCustomerId(initialCustomerId));
   const [customerIdInput, setCustomerIdInput] = useState<string>(customerId);
-  const [briefFocused, setBriefFocused] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [adminConfig, setAdminConfig] = useState(loadAdminConfig());
@@ -955,17 +957,22 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
 
     const typeTick = () => {
       const phrase = phrases[phraseIndex % phrases.length] || "";
-      charIndex = (charIndex + 1) % (phrase.length + 1 || 1);
-      setMinaMessage(phrase.slice(0, charIndex) || personalityFiller[0] || "typing…");
+      const nextChar = charIndex + 1;
+      const nextSlice = phrase.slice(0, Math.min(nextChar, phrase.length));
 
-      if (charIndex >= phrase.length) {
+      setMinaMessage(nextSlice || personalityFiller[0] || "typing…");
+
+      const reachedEnd = nextChar > phrase.length;
+      charIndex = reachedEnd ? 0 : nextChar;
+      if (reachedEnd) {
         phraseIndex += 1;
       }
 
-      raf = window.setTimeout(typeTick, 55);
+      const pause = reachedEnd ? 360 : 140;
+      raf = window.setTimeout(typeTick, pause);
     };
 
-    raf = window.setTimeout(typeTick, 55);
+    raf = window.setTimeout(typeTick, 140);
 
     return () => {
       window.clearTimeout(raf);
@@ -2571,8 +2578,6 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
               briefShellRef={briefShellRef}
               onBriefScroll={handleBriefScroll}
               onBriefChange={handleBriefChange}
-              briefFocused={briefFocused}
-              setBriefFocused={setBriefFocused}
               animateMode={animateMode}
               onToggleAnimateMode={handleToggleAnimateMode}
               activePanel={activePanel}
