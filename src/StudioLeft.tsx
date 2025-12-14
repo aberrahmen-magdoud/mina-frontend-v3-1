@@ -45,7 +45,7 @@ export type AspectOptionLike = {
   platformKey?: string;
 };
 
-export type MotionStyleKey = "melt" | "drop" | "expand" | "satisfying" | "slow_motion" | "fix_camera";
+export type MotionStyleKey = "melt" | "drop" | "expand" | "satisfying" | "slow_motion" | "fix_camera" | "loop";
 
 type StudioLeftProps = {
   globalDragging: boolean;
@@ -223,12 +223,14 @@ const Collapse: React.FC<{
 // Motion styles (exactly 6)
 // ------------------------------------
 const MOTION_STYLES: Array<{ key: MotionStyleKey; label: string; seed: string }> = [
-  { key: "melt", label: "Melt", seed: "Slow, elegant melting motion—soft drips, glossy tension, luxury macro feel." },
-  { key: "drop", label: "Drop", seed: "Gentle droplets falling in slow rhythm—minimal, ASMR, clean editorial motion." },
-  { key: "expand", label: "Expand", seed: "Subtle expansion / blooming—fabric or liquid spreading softly, calm luxury vibe." },
-  { key: "satisfying", label: "Satisfying", seed: "Perfectly smooth, satisfying motion loop—micro movements, clean, premium." },
-  { key: "slow_motion", label: "Slow motion", seed: "Ultra slow camera drift + tiny prop movement—soft light shifts, premium calm." },
-  { key: "fix_camera", label: "Fix camera", seed: "Fixed camera, only scene moves—minimal loop, tiny motion in light/props." },
+  { key: "melt", label: "Melt", seed: "Slow, asmr, melting motion—soft drips, luxury macro feel." },
+  { key: "drop", label: "Drop", seed: "Falling in slow rhythm—minimal, ASMR, drops." },
+  { key: "expand", label: "Expand", seed: "Subtle expansion, calm luxury vibe." },
+  { key: "satisfying", label: "Satisfying", seed: "Slime video, satisfying, smooth, satisfying, motion loop—micro movements, clean, premium." },
+  { key: "slow_motion", label: "Slow motion", seed: "Ultra slow motion, 1000fps, asmr, premium calm." },
+  { key: "fix_camera", label: "Still camera", seed: "fix camera},
+  { key: "loop", label: "Perfect loop", seed: "perfect loop},
+
 ];
 
 // ============================================================================
