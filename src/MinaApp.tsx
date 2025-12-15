@@ -1073,151 +1073,188 @@ useEffect(() => {
     persistCustomerId(customerId);
   }, [customerId]);
 
-  useEffect(() => {
+    useEffect(() => {
     let cancelled = false;
 
-    const hydrateUser = async () => {
+    const applySession = async () => {
       try {
-        const { data } = await supabase.auth.getUser();
+        const { data } = await supabase.auth.getSession();
         if (cancelled) return;
-        const email = (data.user?.email || customerId || "").toLowerCase();
-        setCurrentUserEmail(email || null);
+
+        const email = (data.session?.user?.email || "").toLowerCase() || null;
+        setCurrentUserEmail(email);
+
+        // Keep legacy fallback: ADMIN_EMAILS
         setIsAdmin(email ? ADMIN_EMAILS.includes(email) : false);
+
+        // Optional: also allow Supabase table allowlist to grant admin
+        if (email) {
+          const { data: row, error } = await supabase
+            .from(ADMIN_ALLOWLIST_TABLE)
+            .select("email")
+            .eq("email", email)
+            .limit(1)
+            .maybeSingle();
+
+          if (!cancelled && !error && row?.email) setIsAdmin(true);
+        }
+
+        // Optional: if customerId is still default/anonymous, adopt Supabase user.id (stable)
+        const uid = data.session?.user?.id;
+        if (!cancelled && uid && (!customerId || customerId === "anonymous")) {
+          setCustomerId(uid);
+        }
       } catch {
-        if (!cancelled) setIsAdmin(false);
+        if (!cancelled) {
+          setCurrentUserEmail(null);
+          setIsAdmin(false);
+        }
       }
     };
 
-    void hydrateUser();
+    void applySession();
+
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (cancelled) return;
+
+      const email = (session?.user?.email || "").toLowerCase() || null;
+      setCurrentUserEmail(email);
+      setIsAdmin(email ? ADMIN_EMAILS.includes(email) : false);
+
+      // Optional: allowlist table can grant admin even if not in ADMIN_EMAILS
+      if (email) {
+        try {
+          const { data: row, error } = await supabase
+            .from(ADMIN_ALLOWLIST_TABLE)
+            .select("email")
+            .eq("email", email)
+            .limit(1)
+            .maybeSingle();
+
+          if (!cancelled && !error && row?.email) setIsAdmin(true);
+        } catch {
+          // ignore
+        }
+      }
+
+      // Optional: adopt Supabase user.id when customerId is still default/anonymous
+      const uid = session?.user?.id;
+      if (uid && (!customerId || customerId === "anonymous")) {
+        setCustomerId(uid);
+      }
+    });
 
     return () => {
       cancelled = true;
-    };
-  }, [customerId]);
-
-  useEffect(() => {
-    if (!API_BASE_URL || !customerId) return;
-
-    const bootstrap = async () => {
-      await handleCheckHealth();
-      await fetchCredits();
-      await ensureSession();
-      await fetchHistory();
-    };
-
-    void bootstrap();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customerId]);
-
-  // clear "describe more" timer on unmount
-  useEffect(() => {
-    return () => {
-      if (describeMoreTimeoutRef.current !== null) {
-        window.clearTimeout(describeMoreTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  // revoke blob urls on unmount
-  useEffect(() => {
-    return () => {
-      const revokeIfBlob = (u?: string) => {
-        if (u && u.startsWith("blob:")) {
-          try {
-            URL.revokeObjectURL(u);
-          } catch {
-            // ignore
-          }
-        }
-      };
-
-      // Use refs so we always cleanup the latest state on unmount
-      const snap = uploadsRef.current;
-      snap.product.forEach((x) => revokeIfBlob(x.url));
-      snap.logo.forEach((x) => revokeIfBlob(x.url));
-      snap.inspiration.forEach((x) => revokeIfBlob(x.url));
-
-      revokeIfBlob(customStyleHeroThumbRef.current || undefined);
-
-      customStyleImagesRef.current.forEach((img) => {
-        revokeIfBlob(img.url);
-      });
+      sub.subscription.unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
 
   // ========================================================================
   // [PART 6 END]
   // ========================================================================
 
   // ========================================================================
-  // [PART 7 START] API helpers
-  // ========================================================================
-  const handleCheckHealth = async () => {
-    if (!API_BASE_URL) return;
-    try {
-      setCheckingHealth(true);
-      const res = await fetch(`${API_BASE_URL}/health`);
-      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
-      setHealth({ ok: json.ok ?? false, message: json.message ?? "" });
-    } catch (err: any) {
-      setHealth({ ok: false, message: err?.message || "Unable to reach Mina." });
-    } finally {
-      setCheckingHealth(false);
-    }
-  };
+// [PART 7 START] API helpers
+// ========================================================================
 
-  const fetchCredits = async () => {
-    if (!API_BASE_URL || !customerId) return;
-    try {
-      setCreditsLoading(true);
-      const params = new URLSearchParams({ customerId });
-      const res = await fetch(`${API_BASE_URL}/credits/balance?${params}`);
-      if (!res.ok) return;
-      const json = (await res.json()) as { balance: number; meta?: { imageCost: number; motionCost: number } };
-      setCredits({ balance: json.balance, meta: json.meta });
-    } catch {
-      // silent
-    } finally {
-      setCreditsLoading(false);
-    }
-  };
-
-  const ensureSession = async (): Promise<string | null> => {
-    if (sessionId) return sessionId;
-    if (!API_BASE_URL || !customerId) return null;
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/sessions/start`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerId,
-          platform: currentAspect.platformKey,
-          title: sessionTitle,
-        }),
-      });
-
-      if (!res.ok) return null;
-      const json = (await res.json()) as { ok: boolean; session?: { id: string; title?: string } };
-      if (json.ok && json.session?.id) {
-        setSessionId(json.session.id);
-        setSessionTitle(json.session.title || sessionTitle);
-        return json.session.id;
-      }
-    } catch {
-      // ignore
-    }
+// ------------------------------------------------------------------------
+// Supabase → API auth bridge
+// Every Mina API call remains API-based, but gets Supabase JWT automatically.
+// ------------------------------------------------------------------------
+const getSupabaseAccessToken = async (): Promise<string | null> => {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token || null;
+  } catch {
     return null;
-  };
+  }
+};
 
- // fetchHistory: always copy generation URLs into R2 before displaying
+const apiFetch = async (path: string, init: RequestInit = {}) => {
+  if (!API_BASE_URL) throw new Error("Missing API base URL");
 
-  const fetchHistory = async () => {
+  const headers = new Headers(init.headers || {});
+  const token = await getSupabaseAccessToken();
+
+  // Attach JWT for your backend to verify (safe even if backend ignores it)
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  // Ensure JSON content-type when body is present and caller didn't specify
+  if (init.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  return fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+};
+
+const handleCheckHealth = async () => {
+  if (!API_BASE_URL) return;
+  try {
+    setCheckingHealth(true);
+    const res = await apiFetch("/health");
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
+    setHealth({ ok: json.ok ?? false, message: json.message ?? "" });
+  } catch (err: any) {
+    setHealth({ ok: false, message: err?.message || "Unable to reach Mina." });
+  } finally {
+    setCheckingHealth(false);
+  }
+};
+
+const fetchCredits = async () => {
+  if (!API_BASE_URL || !customerId) return;
+  try {
+    setCreditsLoading(true);
+    const params = new URLSearchParams({ customerId });
+    const res = await apiFetch(`/credits/balance?${params.toString()}`);
+    if (!res.ok) return;
+    const json = (await res.json()) as { balance: number; meta?: { imageCost: number; motionCost: number } };
+    setCredits({ balance: json.balance, meta: json.meta });
+  } catch {
+    // silent
+  } finally {
+    setCreditsLoading(false);
+  }
+};
+
+const ensureSession = async (): Promise<string | null> => {
+  if (sessionId) return sessionId;
+  if (!API_BASE_URL || !customerId) return null;
+
+  try {
+    const res = await apiFetch("/sessions/start", {
+      method: "POST",
+      body: JSON.stringify({
+        customerId,
+        platform: currentAspect.platformKey,
+        title: sessionTitle,
+      }),
+    });
+
+    if (!res.ok) return null;
+    const json = (await res.json()) as { ok: boolean; session?: { id: string; title?: string } };
+    if (json.ok && json.session?.id) {
+      setSessionId(json.session.id);
+      setSessionTitle(json.session.title || sessionTitle);
+      return json.session.id;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+};
+
+// fetchHistory: always copy generation URLs into R2 before displaying
+const fetchHistory = async () => {
   if (!API_BASE_URL || !customerId) return;
   try {
     setHistoryLoading(true);
-    const res = await fetch(`${API_BASE_URL}/history/customer/${encodeURIComponent(customerId)}`);
+    const res = await apiFetch(`/history/customer/${encodeURIComponent(customerId)}`);
     if (!res.ok) throw new Error(`Status ${res.status}`);
     const json = (await res.json()) as HistoryResponse;
     if (!json.ok) throw new Error("History error");
@@ -1247,143 +1284,137 @@ useEffect(() => {
   }
 };
 
-  
-  const getEditorialNumber = (id: string, index: number) => {
-    const fallback = padEditorialNumber(index + 1);
-    const custom = numberMap[id];
-    return custom ? custom : fallback;
-  };
+const getEditorialNumber = (id: string, index: number) => {
+  const fallback = padEditorialNumber(index + 1);
+  const custom = numberMap[id];
+  return custom ? custom : fallback;
+};
 
-  const handleBeginEditNumber = (id: string, index: number) => {
-    if (!isAdmin) return;
-    setEditingNumberId(id);
-    setEditingNumberValue(getEditorialNumber(id, index));
-  };
+const handleBeginEditNumber = (id: string, index: number) => {
+  if (!isAdmin) return;
+  setEditingNumberId(id);
+  setEditingNumberValue(getEditorialNumber(id, index));
+};
 
-  const handleCommitNumber = () => {
-    if (!editingNumberId) return;
-    const cleaned = editingNumberValue.trim();
-    setNumberMap((prev) => ({ ...prev, [editingNumberId]: cleaned || padEditorialNumber(cleaned) }));
-    setEditingNumberId(null);
-    setEditingNumberValue("");
-  };
+const handleCommitNumber = () => {
+  if (!editingNumberId) return;
+  const cleaned = editingNumberValue.trim();
+  setNumberMap((prev) => ({ ...prev, [editingNumberId]: cleaned || padEditorialNumber(cleaned) }));
+  setEditingNumberId(null);
+  setEditingNumberValue("");
+};
 
-  const handleCancelNumberEdit = () => {
-    setEditingNumberId(null);
-    setEditingNumberValue("");
-  };
+const handleCancelNumberEdit = () => {
+  setEditingNumberId(null);
+  setEditingNumberValue("");
+};
 
-  const handleDownloadGeneration = (item: GenerationRecord, label: string) => {
-    const link = document.createElement("a");
-    link.href = item.outputUrl;
-    link.download = `mina-v3-prompt-${label || item.id}`;
-    link.target = "_blank";
-    link.rel = "noreferrer";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+const handleDownloadGeneration = (item: GenerationRecord, label: string) => {
+  const link = document.createElement("a");
+  link.href = item.outputUrl;
+  link.download = `mina-v3-prompt-${label || item.id}`;
+  link.target = "_blank";
+  link.rel = "noreferrer";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
 
-  const handleBrandingChange = (side: "left" | "right", field: string, value: string) => {
-    if (side === "left") {
-      setBrandingLeft((prev) => ({ ...prev, [field]: value }));
-    } else {
-      setBrandingRight((prev) => ({ ...prev, [field]: value }));
-    }
-  };
+const handleBrandingChange = (side: "left" | "right", field: string, value: string) => {
+  if (side === "left") {
+    setBrandingLeft((prev) => ({ ...prev, [field]: value }));
+  } else {
+    setBrandingRight((prev) => ({ ...prev, [field]: value }));
+  }
+};
 
-  const stopBrandingEdit = () => setBrandingEditing(null);
-  // ========================================================================
-  // [PART 7 END]
-  // ========================================================================
+const stopBrandingEdit = () => setBrandingEditing(null);
+// ========================================================================
+// [PART 7 END]
+// ========================================================================
 
-  // ==============================
-  // R2 helpers (upload + store)
-  // ==============================
-  function pickUrlFromR2Response(json: any): string | null {
-    if (!json) return null;
-    if (typeof json.url === "string" && json.url.startsWith("http")) return json.url;
-    if (typeof json.signedUrl === "string" && json.signedUrl.startsWith("http")) return json.signedUrl;
-    if (typeof json.publicUrl === "string" && json.publicUrl.startsWith("http")) return json.publicUrl;
-    if (json.result && typeof json.result.url === "string" && json.result.url.startsWith("http")) return json.result.url;
-    if (json.data && typeof json.data.url === "string" && json.data.url.startsWith("http")) return json.data.url;
-    return null;
+// ==============================
+// R2 helpers (upload + store)
+// ==============================
+function pickUrlFromR2Response(json: any): string | null {
+  if (!json) return null;
+  if (typeof json.url === "string" && json.url.startsWith("http")) return json.url;
+  if (typeof json.signedUrl === "string" && json.signedUrl.startsWith("http")) return json.signedUrl;
+  if (typeof json.publicUrl === "string" && json.publicUrl.startsWith("http")) return json.publicUrl;
+  if (json.result && typeof json.result.url === "string" && json.result.url.startsWith("http")) return json.result.url;
+  if (json.data && typeof json.data.url === "string" && json.data.url.startsWith("http")) return json.data.url;
+  return null;
+}
+
+async function uploadFileToR2(panel: UploadPanelKey, file: File): Promise<string> {
+  const dataUrl = await fileToDataUrl(file);
+
+  const res = await apiFetch("/api/r2/upload-signed", {
+    method: "POST",
+    body: JSON.stringify({
+      dataUrl,
+      kind: panel, // "product" | "logo" | "inspiration"
+      customerId, // track who uploaded
+    }),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json?.ok === false) {
+    throw new Error(json?.message || json?.error || `Upload failed (${res.status})`);
   }
 
-  async function uploadFileToR2(panel: UploadPanelKey, file: File): Promise<string> {
-    if (!API_BASE_URL) throw new Error("Missing API base URL");
-    const dataUrl = await fileToDataUrl(file);
+  const url = pickUrlFromR2Response(json);
+  if (!url) throw new Error("Upload succeeded but no URL returned");
+  return url;
+}
 
-    const res = await fetch(`${API_BASE_URL}/api/r2/upload-signed`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        dataUrl,
-        kind: panel, // "product" | "logo" | "inspiration"
-        customerId, // so you can track who uploaded
-      }),
-    });
+async function storeRemoteToR2(url: string, kind: string): Promise<string> {
+  const res = await apiFetch("/api/r2/store-remote-signed", {
+    method: "POST",
+    body: JSON.stringify({
+      url,
+      kind, // "generations" | "motions" | etc.
+      customerId,
+    }),
+  });
 
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok || json?.ok === false) {
-      throw new Error(json?.message || json?.error || `Upload failed (${res.status})`);
-    }
-
-    const url = pickUrlFromR2Response(json);
-    if (!url) throw new Error("Upload succeeded but no URL returned");
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json?.ok === false) {
+    // non-blocking: fall back to original URL
     return url;
   }
 
-  async function storeRemoteToR2(url: string, kind: string): Promise<string> {
-    if (!API_BASE_URL) throw new Error("Missing API base URL");
+  return pickUrlFromR2Response(json) || url;
+}
 
-    const res = await fetch(`${API_BASE_URL}/api/r2/store-remote-signed`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url,
-        kind, // "generations" | "motions" | etc.
-        customerId,
-      }),
-    });
+function patchUploadItem(panel: UploadPanelKey, id: string, patch: Partial<UploadItem>) {
+  setUploads((prev) => ({
+    ...prev,
+    [panel]: prev[panel].map((it) => (it.id === id ? { ...it, ...patch } : it)),
+  }));
+}
 
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok || json?.ok === false) {
-      // if storing fails, just return original url (non-blocking)
-      return url;
-    }
-
-    return pickUrlFromR2Response(json) || url;
+async function startUploadForFileItem(panel: UploadPanelKey, id: string, file: File) {
+  try {
+    patchUploadItem(panel, id, { uploading: true, error: undefined });
+    const remoteUrl = await uploadFileToR2(panel, file);
+    patchUploadItem(panel, id, { remoteUrl, uploading: false });
+  } catch (err: any) {
+    patchUploadItem(panel, id, { uploading: false, error: err?.message || "Upload failed" });
   }
+}
 
-  function patchUploadItem(panel: UploadPanelKey, id: string, patch: Partial<UploadItem>) {
-    setUploads((prev) => ({
-      ...prev,
-      [panel]: prev[panel].map((it) => (it.id === id ? { ...it, ...patch } : it)),
-    }));
+async function startStoreForUrlItem(panel: UploadPanelKey, id: string, url: string) {
+  try {
+    patchUploadItem(panel, id, { uploading: true, error: undefined });
+    const remoteUrl = await storeRemoteToR2(url, panel);
+    patchUploadItem(panel, id, { remoteUrl, uploading: false });
+  } catch (err: any) {
+    patchUploadItem(panel, id, { uploading: false, error: err?.message || "Store failed" });
   }
+}
 
-  async function startUploadForFileItem(panel: UploadPanelKey, id: string, file: File) {
-    try {
-      patchUploadItem(panel, id, { uploading: true, error: undefined });
-      const remoteUrl = await uploadFileToR2(panel, file);
-      patchUploadItem(panel, id, { remoteUrl, uploading: false });
-    } catch (err: any) {
-      patchUploadItem(panel, id, { uploading: false, error: err?.message || "Upload failed" });
-    }
-  }
-
-  async function startStoreForUrlItem(panel: UploadPanelKey, id: string, url: string) {
-    try {
-      patchUploadItem(panel, id, { uploading: true, error: undefined });
-      const remoteUrl = await storeRemoteToR2(url, panel);
-      patchUploadItem(panel, id, { remoteUrl, uploading: false });
-    } catch (err: any) {
-      patchUploadItem(panel, id, { uploading: false, error: err?.message || "Store failed" });
-    }
-  }
-
-  // ========================================================================
+// ========================================================================
 // [PART 9 START] Stills (editorial)
 // ========================================================================
 const handleGenerateStill = async () => {
@@ -1451,9 +1482,8 @@ const handleGenerateStill = async () => {
 
     if (inspirationUrls.length) payload.styleImageUrls = inspirationUrls;
 
-    const res = await fetch(`${API_BASE_URL}/editorial/generate`, {
+    const res = await apiFetch("/editorial/generate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
@@ -1496,8 +1526,7 @@ const handleGenerateStill = async () => {
     // ✅ Show “real text” AFTER response (prefer server userMessage; fallback to user brief)
     if (minaVisionEnabled) {
       const gptAny = (data as any)?.gpt || {};
-      const serverUserMessage =
-        typeof gptAny.userMessage === "string" ? gptAny.userMessage.trim() : "";
+      const serverUserMessage = typeof gptAny.userMessage === "string" ? gptAny.userMessage.trim() : "";
       const imageTexts = Array.isArray(gptAny.imageTexts)
         ? gptAny.imageTexts.filter((x: any) => typeof x === "string" && x.trim())
         : [];
@@ -1523,264 +1552,260 @@ const handleGenerateStill = async () => {
 // [PART 9 END]
 // ========================================================================
 
+// ========================================================================
+// [PART 10 START] Motion (suggest + generate)
+// ========================================================================
+const applyMotionSuggestionText = async (text: string) => {
+  if (!text) return;
+  if (describeMoreTimeoutRef.current !== null) {
+    window.clearTimeout(describeMoreTimeoutRef.current);
+    describeMoreTimeoutRef.current = null;
+  }
+  setShowDescribeMore(false);
+  setMotionSuggestTyping(true);
 
-  // ========================================================================
-  // [PART 10 START] Motion (suggest + generate)
-  // ========================================================================
-  const applyMotionSuggestionText = async (text: string) => {
-    if (!text) return;
-    if (describeMoreTimeoutRef.current !== null) {
-      window.clearTimeout(describeMoreTimeoutRef.current);
-      describeMoreTimeoutRef.current = null;
+  for (let i = 0; i < text.length; i++) {
+    const next = text.slice(0, i + 1);
+    setMotionDescription(next);
+    setBrief(next);
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => setTimeout(resolve, 12));
+  }
+
+  setMotionSuggestTyping(false);
+};
+
+const handleSuggestMotion = async () => {
+  if (!API_BASE_URL || !motionReferenceImageUrl || motionSuggestLoading || motionSuggestTyping) return;
+
+  setAnimateMode(true);
+
+  try {
+    setMotionSuggestLoading(true);
+    setMotionSuggestError(null);
+
+    const res = await apiFetch("/motion/suggest", {
+      method: "POST",
+      body: JSON.stringify({
+        customerId,
+        referenceImageUrl: motionReferenceImageUrl,
+        tone,
+        platform: animateAspectOption.platformKey,
+        minaVisionEnabled,
+        stylePresetKey: stylePresetKeyForApi,
+        motionStyles: motionStyleKeys,
+        aspectRatio: animateAspectOption.ratio,
+      }),
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => null);
+      const msg = errJson?.message || `Error ${res.status}: Failed to suggest motion.`;
+      throw new Error(msg);
     }
-    setShowDescribeMore(false);
-    setMotionSuggestTyping(true);
 
-    for (let i = 0; i < text.length; i++) {
-      const next = text.slice(0, i + 1);
-      setMotionDescription(next);
-      setBrief(next);
-      // small delay for typewriter feel
-      // eslint-disable-next-line no-await-in-loop
-      await new Promise((resolve) => setTimeout(resolve, 12));
-    }
-
+    const data = (await res.json()) as MotionSuggestResponse;
+    if (data.suggestion) await applyMotionSuggestionText(data.suggestion);
+  } catch (err: any) {
+    setMotionSuggestError(err?.message || "Unexpected error suggesting motion.");
+  } finally {
+    setMotionSuggestLoading(false);
     setMotionSuggestTyping(false);
-  };
+  }
+};
 
-  const handleSuggestMotion = async () => {
-    if (!API_BASE_URL || !motionReferenceImageUrl || motionSuggestLoading || motionSuggestTyping) return;
+const handleGenerateMotion = async () => {
+  if (!API_BASE_URL || !motionReferenceImageUrl || !motionTextTrimmed) return;
 
-    setAnimateMode(true);
+  const sid = await ensureSession();
+  if (!sid) {
+    setMotionError("Could not start Mina session.");
+    return;
+  }
 
-    try {
-      setMotionSuggestLoading(true);
-      setMotionSuggestError(null);
-      const res = await fetch(`${API_BASE_URL}/motion/suggest`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerId,
-          referenceImageUrl: motionReferenceImageUrl,
-          tone,
-          platform: animateAspectOption.platformKey,
-          minaVisionEnabled,
-          stylePresetKey: stylePresetKeyForApi,
-          motionStyles: motionStyleKeys,
-          aspectRatio: animateAspectOption.ratio,
-        }),
-      });
+  try {
+    setMotionGenerating(true);
+    setMotionError(null);
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => null);
-        const msg = errJson?.message || `Error ${res.status}: Failed to suggest motion.`;
-        throw new Error(msg);
-      }
+    const res = await apiFetch("/motion/generate", {
+      method: "POST",
+      body: JSON.stringify({
+        customerId,
+        sessionId: sid,
+        lastImageUrl: motionReferenceImageUrl,
+        motionDescription: motionTextTrimmed,
+        tone,
+        platform: animateAspectOption.platformKey,
+        minaVisionEnabled,
+        stylePresetKey: stylePresetKeyForApi,
+        motionStyles: motionStyleKeys,
+        aspectRatio: animateAspectOption.ratio,
+      }),
+    });
 
-      const data = (await res.json()) as MotionSuggestResponse;
-      if (data.suggestion) await applyMotionSuggestionText(data.suggestion);
-    } catch (err: any) {
-      setMotionSuggestError(err?.message || "Unexpected error suggesting motion.");
-    } finally {
-      setMotionSuggestLoading(false);
-      setMotionSuggestTyping(false);
-    }
-  };
-
-  const handleGenerateMotion = async () => {
-    if (!API_BASE_URL || !motionReferenceImageUrl || !motionTextTrimmed) return;
-
-    const sid = await ensureSession();
-    if (!sid) {
-      setMotionError("Could not start Mina session.");
-      return;
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => null);
+      const msg = errJson?.message || `Error ${res.status}: Failed to generate motion.`;
+      throw new Error(msg);
     }
 
-    try {
-      setMotionGenerating(true);
-      setMotionError(null);
+    const data = (await res.json()) as MotionResponse;
+    const url = data.videoUrl;
+    if (!url) throw new Error("No video URL in Mina response.");
 
-      const res = await fetch(`${API_BASE_URL}/motion/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerId,
-          sessionId: sid,
-          lastImageUrl: motionReferenceImageUrl,
-          motionDescription: motionTextTrimmed,
-          tone,
-          platform: animateAspectOption.platformKey,
-          minaVisionEnabled,
-          stylePresetKey: stylePresetKeyForApi,
-          motionStyles: motionStyleKeys,
-          aspectRatio: animateAspectOption.ratio,
-        }),
-      });
+    const storedUrl = await storeRemoteToR2(url, "motions");
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => null);
-        const msg = errJson?.message || `Error ${res.status}: Failed to generate motion.`;
-        throw new Error(msg);
-      }
+    const item: MotionItem = {
+      id: data.generationId || `motion_${Date.now()}`,
+      url: storedUrl,
+      createdAt: new Date().toISOString(),
+      prompt: data.prompt || motionTextTrimmed,
+    };
 
-      const data = (await res.json()) as MotionResponse;
-      const url = data.videoUrl;
-      if (!url) throw new Error("No video URL in Mina response.");
+    setMotionItems((prev) => {
+      const next = [...prev, item];
+      setMotionIndex(next.length - 1);
+      return next;
+    });
 
-      const storedUrl = await storeRemoteToR2(url, "motions");
-
-      const item: MotionItem = {
-        id: data.generationId || `motion_${Date.now()}`,
-        url: storedUrl,
-        createdAt: new Date().toISOString(),
-        prompt: data.prompt || motionTextTrimmed,
-      };
-
-      setMotionItems((prev) => {
-        const next = [...prev, item];
-        setMotionIndex(next.length - 1); // always select newest
-        return next;
-      });
-
-      if (data.credits?.balance !== undefined) {
-        setCredits((prev) => ({
-          balance: data.credits!.balance,
-          meta: prev?.meta,
-        }));
-      }
-    } catch (err: any) {
-      setMotionError(err?.message || "Unexpected error generating motion.");
-    } finally {
-      setMotionGenerating(false);
+    if (data.credits?.balance !== undefined) {
+      setCredits((prev) => ({
+        balance: data.credits!.balance,
+        meta: prev?.meta,
+      }));
     }
-  };
-  // ========================================================================
-  // [PART 10 END]
-  // ========================================================================
+  } catch (err: any) {
+    setMotionError(err?.message || "Unexpected error generating motion.");
+  } finally {
+    setMotionGenerating(false);
+  }
+};
+// ========================================================================
+// [PART 10 END]
+// ========================================================================
 
-  // ========================================================================
-  // [PART 11 START] Feedback / like / download
-  // ========================================================================
-  const getCurrentMediaKey = () => {
-    const mediaType = currentMotion ? "motion" : currentStill ? "still" : null;
-    if (!mediaType) return null;
+// ========================================================================
+// [PART 11 START] Feedback / like / download
+// ========================================================================
+const getCurrentMediaKey = () => {
+  const mediaType = currentMotion ? "motion" : currentStill ? "still" : null;
+  if (!mediaType) return null;
 
-    const rawKey = currentMotion?.id || currentStill?.id || currentMotion?.url || currentStill?.url;
-    return rawKey ? `${mediaType}:${rawKey}` : null;
-  };
+  const rawKey = currentMotion?.id || currentStill?.id || currentMotion?.url || currentStill?.url;
+  return rawKey ? `${mediaType}:${rawKey}` : null;
+};
 
-  const handleLikeCurrentStill = async () => {
-    const targetMedia = currentMotion || currentStill;
-    if (!targetMedia) return;
+const handleLikeCurrentStill = async () => {
+  const targetMedia = currentMotion || currentStill;
+  if (!targetMedia) return;
 
-    const resultType = currentMotion ? "motion" : "image";
-    const likeKey = getCurrentMediaKey();
-    const nextLiked = likeKey ? !likedMap[likeKey] : false;
+  const resultType = currentMotion ? "motion" : "image";
+  const likeKey = getCurrentMediaKey();
+  const nextLiked = likeKey ? !likedMap[likeKey] : false;
 
-    if (likeKey) {
-      setLikedMap((prev) => ({ ...prev, [likeKey]: nextLiked }));
-    }
+  if (likeKey) {
+    setLikedMap((prev) => ({ ...prev, [likeKey]: nextLiked }));
+  }
 
-    if (!API_BASE_URL || !nextLiked) return;
+  if (!API_BASE_URL || !nextLiked) return;
 
-    try {
-      setLikeSubmitting(true);
-      await fetch(`${API_BASE_URL}/feedback/like`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerId,
-          resultType,
-          platform: currentAspect.platformKey,
-          prompt: currentMotion?.prompt || currentStill?.prompt || lastStillPrompt || stillBrief || brief,
-          comment: "",
-          imageUrl: currentMotion ? "" : targetMedia.url,
-          videoUrl: currentMotion ? targetMedia.url : "",
-          sessionId,
-          liked: true,
-        }),
-      });
-    } catch {
-      // non-blocking
-    } finally {
-      setLikeSubmitting(false);
-    }
-  };
+  try {
+    setLikeSubmitting(true);
+    await apiFetch("/feedback/like", {
+      method: "POST",
+      body: JSON.stringify({
+        customerId,
+        resultType,
+        platform: currentAspect.platformKey,
+        prompt: currentMotion?.prompt || currentStill?.prompt || lastStillPrompt || stillBrief || brief,
+        comment: "",
+        imageUrl: currentMotion ? "" : targetMedia.url,
+        videoUrl: currentMotion ? targetMedia.url : "",
+        sessionId,
+        liked: true,
+      }),
+    });
+  } catch {
+    // non-blocking
+  } finally {
+    setLikeSubmitting(false);
+  }
+};
 
-  const handleSubmitFeedback = async () => {
-    if (!API_BASE_URL || !feedbackText.trim()) return;
-    const comment = feedbackText.trim();
+const handleSubmitFeedback = async () => {
+  if (!API_BASE_URL || !feedbackText.trim()) return;
+  const comment = feedbackText.trim();
 
-    const targetVideo = currentMotion?.url || "";
-    const targetImage = currentStill?.url || "";
+  const targetVideo = currentMotion?.url || "";
+  const targetImage = currentStill?.url || "";
 
-    try {
-      setFeedbackSending(true);
-      setFeedbackError(null);
+  try {
+    setFeedbackSending(true);
+    setFeedbackError(null);
 
-      await fetch(`${API_BASE_URL}/feedback/like`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerId,
-          resultType: targetVideo ? "motion" : "image",
-          platform: currentAspect.platformKey,
-          prompt: lastStillPrompt || stillBrief || brief,
-          comment,
-          imageUrl: targetImage,
-          videoUrl: targetVideo,
-          sessionId,
-        }),
-      });
+    await apiFetch("/feedback/like", {
+      method: "POST",
+      body: JSON.stringify({
+        customerId,
+        resultType: targetVideo ? "motion" : "image",
+        platform: currentAspect.platformKey,
+        prompt: lastStillPrompt || stillBrief || brief,
+        comment,
+        imageUrl: targetImage,
+        videoUrl: targetVideo,
+        sessionId,
+      }),
+    });
 
-      setFeedbackText("");
-    } catch (err: any) {
-      setFeedbackError(err?.message || "Failed to send feedback.");
-    } finally {
-      setFeedbackSending(false);
-    }
-  };
+    setFeedbackText("");
+  } catch (err: any) {
+    setFeedbackError(err?.message || "Failed to send feedback.");
+  } finally {
+    setFeedbackSending(false);
+  }
+};
 
-  const handleDownloadCurrentStill = () => {
-    const target = currentMotion?.url || currentStill?.url;
-    if (!target) return;
+const handleDownloadCurrentStill = () => {
+  const target = currentMotion?.url || currentStill?.url;
+  if (!target) return;
 
-    let filename = "";
-    try {
-      const parsed = new URL(target);
-      const last = parsed.pathname.split("/").filter(Boolean).pop();
-      if (last && last.includes(".")) filename = last;
-    } catch {
-      // fallback below
-    }
+  let filename = "";
+  try {
+    const parsed = new URL(target);
+    const last = parsed.pathname.split("/").filter(Boolean).pop();
+    if (last && last.includes(".")) filename = last;
+  } catch {
+    // fallback below
+  }
 
-    if (!filename) {
-      const safePrompt =
-        (lastStillPrompt || brief || "Mina-image")
-          .replace(/[^a-z0-9]+/gi, "-")
-          .toLowerCase()
-          .slice(0, 80) || "mina-image";
-      filename = currentMotion ? `mina-motion-${safePrompt}.mp4` : `mina-image-${safePrompt}.png`;
-    }
-
-    const a = document.createElement("a");
-    a.href = target;
+  if (!filename) {
     const safePrompt =
-      (lastStillPrompt || stillBrief || brief || "Mina-image")
+      (lastStillPrompt || brief || "Mina-image")
         .replace(/[^a-z0-9]+/gi, "-")
         .toLowerCase()
         .slice(0, 80) || "mina-image";
-    a.download = `Mina-v3-${safePrompt}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
+    filename = currentMotion ? `mina-motion-${safePrompt}.mp4` : `mina-image-${safePrompt}.png`;
+  }
 
-  const currentMediaKey = getCurrentMediaKey();
-  const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
-  // ========================================================================
-  // [PART 11 END]
-  // ========================================================================
+  const a = document.createElement("a");
+  a.href = target;
+  const safePrompt =
+    (lastStillPrompt || stillBrief || brief || "Mina-image")
+      .replace(/[^a-z0-9]+/gi, "-")
+      .toLowerCase()
+      .slice(0, 80) || "mina-image";
+  a.download = `Mina-v3-${safePrompt}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+};
+
+const currentMediaKey = getCurrentMediaKey();
+const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
+// ========================================================================
+// [PART 11 END]
+// ========================================================================
+
 
   // ==============================================
   // 12. UI helpers – aspect + uploads + logout
