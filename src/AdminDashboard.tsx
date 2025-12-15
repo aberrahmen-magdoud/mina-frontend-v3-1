@@ -1224,6 +1224,15 @@ export default function AdminDashboard() {
   const { config, updateConfig, loading, error } = useAdminConfigState();
   const [draft, setDraft] = useState<AdminConfig | null>(null);
   const [tab, setTab] = useState<TabKey>("customers");
+  // ✅ API base for backend calls (stored in this browser)
+  // Leave empty "" if admin frontend and backend are on same domain.
+  const [apiBase, setApiBase] = useState<string>(() => {
+    try {
+      return localStorage.getItem("MINA_API_BASE") || "";
+    } catch {
+      return "";
+    }
+  });
 
   // live state
   const [customersTable] = useState("customers");
@@ -1461,16 +1470,13 @@ export default function AdminDashboard() {
 
       <div className="admin-content">
                 {tab === "runtime" && (
-  <div className="admin-grid">
-    <Section
-      title="Runtime Config"
-      description="Stored in Supabase (mina_runtime_config). No API endpoints needed."
-    >
-      <RuntimeConfigEditor />
-    </Section>
-  </div>
-)}
-
+          <div className="admin-grid">
+            <Section
+              title="Runtime Config (Live backend)"
+              description="Edit the live backend runtime config (models, replicate params, GPT temp/tokens, system/user append)."
+            >
+              <div className="admin-inline">
+                <label style={{ minWidth: 420 }}>
                   <strong>API Base URL (optional)</strong>
                   <input
                     value={apiBase}
