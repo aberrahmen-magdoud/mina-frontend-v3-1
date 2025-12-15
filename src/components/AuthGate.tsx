@@ -1,3 +1,4 @@
+// src/components/AuthGate.tsx
 import React, { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabaseClient";
@@ -8,8 +9,6 @@ type AuthGateProps = {
 
 const API_BASE_URL =
   import.meta.env.VITE_MINA_API_BASE_URL || "https://mina-editorial-ai-api.onrender.com";
-
-// src/components/AuthGate.tsx
 
 async function syncShopifyWelcome(
   email: string | null | undefined,
@@ -61,11 +60,7 @@ function getInboxHref(email: string | null): string {
     return "https://mail.yahoo.com/d/folders/1";
   }
 
-  if (
-    domain === "icloud.com" ||
-    domain.endsWith(".me.com") ||
-    domain.endsWith(".mac.com")
-  ) {
+  if (domain === "icloud.com" || domain.endsWith(".me.com") || domain.endsWith(".mac.com")) {
     return "https://www.icloud.com/mail";
   }
 
@@ -106,6 +101,7 @@ export function AuthGate({ children }: AuthGateProps) {
 
   const [bypassForNow] = useState(false);
 
+  // Session bootstrap + auth listener
   useEffect(() => {
     let mounted = true;
 
@@ -121,6 +117,8 @@ export function AuthGate({ children }: AuthGateProps) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (!mounted) return;
+
       setSession(newSession);
 
       if (event === "SIGNED_OUT") {
@@ -133,20 +131,20 @@ export function AuthGate({ children }: AuthGateProps) {
       }
 
       if (event === "SIGNED_IN" && newSession?.user?.email) {
-      const signedEmail = newSession.user.email;
-      const userId = newSession.user.id;
-    
-      // don’t use `await` directly in this callback
-      void (async () => {
-        const shopifyCustomerId = await syncShopifyWelcome(signedEmail, userId);
-    
-        if (shopifyCustomerId && typeof window !== "undefined") {
-          window.localStorage.setItem("minaCustomerId", shopifyCustomerId);
-        }
-      })();
-    }
+        const signedEmail = newSession.user.email;
+        const userId = newSession.user.id;
 
+        // Avoid `await` directly in this non-async callback
+        void (async () => {
+          const shopifyCustomerId = await syncShopifyWelcome(signedEmail, userId);
+          if (!mounted) return;
 
+          if (shopifyCustomerId && typeof window !== "undefined") {
+            window.localStorage.setItem("minaCustomerId", shopifyCustomerId);
+          }
+        })();
+      }
+    });
 
     return () => {
       mounted = false;
@@ -154,6 +152,7 @@ export function AuthGate({ children }: AuthGateProps) {
     };
   }, []);
 
+  // Public stats
   useEffect(() => {
     let cancelled = false;
 
@@ -163,16 +162,11 @@ export function AuthGate({ children }: AuthGateProps) {
         if (!res.ok) return;
 
         const json = await res.json();
-        if (
-          !cancelled &&
-          json.ok &&
-          typeof json.totalUsers === "number" &&
-          json.totalUsers > 0
-        ) {
+        if (!cancelled && json.ok && typeof json.totalUsers === "number" && json.totalUsers > 0) {
           setTotalUsers(json.totalUsers);
         }
       } catch {
-        // stay silent, no number = no display
+        // silent
       }
     };
 
@@ -204,6 +198,7 @@ export function AuthGate({ children }: AuthGateProps) {
       setOtpSent(true);
       setSentTo(trimmed);
 
+      // temporary id (will be replaced by Shopify id after SIGNED_IN)
       try {
         if (typeof window !== "undefined") {
           window.localStorage.setItem("minaCustomerId", trimmed);
@@ -221,6 +216,7 @@ export function AuthGate({ children }: AuthGateProps) {
   const handleGoogleLogin = async () => {
     setError(null);
     setGoogleOpening(true);
+
     try {
       const { error: supaError } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -228,6 +224,7 @@ export function AuthGate({ children }: AuthGateProps) {
           redirectTo: window.location.origin,
         },
       });
+
       if (supaError) throw supaError;
     } catch (err: any) {
       setError(err?.message || "Failed to start Google login.");
@@ -249,9 +246,7 @@ export function AuthGate({ children }: AuthGateProps) {
             <p className="mina-auth-text">Loading…</p>
           </div>
           <div className="mina-auth-footer">
-            {totalUsers !== null
-              ? `${formatUserCount(totalUsers)} creative using Mina`
-              : "3,7k curators use Mina"}
+            {totalUsers !== null ? `${formatUserCount(totalUsers)} creative using Mina` : "3,7k curators use Mina"}
           </div>
         </div>
         <div className="mina-auth-right" />
@@ -268,7 +263,6 @@ export function AuthGate({ children }: AuthGateProps) {
   const targetEmail = sentTo || (hasEmail ? trimmed : null);
   const inboxHref = getInboxHref(targetEmail);
   const openInNewTab = inboxHref.startsWith("http");
-
   const showBack = (emailMode && hasEmail) || otpSent;
 
   return (
@@ -282,13 +276,7 @@ export function AuthGate({ children }: AuthGateProps) {
         </div>
 
         <div className="mina-auth-card">
-          <div
-            className={
-              showBack
-                ? "mina-fade mina-auth-back-wrapper"
-                : "mina-fade hidden mina-auth-back-wrapper"
-            }
-          >
+          <div className={showBack ? "mina-fade mina-auth-back-wrapper" : "mina-fade hidden mina-auth-back-wrapper"}>
             <button
               type="button"
               className="mina-auth-back"
@@ -320,15 +308,10 @@ export function AuthGate({ children }: AuthGateProps) {
                 <div className="mina-auth-stack">
                   <div
                     className={
-                      "fade-overlay auth-panel auth-panel--google " +
-                      (emailMode ? "hidden" : "visible")
+                      "fade-overlay auth-panel auth-panel--google " + (emailMode ? "hidden" : "visible")
                     }
                   >
-                    <button
-                      type="button"
-                      className="mina-auth-link mina-auth-main"
-                      onClick={handleGoogleLogin}
-                    >
+                    <button type="button" className="mina-auth-link mina-auth-main" onClick={handleGoogleLogin}>
                       {googleOpening ? "Opening Google…" : "Login with Google"}
                     </button>
 
@@ -349,14 +332,10 @@ export function AuthGate({ children }: AuthGateProps) {
 
                   <div
                     className={
-                      "fade-overlay auth-panel auth-panel--email " +
-                      (emailMode ? "visible" : "hidden")
+                      "fade-overlay auth-panel auth-panel--email " + (emailMode ? "visible" : "hidden")
                     }
                   >
-                    <form
-                      onSubmit={handleEmailLogin}
-                      className="mina-auth-form"
-                    >
+                    <form onSubmit={handleEmailLogin} className="mina-auth-form">
                       <label className="mina-auth-label">
                         <input
                           className="mina-auth-input"
@@ -367,11 +346,7 @@ export function AuthGate({ children }: AuthGateProps) {
                         />
                       </label>
 
-                      <div
-                        className={
-                          hasEmail ? "fade-block delay" : "fade-block hidden"
-                        }
-                      >
+                      <div className={hasEmail ? "fade-block delay" : "fade-block hidden"}>
                         <button
                           type="submit"
                           className="mina-auth-link mina-auth-main small"
@@ -381,14 +356,10 @@ export function AuthGate({ children }: AuthGateProps) {
                         </button>
                       </div>
 
-                      <div
-                        className={
-                          hasEmail ? "fade-block delay" : "fade-block hidden"
-                        }
-                      >
+                      <div className={hasEmail ? "fade-block delay" : "fade-block hidden"}>
                         <p className="mina-auth-hint">
-                          We’ll email you a one-time link. If this address is
-                          new, that email will also confirm your account.
+                          We’ll email you a one-time link. If this address is new, that email will also confirm your
+                          account.
                         </p>
                       </div>
                     </form>
@@ -413,12 +384,7 @@ export function AuthGate({ children }: AuthGateProps) {
                     </a>
                     <p className="mina-auth-text" style={{ marginTop: 8 }}>
                       We’ve sent a sign-in link to{" "}
-                      {targetEmail ? (
-                        <strong>{targetEmail}</strong>
-                      ) : (
-                        "your inbox"
-                      )}
-                      . Open it to continue with Mina.
+                      {targetEmail ? <strong>{targetEmail}</strong> : "your inbox"}. Open it to continue with Mina.
                     </p>
                   </div>
                 </div>
@@ -430,9 +396,7 @@ export function AuthGate({ children }: AuthGateProps) {
         </div>
 
         <div className="mina-auth-footer">
-          {totalUsers !== null
-            ? `${formatUserCount(totalUsers)} curators use Mina`
-            : "curators use Mina"}
+          {totalUsers !== null ? `${formatUserCount(totalUsers)} curators use Mina` : "curators use Mina"}
         </div>
       </div>
       <div className="mina-auth-right" />
