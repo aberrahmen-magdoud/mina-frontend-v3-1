@@ -114,15 +114,19 @@ export function AuthGate({ children }: AuthGateProps) {
       }
 
       if (event === "SIGNED_IN" && newSession?.user?.email) {
-  const email = newSession.user.email;
-  const userId = newSession.user.id;
+      const signedEmail = newSession.user.email;
+      const userId = newSession.user.id;
+    
+      // don’t use `await` directly in this callback
+      void (async () => {
+        const shopifyCustomerId = await syncShopifyWelcome(signedEmail, userId);
+    
+        if (shopifyCustomerId && typeof window !== "undefined") {
+          window.localStorage.setItem("minaCustomerId", shopifyCustomerId);
+        }
+      })();
+    }
 
-  const shopifyCustomerId = await syncShopifyWelcome(email, userId);
-
-  if (shopifyCustomerId && typeof window !== "undefined") {
-    window.localStorage.setItem("minaCustomerId", shopifyCustomerId);
-  }
-}
 
 
     return () => {
