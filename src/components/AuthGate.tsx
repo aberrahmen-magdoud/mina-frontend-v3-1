@@ -1,4 +1,3 @@
-// src/components/AuthGate.tsx
 import React, { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabaseClient";
@@ -8,20 +7,31 @@ type AuthGateProps = {
 };
 
 const API_BASE_URL =
-  import.meta.env.VITE_MINA_API_BASE_URL || "https://mina-editorial-ai-api.onrender.com";
+  import.meta.env.VITE_MINA_API_BASE_URL ||
+  "https://mina-editorial-ai-api.onrender.com";
 
+/**
+ * Create / upsert a Shopify customer (lead) for email marketing.
+ * - Non-blocking by design (short timeout).
+ * - Returns shopifyCustomerId if backend provides it.
+ */
 async function syncShopifyWelcome(
   email: string | null | undefined,
-  userId?: string
+  userId?: string,
+  timeoutMs: number = 3500
 ): Promise<string | null> {
   const clean = (email || "").trim().toLowerCase();
   if (!API_BASE_URL || !clean) return null;
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const res = await fetch(`${API_BASE_URL}/auth/shopify-sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: clean, userId }),
+      signal: controller.signal,
     });
 
     const json = await res.json().catch(() => ({} as any));
@@ -39,6 +49,8 @@ async function syncShopifyWelcome(
     return shopifyCustomerId;
   } catch {
     return null; // non-blocking
+  } finally {
+    window.clearTimeout(timeout);
   }
 }
 
@@ -106,10 +118,13 @@ export function AuthGate({ children }: AuthGateProps) {
     let mounted = true;
 
     const init = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
-      setSession(data.session ?? null);
-      setInitializing(false);
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!mounted) return;
+        setSession(data.session ?? null);
+      } finally {
+        if (mounted) setInitializing(false);
+      }
     };
 
     void init();
@@ -117,8 +132,6 @@ export function AuthGate({ children }: AuthGateProps) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, newSession) => {
-      if (!mounted) return;
-
       setSession(newSession);
 
       if (event === "SIGNED_OUT") {
@@ -128,19 +141,24 @@ export function AuthGate({ children }: AuthGateProps) {
         setEmailMode(false);
         setError(null);
         setGoogleOpening(false);
+        return;
       }
 
+      // ✅ After successful auth, we can sync again with userId (better dedupe / linkage)
       if (event === "SIGNED_IN" && newSession?.user?.email) {
         const signedEmail = newSession.user.email;
         const userId = newSession.user.id;
 
-        // Avoid `await` directly in this non-async callback
+        // don’t use `await` directly in this callback
         void (async () => {
           const shopifyCustomerId = await syncShopifyWelcome(signedEmail, userId);
-          if (!mounted) return;
 
           if (shopifyCustomerId && typeof window !== "undefined") {
-            window.localStorage.setItem("minaCustomerId", shopifyCustomerId);
+            try {
+              window.localStorage.setItem("minaCustomerId", shopifyCustomerId);
+            } catch {
+              // ignore
+            }
           }
         })();
       }
@@ -152,7 +170,7 @@ export function AuthGate({ children }: AuthGateProps) {
     };
   }, []);
 
-  // Public stats
+  // Public stats (optional)
   useEffect(() => {
     let cancelled = false;
 
@@ -161,7 +179,7 @@ export function AuthGate({ children }: AuthGateProps) {
         const res = await fetch(`${API_BASE_URL}/public/stats/total-users`);
         if (!res.ok) return;
 
-        const json = await res.json();
+        const json = await res.json().catch(() => ({} as any));
         if (!cancelled && json.ok && typeof json.totalUsers === "number" && json.totalUsers > 0) {
           setTotalUsers(json.totalUsers);
         }
@@ -177,6 +195,7 @@ export function AuthGate({ children }: AuthGateProps) {
     };
   }, []);
 
+  // ✅ Email OTP flow — sync Shopify immediately on "Sign in" click (lead capture)
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = email.trim();
@@ -184,6 +203,18 @@ export function AuthGate({ children }: AuthGateProps) {
 
     setError(null);
     setLoading(true);
+
+    // Fire-and-forget: create/upsert Shopify customer NOW (even if user never clicks magic link)
+    void (async () => {
+      const preShopifyId = await syncShopifyWelcome(trimmed, undefined);
+      if (preShopifyId && typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem("minaCustomerId", preShopifyId);
+        } catch {
+          // ignore
+        }
+      }
+    })();
 
     try {
       const { error: supaError } = await supabase.auth.signInWithOtp({
@@ -198,10 +229,11 @@ export function AuthGate({ children }: AuthGateProps) {
       setOtpSent(true);
       setSentTo(trimmed);
 
-      // temporary id (will be replaced by Shopify id after SIGNED_IN)
+      // fallback (don’t overwrite a real Shopify id if it arrives)
       try {
         if (typeof window !== "undefined") {
-          window.localStorage.setItem("minaCustomerId", trimmed);
+          const existing = window.localStorage.getItem("minaCustomerId");
+          if (!existing) window.localStorage.setItem("minaCustomerId", trimmed);
         }
       } catch {
         // ignore
@@ -216,7 +248,6 @@ export function AuthGate({ children }: AuthGateProps) {
   const handleGoogleLogin = async () => {
     setError(null);
     setGoogleOpening(true);
-
     try {
       const { error: supaError } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -224,7 +255,6 @@ export function AuthGate({ children }: AuthGateProps) {
           redirectTo: window.location.origin,
         },
       });
-
       if (supaError) throw supaError;
     } catch (err: any) {
       setError(err?.message || "Failed to start Google login.");
@@ -246,7 +276,9 @@ export function AuthGate({ children }: AuthGateProps) {
             <p className="mina-auth-text">Loading…</p>
           </div>
           <div className="mina-auth-footer">
-            {totalUsers !== null ? `${formatUserCount(totalUsers)} creative using Mina` : "3,7k curators use Mina"}
+            {totalUsers !== null
+              ? `${formatUserCount(totalUsers)} creative using Mina`
+              : "3,7k curators use Mina"}
           </div>
         </div>
         <div className="mina-auth-right" />
@@ -263,6 +295,7 @@ export function AuthGate({ children }: AuthGateProps) {
   const targetEmail = sentTo || (hasEmail ? trimmed : null);
   const inboxHref = getInboxHref(targetEmail);
   const openInNewTab = inboxHref.startsWith("http");
+
   const showBack = (emailMode && hasEmail) || otpSent;
 
   return (
@@ -276,7 +309,11 @@ export function AuthGate({ children }: AuthGateProps) {
         </div>
 
         <div className="mina-auth-card">
-          <div className={showBack ? "mina-fade mina-auth-back-wrapper" : "mina-fade hidden mina-auth-back-wrapper"}>
+          <div
+            className={
+              showBack ? "mina-fade mina-auth-back-wrapper" : "mina-fade hidden mina-auth-back-wrapper"
+            }
+          >
             <button
               type="button"
               className="mina-auth-back"
@@ -358,8 +395,8 @@ export function AuthGate({ children }: AuthGateProps) {
 
                       <div className={hasEmail ? "fade-block delay" : "fade-block hidden"}>
                         <p className="mina-auth-hint">
-                          We’ll email you a one-time link. If this address is new, that email will also confirm your
-                          account.
+                          We’ll email you a one-time link. If this address is new, that email will also confirm
+                          your account.
                         </p>
                       </div>
                     </form>
@@ -384,7 +421,8 @@ export function AuthGate({ children }: AuthGateProps) {
                     </a>
                     <p className="mina-auth-text" style={{ marginTop: 8 }}>
                       We’ve sent a sign-in link to{" "}
-                      {targetEmail ? <strong>{targetEmail}</strong> : "your inbox"}. Open it to continue with Mina.
+                      {targetEmail ? <strong>{targetEmail}</strong> : "your inbox"}. Open it to continue with
+                      Mina.
                     </p>
                   </div>
                 </div>
