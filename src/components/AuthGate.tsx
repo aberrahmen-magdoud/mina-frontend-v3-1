@@ -114,17 +114,16 @@ export function AuthGate({ children }: AuthGateProps) {
       }
 
       if (event === "SIGNED_IN" && newSession?.user?.email) {
-        const signedEmail = newSession.user.email;
-        try {
-          if (typeof window !== "undefined") {
-            window.localStorage.setItem("minaCustomerId", signedEmail);
-          }
-        } catch {
-          // ignore
-        }
-        void syncShopifyWelcome(signedEmail);
-      }
-    });
+  const email = newSession.user.email;
+  const userId = newSession.user.id;
+
+  const shopifyCustomerId = await syncShopifyWelcome(email, userId);
+
+  if (shopifyCustomerId && typeof window !== "undefined") {
+    window.localStorage.setItem("minaCustomerId", shopifyCustomerId);
+  }
+}
+
 
     return () => {
       mounted = false;
