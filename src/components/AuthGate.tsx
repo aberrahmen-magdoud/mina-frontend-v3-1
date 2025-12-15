@@ -7,8 +7,10 @@ type AuthGateProps = {
 };
 
 const API_BASE_URL =
-  import.meta.env.VITE_MINA_API_BASE_URL ||
-  "https://mina-editorial-ai-api.onrender.com";
+  import.meta.env.VITE_MINA_API_BASE_URL || "https://mina-editorial-ai-api.onrender.com";
+
+// ✅ baseline: your “3,7k” starting point
+const BASELINE_USERS = 3700;
 
 /**
  * Create / upsert a Shopify customer (lead) for email marketing.
@@ -52,42 +54,6 @@ async function syncShopifyWelcome(
   } finally {
     window.clearTimeout(timeout);
   }
-}
-async function syncSupabaseUserTables(params: {
-  userId: string;
-  email: string;
-  shopifyCustomerId: string;
-}) {
-  const cleanEmail = (params.email || "").trim().toLowerCase();
-  if (!cleanEmail || !params.userId || !params.shopifyCustomerId) return;
-
-  const nowIso = new Date().toISOString();
-
-  // 1) customers: PK appears to be shopify_customer_id (from your screenshot)
-  await supabase
-    .from("customers")
-    .upsert(
-      {
-        shopify_customer_id: params.shopifyCustomerId,
-        user_id: params.userId,     // uuid string is fine here
-        email: cleanEmail,
-        last_active: nowIso,
-      },
-      { onConflict: "shopify_customer_id" }
-    );
-
-  // 2) users_profile: PK appears to be id (text) = email (from your screenshot)
-  await supabase
-    .from("users_profile")
-    .upsert(
-      {
-        id: cleanEmail,
-        user_id: params.userId,     // NOTE: your column is text currently; better as uuid long-term
-        email: cleanEmail,
-        last_active: nowIso,
-      },
-      { onConflict: "id" }
-    );
 }
 
 function getInboxHref(email: string | null): string {
@@ -145,9 +111,15 @@ export function AuthGate({ children }: AuthGateProps) {
   const [error, setError] = useState<string | null>(null);
 
   const [googleOpening, setGoogleOpening] = useState(false);
-  const [totalUsers, setTotalUsers] = useState<number | null>(null);
+
+  // ✅ this holds “new users count” coming from your API
+  const [newUsers, setNewUsers] = useState<number | null>(null);
 
   const [bypassForNow] = useState(false);
+
+  // ✅ final displayed count
+  const displayedUsers = BASELINE_USERS + (newUsers ?? 0);
+  const displayedUsersLabel = `${formatUserCount(displayedUsers)} curators use Mina`;
 
   // Session bootstrap + auth listener
   useEffect(() => {
@@ -182,38 +154,21 @@ export function AuthGate({ children }: AuthGateProps) {
 
       // ✅ After successful auth, we can sync again with userId (better dedupe / linkage)
       if (event === "SIGNED_IN" && newSession?.user?.email) {
-      const signedEmail = newSession.user.email;
-      const userId = newSession.user.id;
-    
-      void (async () => {
-        const shopifyCustomerId =
-          (await syncShopifyWelcome(signedEmail, userId)) ||
-          (() => {
-            try {
-              return window.localStorage.getItem("minaCustomerId") || signedEmail;
-            } catch {
-              return signedEmail;
-            }
-          })();
-    
-        // keep localStorage updated
-        if (shopifyCustomerId && typeof window !== "undefined") {
-          try {
-            window.localStorage.setItem("minaCustomerId", shopifyCustomerId);
-          } catch {
-            // ignore
-          }
-        }
-    
-        // ✅ THIS is what fixes your NULL emails in Supabase tables
-        await syncSupabaseUserTables({
-          userId,
-          email: signedEmail,
-          shopifyCustomerId: shopifyCustomerId || signedEmail,
-        });
-      })();
-    }
+        const signedEmail = newSession.user.email;
+        const userId = newSession.user.id;
 
+        void (async () => {
+          const shopifyCustomerId = await syncShopifyWelcome(signedEmail, userId);
+
+          if (shopifyCustomerId && typeof window !== "undefined") {
+            try {
+              window.localStorage.setItem("minaCustomerId", shopifyCustomerId);
+            } catch {
+              // ignore
+            }
+          }
+        })();
+      }
     });
 
     return () => {
@@ -228,12 +183,16 @@ export function AuthGate({ children }: AuthGateProps) {
 
     const fetchStats = async () => {
       try {
+        // IMPORTANT: this endpoint should return the number of *new users* (delta),
+        // not the full total, because we add BASELINE_USERS on the frontend.
         const res = await fetch(`${API_BASE_URL}/public/stats/total-users`);
         if (!res.ok) return;
 
         const json = await res.json().catch(() => ({} as any));
-        if (!cancelled && json.ok && typeof json.totalUsers === "number" && json.totalUsers > 0) {
-          setTotalUsers(json.totalUsers);
+
+        // expecting: { ok: true, totalUsers: <number> }
+        if (!cancelled && json.ok && typeof json.totalUsers === "number" && json.totalUsers >= 0) {
+          setNewUsers(json.totalUsers);
         }
       } catch {
         // silent
@@ -327,11 +286,9 @@ export function AuthGate({ children }: AuthGateProps) {
           <div className="mina-auth-card">
             <p className="mina-auth-text">Loading…</p>
           </div>
-          <div className="mina-auth-footer">
-            {totalUsers !== null
-              ? `${formatUserCount(totalUsers)} creative using Mina`
-              : "3,7k curators use Mina"}
-          </div>
+
+          {/* ✅ always show baseline+new */}
+          <div className="mina-auth-footer">{displayedUsersLabel}</div>
         </div>
         <div className="mina-auth-right" />
       </div>
@@ -361,11 +318,7 @@ export function AuthGate({ children }: AuthGateProps) {
         </div>
 
         <div className="mina-auth-card">
-          <div
-            className={
-              showBack ? "mina-fade mina-auth-back-wrapper" : "mina-fade hidden mina-auth-back-wrapper"
-            }
-          >
+          <div className={showBack ? "mina-fade mina-auth-back-wrapper" : "mina-fade hidden mina-auth-back-wrapper"}>
             <button
               type="button"
               className="mina-auth-back"
@@ -395,11 +348,7 @@ export function AuthGate({ children }: AuthGateProps) {
             <>
               <div className="mina-auth-actions">
                 <div className="mina-auth-stack">
-                  <div
-                    className={
-                      "fade-overlay auth-panel auth-panel--google " + (emailMode ? "hidden" : "visible")
-                    }
-                  >
+                  <div className={"fade-overlay auth-panel auth-panel--google " + (emailMode ? "hidden" : "visible")}>
                     <button type="button" className="mina-auth-link mina-auth-main" onClick={handleGoogleLogin}>
                       {googleOpening ? "Opening Google…" : "Login with Google"}
                     </button>
@@ -419,11 +368,7 @@ export function AuthGate({ children }: AuthGateProps) {
                     </div>
                   </div>
 
-                  <div
-                    className={
-                      "fade-overlay auth-panel auth-panel--email " + (emailMode ? "visible" : "hidden")
-                    }
-                  >
+                  <div className={"fade-overlay auth-panel auth-panel--email " + (emailMode ? "visible" : "hidden")}>
                     <form onSubmit={handleEmailLogin} className="mina-auth-form">
                       <label className="mina-auth-label">
                         <input
@@ -436,19 +381,14 @@ export function AuthGate({ children }: AuthGateProps) {
                       </label>
 
                       <div className={hasEmail ? "fade-block delay" : "fade-block hidden"}>
-                        <button
-                          type="submit"
-                          className="mina-auth-link mina-auth-main small"
-                          disabled={loading || !hasEmail}
-                        >
+                        <button type="submit" className="mina-auth-link mina-auth-main small" disabled={loading || !hasEmail}>
                           {loading ? "Sending link…" : "Sign in"}
                         </button>
                       </div>
 
                       <div className={hasEmail ? "fade-block delay" : "fade-block hidden"}>
                         <p className="mina-auth-hint">
-                          We’ll email you a one-time link. If this address is new, that email will also confirm
-                          your account.
+                          We’ll email you a one-time link. If this address is new, that email will also confirm your account.
                         </p>
                       </div>
                     </form>
@@ -472,9 +412,7 @@ export function AuthGate({ children }: AuthGateProps) {
                       Open email app
                     </a>
                     <p className="mina-auth-text" style={{ marginTop: 8 }}>
-                      We’ve sent a sign-in link to{" "}
-                      {targetEmail ? <strong>{targetEmail}</strong> : "your inbox"}. Open it to continue with
-                      Mina.
+                      We’ve sent a sign-in link to {targetEmail ? <strong>{targetEmail}</strong> : "your inbox"}. Open it to continue with Mina.
                     </p>
                   </div>
                 </div>
@@ -485,10 +423,10 @@ export function AuthGate({ children }: AuthGateProps) {
           )}
         </div>
 
-        <div className="mina-auth-footer">
-          {totalUsers !== null ? `${formatUserCount(totalUsers)} curators use Mina` : "curators use Mina"}
-        </div>
+        {/* ✅ always show baseline+new */}
+        <div className="mina-auth-footer">{displayedUsersLabel}</div>
       </div>
+
       <div className="mina-auth-right" />
     </div>
   );
