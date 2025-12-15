@@ -50,14 +50,15 @@ export default function RuntimeConfigEditor({ apiBase }: Props) {
 
   const normalized = useMemo(() => normalizeBase(baseInput), [baseInput]);
 
-  const candidates = useMemo(() => {
+   const candidates = useMemo(() => {
     if (!normalized.base) return [];
     return [
       `${normalized.base}/api/admin/runtime-config`,
       `${normalized.base}/api/runtime-config`,
-      `${normalized.base}/runtime-config`,
+      // DO NOT try /runtime-config (your backend returns 404 for it)
     ];
   }, [normalized.base]);
+
 
   const testHealth = async () => {
     setError(null);
