@@ -28,7 +28,7 @@ const TAB_LABELS: Record<TabKey, string> = {
 };
 
 // ✅ CHANGE THIS if your table name is different
-const AI_FLAT_TABLE = "flat_ai_config";
+const AI_FLAT_TABLE = "runtime_config_flat;
 // ✅ CHANGE THIS if your logs table name is different
 const LOGS_TABLE = "logs";
 
