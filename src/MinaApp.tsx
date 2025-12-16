@@ -1161,137 +1161,103 @@ useEffect(() => {
 
 
   // ========================================================================
-// [PART 6 START] Effects – persist customer + bootstrap
-// ========================================================================
-useEffect(() => {
-  setCustomerIdInput(customerId);
-  persistCustomerId(customerId);
-}, [customerId]);
+  // [PART 6 START] Effects – persist customer + bootstrap
+  // ========================================================================
+  useEffect(() => {
+    setCustomerIdInput(customerId);
+    persistCustomerId(customerId);
+  }, [customerId]);
 
-// ✅ Keep the old (legacy) customerId so Profile can still load older archives
-const LEGACY_CUSTOMER_STORAGE_KEY = "minaLegacyCustomerId";
+    useEffect(() => {
+    let cancelled = false;
 
-const readLegacyCustomerId = (): string | null => {
-  try {
-    if (typeof window === "undefined") return null;
-    const v = window.localStorage.getItem(LEGACY_CUSTOMER_STORAGE_KEY);
-    return v && v.trim() ? v.trim() : null;
-  } catch {
-    return null;
-  }
-};
+    const applySession = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (cancelled) return;
 
-const persistLegacyCustomerId = (id: string) => {
-  try {
-    if (typeof window === "undefined") return;
-    if (!id || !id.trim()) return;
-    window.localStorage.setItem(LEGACY_CUSTOMER_STORAGE_KEY, id.trim());
-  } catch {
-    // ignore
-  }
-};
+        const email = (data.session?.user?.email || "").toLowerCase() || null;
+        setCurrentUserEmail(email);
 
-useEffect(() => {
-  let cancelled = false;
+        // Keep legacy fallback: ADMIN_EMAILS
+        setIsAdmin(email ? ADMIN_EMAILS.includes(email) : false);
 
-  const applySession = async () => {
-    try {
-      const { data } = await supabase.auth.getSession();
+        // Optional: also allow Supabase table allowlist to grant admin
+        if (email) {
+          const { data: row, error } = await supabase
+            .from(ADMIN_ALLOWLIST_TABLE)
+            .select("email")
+            .eq("email", email)
+            .limit(1)
+            .maybeSingle();
+
+          if (!cancelled && !error && row?.email) setIsAdmin(true);
+        }
+
+        const uid = data.session?.user?.id || null;
+        setAuthUserId(uid);
+
+        // ✅ Production: force customerId to Supabase user id when logged in
+        if (!cancelled && uid) {
+          setCustomerId((prev) => (prev !== uid ? uid : prev));
+          setCustomerIdInput(uid);
+        }
+      } catch {
+        if (!cancelled) {
+          setCurrentUserEmail(null);
+          setIsAdmin(false);
+        }
+      }
+    };
+
+    void applySession();
+
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (cancelled) return;
 
-      const email = (data.session?.user?.email || "").toLowerCase() || null;
+      const email = (session?.user?.email || "").toLowerCase() || null;
       setCurrentUserEmail(email);
-
-      // Keep legacy fallback: ADMIN_EMAILS
       setIsAdmin(email ? ADMIN_EMAILS.includes(email) : false);
 
-      // Optional: also allow Supabase table allowlist to grant admin
+      // Optional: allowlist table can grant admin even if not in ADMIN_EMAILS
       if (email) {
-        const { data: row, error } = await supabase
-          .from(ADMIN_ALLOWLIST_TABLE)
-          .select("email")
-          .eq("email", email)
-          .limit(1)
-          .maybeSingle();
+        try {
+          const { data: row, error } = await supabase
+            .from(ADMIN_ALLOWLIST_TABLE)
+            .select("email")
+            .eq("email", email)
+            .limit(1)
+            .maybeSingle();
 
-        if (!cancelled && !error && row?.email) setIsAdmin(true);
+          if (!cancelled && !error && row?.email) setIsAdmin(true);
+        } catch {
+          // ignore
+        }
       }
 
-      const uid = data.session?.user?.id || null;
+      const uid = session?.user?.id || null;
       setAuthUserId(uid);
 
-      // ✅ IMPORTANT:
-      // Before forcing customerId = Supabase uid, store the previous customerId as legacy
-      if (!cancelled && uid) {
-        setCustomerId((prev) => {
-          if (prev && prev !== uid && prev !== "anonymous") {
-            persistLegacyCustomerId(prev);
-          }
-          return prev !== uid ? uid : prev;
-        });
+      // ✅ Production: force customerId to Supabase user id when logged in
+      if (uid) {
+        setCustomerId((prev) => (prev !== uid ? uid : prev));
         setCustomerIdInput(uid);
       }
-    } catch {
-      if (!cancelled) {
-        setCurrentUserEmail(null);
-        setIsAdmin(false);
-      }
-    }
-  };
+    });
 
-  void applySession();
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
-    if (cancelled) return;
 
-    const email = (session?.user?.email || "").toLowerCase() || null;
-    setCurrentUserEmail(email);
-    setIsAdmin(email ? ADMIN_EMAILS.includes(email) : false);
+  // ========================================================================
+  // [PART 6 END]
+  // ========================================================================
 
-    // Optional: allowlist table can grant admin even if not in ADMIN_EMAILS
-    if (email) {
-      try {
-        const { data: row, error } = await supabase
-          .from(ADMIN_ALLOWLIST_TABLE)
-          .select("email")
-          .eq("email", email)
-          .limit(1)
-          .maybeSingle();
-
-        if (!cancelled && !error && row?.email) setIsAdmin(true);
-      } catch {
-        // ignore
-      }
-    }
-
-    const uid = session?.user?.id || null;
-    setAuthUserId(uid);
-
-    // ✅ IMPORTANT:
-    // Before forcing customerId = Supabase uid, store the previous customerId as legacy
-    if (uid) {
-      setCustomerId((prev) => {
-        if (prev && prev !== uid && prev !== "anonymous") {
-          persistLegacyCustomerId(prev);
-        }
-        return prev !== uid ? uid : prev;
-      });
-      setCustomerIdInput(uid);
-    }
-  });
-
-  return () => {
-    cancelled = true;
-    sub.subscription.unsubscribe();
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
-
-// ========================================================================
-// [PART 6 END]
-// ========================================================================
-
-// ========================================================================
+  // ========================================================================
 // [PART 7 START] API helpers
 // ========================================================================
 
@@ -1356,42 +1322,24 @@ const extractExpiresAt = (obj: any): string | null => {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 };
 
-// ✅ Credits: try primary id first, fallback to legacy id if needed
 const fetchCredits = async () => {
   if (!API_BASE_URL || !effectiveCustomerId) return;
-
-  const legacyId = readLegacyCustomerId();
-  const ids = [effectiveCustomerId, legacyId]
-    .filter((x): x is string => !!x && x.trim())
-    .map((x) => x.trim())
-    .filter((x, i, arr) => arr.indexOf(x) === i);
-
   try {
     setCreditsLoading(true);
 
-    let picked: any = null;
+    const params = new URLSearchParams({ customerId: effectiveCustomerId });
+    const res = await apiFetch(`/credits/balance?${params.toString()}`);
+    if (!res.ok) return;
 
-    for (const cid of ids) {
-      const params = new URLSearchParams({ customerId: cid });
-      const res = await apiFetch(`/credits/balance?${params.toString()}`);
-      if (!res.ok) continue;
+    const json = (await res.json().catch(() => ({}))) as any;
 
-      const json = (await res.json().catch(() => ({}))) as any;
-      if (json && typeof json.balance !== "undefined") {
-        picked = json;
-        break;
-      }
-    }
-
-    if (!picked) return;
-
-    const expiresAt = extractExpiresAt(picked);
+    const expiresAt = extractExpiresAt(json);
 
     setCredits((prev) => ({
-      balance: Number(picked?.balance ?? prev?.balance ?? 0),
+      balance: Number(json?.balance ?? prev?.balance ?? 0),
       meta: {
-        imageCost: Number(picked?.meta?.imageCost ?? prev?.meta?.imageCost ?? adminConfig.pricing?.imageCost ?? 1),
-        motionCost: Number(picked?.meta?.motionCost ?? prev?.meta?.motionCost ?? adminConfig.pricing?.motionCost ?? 5),
+        imageCost: Number(json?.meta?.imageCost ?? prev?.meta?.imageCost ?? adminConfig.pricing?.imageCost ?? 1),
+        motionCost: Number(json?.meta?.motionCost ?? prev?.meta?.motionCost ?? adminConfig.pricing?.motionCost ?? 5),
         expiresAt,
       },
     }));
@@ -1429,69 +1377,39 @@ const ensureSession = async (): Promise<string | null> => {
   return null;
 };
 
-// ✅ History: load primary + legacy customerId and merge so Profile never shows empty
+// fetchHistory: always copy generation URLs into R2 before displaying
 const fetchHistory = async () => {
   if (!API_BASE_URL || !effectiveCustomerId) return;
-
-  const legacyId = readLegacyCustomerId();
-  const ids = [effectiveCustomerId, legacyId]
-    .filter((x): x is string => !!x && x.trim())
-    .map((x) => x.trim())
-    .filter((x, i, arr) => arr.indexOf(x) === i);
 
   try {
     setHistoryLoading(true);
     setHistoryError(null);
 
-    const results: HistoryResponse[] = [];
+    const res = await apiFetch(`/history/customer/${encodeURIComponent(effectiveCustomerId)}`);
+    if (!res.ok) throw new Error(`Status ${res.status}`);
 
-    for (const cid of ids) {
-      try {
-        const res = await apiFetch(`/history/customer/${encodeURIComponent(cid)}`);
-        if (!res.ok) continue;
+    const json = (await res.json().catch(() => ({}))) as HistoryResponse;
+    if (!json.ok) throw new Error("History error");
 
-        const json = (await res.json().catch(() => ({}))) as HistoryResponse;
-        if (json.ok) results.push(json);
-      } catch {
-        // keep trying next id
-      }
-    }
+    // update credit balance + optional expiry
+    setCredits((prev) => ({
+      balance: json.credits.balance,
+      meta: {
+        imageCost: prev?.meta?.imageCost ?? adminConfig.pricing?.imageCost ?? 1,
+        motionCost: prev?.meta?.motionCost ?? adminConfig.pricing?.motionCost ?? 5,
+        expiresAt: json.credits.expiresAt ?? prev?.meta?.expiresAt ?? null,
+      },
+    }));
 
-    if (!results.length) throw new Error("Unable to load history.");
+    const gens = json.generations || [];
 
-    // Pick credits from the response with the highest balance (helps migrations)
-    const bestCredits = results
-      .map((r) => r.credits)
-      .filter(Boolean)
-      .sort((a, b) => Number(b.balance) - Number(a.balance))[0];
-
-    if (bestCredits) {
-      setCredits((prev) => ({
-        balance: bestCredits.balance,
-        meta: {
-          imageCost: prev?.meta?.imageCost ?? adminConfig.pricing?.imageCost ?? 1,
-          motionCost: prev?.meta?.motionCost ?? adminConfig.pricing?.motionCost ?? 5,
-          expiresAt: bestCredits.expiresAt ?? prev?.meta?.expiresAt ?? null,
-        },
-      }));
-    }
-
-    // Merge generations + feedbacks by id
-    const genMap = new Map<string, GenerationRecord>();
-    const fbMap = new Map<string, FeedbackRecord>();
-
-    results.forEach((r) => {
-      (r.generations || []).forEach((g) => genMap.set(g.id, g));
-      (r.feedbacks || []).forEach((f) => fbMap.set(f.id, f));
-    });
-
-    const gens = Array.from(genMap.values());
-    const feedbacks = Array.from(fbMap.values());
-
-    // Normalize links into stable R2, but never drop items if it fails
+    // ✅ Production behavior:
+    // - Try to normalize links into stable R2
+    // - BUT never drop items if that fails
     const updated = await Promise.all(
       gens.map(async (g) => {
         const original = g.outputUrl;
+
         try {
           const r2 = await storeRemoteToR2(original, "generations");
           const stable = stripSignedQuery(r2);
@@ -1503,7 +1421,7 @@ const fetchHistory = async () => {
     );
 
     setHistoryGenerations(updated);
-    setHistoryFeedbacks(feedbacks);
+    setHistoryFeedbacks(json.feedbacks || []);
   } catch (err: any) {
     setHistoryError(err?.message || "Unable to load history.");
   } finally {
@@ -1520,6 +1438,7 @@ useEffect(() => {
   void fetchHistory();
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [activeTab, effectiveCustomerId]);
+
 
 const getEditorialNumber = (id: string, index: number) => {
   const fallback = padEditorialNumber(index + 1);
@@ -1569,7 +1488,6 @@ const stopBrandingEdit = () => setBrandingEditing(null);
 // ========================================================================
 // [PART 7 END]
 // ========================================================================
-
 
 // ==============================
 // R2 helpers (upload + store)
