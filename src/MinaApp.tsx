@@ -274,6 +274,7 @@ const PANEL_LIMITS: Record<UploadPanelKey, number> = {
 };
 
 const CUSTOM_STYLES_LS_KEY = "minaCustomStyles_v1";
+
 // Premium reveal timing
 const PILL_INITIAL_DELAY_MS = 260; // when the first pill starts appearing
 const PILL_STAGGER_MS = 90; // delay between each pill (accordion / wave)
@@ -336,11 +337,59 @@ function padEditorialNumber(value: number | string) {
   return String(value).trim() || "00";
 }
 
+// ✅ Detect signed URLs (R2/S3/CloudFront style) so we never break them by adding params
+function hasSignedQuery(searchParams: URLSearchParams) {
+  return (
+    searchParams.has("X-Amz-Signature") ||
+    searchParams.has("X-Amz-Credential") ||
+    searchParams.has("X-Amz-Algorithm") ||
+    searchParams.has("X-Amz-Date") ||
+    searchParams.has("X-Amz-Expires") ||
+    searchParams.has("Signature") ||
+    searchParams.has("Expires") ||
+    searchParams.has("Key-Pair-Id") ||
+    searchParams.has("Policy") ||
+    Array.from(searchParams.keys()).some((k) => k.toLowerCase().includes("signature"))
+  );
+}
+
+// ✅ Turn a signed URL into a non-expiring base URL (works when your R2 objects are public)
+function stripSignedQuery(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (!hasSignedQuery(parsed.searchParams)) return url;
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+// ✅ Replicate detection (so we never show it in Profile)
+function isReplicateUrl(url: string) {
+  try {
+    const h = new URL(url).hostname.toLowerCase();
+    return h.includes("replicate.delivery") || h.includes("replicate.com");
+  } catch {
+    return false;
+  }
+}
+
+// ✅ Preview URL: never modify signed URLs (that’s what caused the ❓ icons)
 function toPreviewUrl(url: string) {
   try {
     const parsed = new URL(url);
-    if (!parsed.searchParams.has("w")) parsed.searchParams.set("w", "900");
-    if (!parsed.searchParams.has("auto")) parsed.searchParams.set("auto", "format");
+
+    // If signed → DO NOT touch query params, and also strip to stable base (no expiry)
+    if (hasSignedQuery(parsed.searchParams)) return stripSignedQuery(parsed.toString());
+
+    // Only add resize params for Shopify CDN (safe)
+    if (parsed.hostname.includes("cdn.shopify.com")) {
+      if (!parsed.searchParams.has("w")) parsed.searchParams.set("w", "900");
+      if (!parsed.searchParams.has("auto")) parsed.searchParams.set("auto", "format");
+    }
+
     return parsed.toString();
   } catch {
     return url;
@@ -394,6 +443,7 @@ function saveCustomStyles(styles: CustomStylePreset[]) {
 // ============================================================================
 // [PART 3 END]
 // ============================================================================
+
 
 // ==============================================
 // PART UI HELPERS (pills/panels)
@@ -1282,20 +1332,26 @@ const fetchHistory = async () => {
     // update credit balance
     setCredits((prev) => ({ balance: json.credits.balance, meta: prev?.meta }));
 
-    // fetch and store each generation’s image in R2
+    // fetch and store each generation’s image in R2 (stable, non-expiring)
     const gens = json.generations || [];
     const updated = await Promise.all(
       gens.map(async (g) => {
         try {
-          const remoteUrl = await storeRemoteToR2(g.outputUrl, "generations");
-          return { ...g, outputUrl: remoteUrl };
+          const r2 = await storeRemoteToR2(g.outputUrl, "generations");
+          const stable = stripSignedQuery(r2);
+
+          // ✅ Never show replicate links in profile
+          if (isReplicateUrl(stable)) return null;
+
+          return { ...g, outputUrl: stable };
         } catch {
-          return g;
+          // If anything fails, hide it (because you only want R2 non-expiring links)
+          return null;
         }
       })
     );
-    setHistoryGenerations(updated);
 
+    setHistoryGenerations(updated.filter(Boolean) as GenerationRecord[]);
     setHistoryFeedbacks(json.feedbacks || []);
   } catch (err: any) {
     setHistoryError(err?.message || "Unable to load history.");
@@ -1303,6 +1359,7 @@ const fetchHistory = async () => {
     setHistoryLoading(false);
   }
 };
+
 
 const getEditorialNumber = (id: string, index: number) => {
   const fallback = padEditorialNumber(index + 1);
@@ -1356,14 +1413,42 @@ const stopBrandingEdit = () => setBrandingEditing(null);
 // ==============================
 // R2 helpers (upload + store)
 // ==============================
+
+// ✅ Pick a URL from backend response, prefer stable/public first
 function pickUrlFromR2Response(json: any): string | null {
   if (!json) return null;
-  if (typeof json.url === "string" && json.url.startsWith("http")) return json.url;
-  if (typeof json.signedUrl === "string" && json.signedUrl.startsWith("http")) return json.signedUrl;
-  if (typeof json.publicUrl === "string" && json.publicUrl.startsWith("http")) return json.publicUrl;
-  if (json.result && typeof json.result.url === "string" && json.result.url.startsWith("http")) return json.result.url;
-  if (json.data && typeof json.data.url === "string" && json.data.url.startsWith("http")) return json.data.url;
+
+  const candidates: any[] = [
+    // Prefer public first (non-expiring)
+    json.publicUrl,
+    json.public_url,
+    json.url,
+    json.public,
+
+    json.result?.publicUrl,
+    json.result?.public_url,
+    json.result?.url,
+
+    json.data?.publicUrl,
+    json.data?.public_url,
+    json.data?.url,
+
+    // Signed LAST (expires)
+    json.signedUrl,
+    json.signed_url,
+    json.result?.signedUrl,
+    json.data?.signedUrl,
+  ];
+
+  for (const c of candidates) {
+    if (typeof c === "string" && c.startsWith("http")) return c;
+  }
   return null;
+}
+
+// ✅ Ensure non-expiring URL (strip signature query if present)
+function normalizeNonExpiringUrl(url: string): string {
+  return stripSignedQuery(url);
 }
 
 async function uploadFileToR2(panel: UploadPanelKey, file: File): Promise<string> {
@@ -1383,9 +1468,12 @@ async function uploadFileToR2(panel: UploadPanelKey, file: File): Promise<string
     throw new Error(json?.message || json?.error || `Upload failed (${res.status})`);
   }
 
-  const url = pickUrlFromR2Response(json);
-  if (!url) throw new Error("Upload succeeded but no URL returned");
-  return url;
+  const rawUrl = pickUrlFromR2Response(json);
+  if (!rawUrl) throw new Error("Upload succeeded but no URL returned");
+
+  const stable = normalizeNonExpiringUrl(rawUrl);
+  if (!stable.startsWith("http")) throw new Error("Upload returned invalid URL");
+  return stable;
 }
 
 async function storeRemoteToR2(url: string, kind: string): Promise<string> {
@@ -1399,12 +1487,17 @@ async function storeRemoteToR2(url: string, kind: string): Promise<string> {
   });
 
   const json = await res.json().catch(() => ({}));
+
+  // If backend fails, keep original (so user still sees something)
   if (!res.ok || json?.ok === false) {
-    // non-blocking: fall back to original URL
     return url;
   }
 
-  return pickUrlFromR2Response(json) || url;
+  const rawUrl = pickUrlFromR2Response(json);
+  if (!rawUrl) return url;
+
+  const stable = normalizeNonExpiringUrl(rawUrl);
+  return stable || url;
 }
 
 function patchUploadItem(panel: UploadPanelKey, id: string, patch: Partial<UploadItem>) {
@@ -1433,6 +1526,7 @@ async function startStoreForUrlItem(panel: UploadPanelKey, id: string, url: stri
     patchUploadItem(panel, id, { uploading: false, error: err?.message || "Store failed" });
   }
 }
+
 
 // ========================================================================
 // [PART 9 START] Stills (editorial)
