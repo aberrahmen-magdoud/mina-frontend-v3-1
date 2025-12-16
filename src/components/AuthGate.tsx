@@ -8,17 +8,92 @@ type AuthGateProps = {
 
 const API_BASE_URL =
   import.meta.env.VITE_MINA_API_BASE_URL || "https://mina-editorial-ai-api.onrender.com";
+
+// ✅ MEGA identity storage (single identity)
+const PASS_ID_STORAGE_KEY = "minaPassId";
+
 // ✅ baseline: your “3,7k” starting point
 const BASELINE_USERS = 0;
+
+// ----------------------------------------------------------------------------
+// Pass ID helpers
+// ----------------------------------------------------------------------------
+function readStoredPassId(): string | null {
+  try {
+    const v = window.localStorage.getItem(PASS_ID_STORAGE_KEY);
+    return v && v.trim() ? v.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistPassId(passId: string) {
+  try {
+    window.localStorage.setItem(PASS_ID_STORAGE_KEY, passId);
+  } catch {
+    // ignore
+  }
+}
+
+async function getSupabaseAccessToken(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * ✅ MEGA: Resolve/Create canonical passId on the backend.
+ * - If anonymous: backend issues/returns passId
+ * - If logged in (JWT): backend links that auth user to the SAME passId
+ * - We persist passId locally to keep continuity across reloads
+ */
+async function ensurePassId(): Promise<string | null> {
+  if (!API_BASE_URL) return null;
+
+  const token = await getSupabaseAccessToken();
+  const existing = readStoredPassId();
+
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (existing) headers["X-Mina-Pass-Id"] = existing;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/me`, {
+      method: "GET",
+      headers,
+      // If your backend uses cookies, this helps (safe even if it doesn't)
+      credentials: "include",
+    });
+
+    if (!res.ok) return existing;
+
+    const json = (await res.json().catch(() => ({} as any))) as any;
+    const next = typeof json?.passId === "string" ? json.passId.trim() : null;
+
+    if (next) {
+      persistPassId(next);
+      return next;
+    }
+
+    return existing;
+  } catch {
+    return existing;
+  }
+}
 
 /**
  * Create / upsert a Shopify customer (lead) for email marketing.
  * - Non-blocking by design (short timeout).
- * - Returns shopifyCustomerId if backend provides it.
+ * - ✅ IMPORTANT: does NOT set app identity
+ * - Optional: includes passId so backend can link Shopify id to MEGA_CUSTOMERS row
  */
 async function syncShopifyWelcome(
   email: string | null | undefined,
   userId?: string,
+  passId?: string | null,
   timeoutMs: number = 3500
 ): Promise<string | null> {
   const clean = (email || "").trim().toLowerCase();
@@ -28,10 +103,14 @@ async function syncShopifyWelcome(
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    const payload: any = { email: clean };
+    if (userId) payload.userId = userId;
+    if (passId) payload.passId = passId;
+
     const res = await fetch(`${API_BASE_URL}/auth/shopify-sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: clean, userId }),
+      body: JSON.stringify(payload),
       signal: controller.signal,
     });
 
@@ -126,9 +205,13 @@ export function AuthGate({ children }: AuthGateProps) {
 
     const init = async () => {
       try {
+        // 1) get session
         const { data } = await supabase.auth.getSession();
         if (!mounted) return;
         setSession(data.session ?? null);
+
+        // 2) ensure passId exists even for anonymous users
+        void ensurePassId();
       } finally {
         if (mounted) setInitializing(false);
       }
@@ -148,25 +231,28 @@ export function AuthGate({ children }: AuthGateProps) {
         setEmailMode(false);
         setError(null);
         setGoogleOpening(false);
+
+        // ✅ keep MEGA continuity: still ensure an anonymous pass exists
+        void ensurePassId();
         return;
       }
 
-      // ✅ After successful auth, we can sync again with userId (better dedupe / linkage)
-      if (event === "SIGNED_IN" && newSession?.user?.email) {
-        const signedEmail = newSession.user.email;
-        const userId = newSession.user.id;
-
+      // ✅ After successful auth, ensure passId again so backend can link mg_user_id to passId
+      if (event === "SIGNED_IN") {
         void (async () => {
-          const shopifyCustomerId = await syncShopifyWelcome(signedEmail, userId);
+          const passId = await ensurePassId();
 
-          if (shopifyCustomerId && typeof window !== "undefined") {
-            try {
-              window.localStorage.setItem("minaCustomerId", shopifyCustomerId);
-            } catch {
-              // ignore
-            }
+          // Optional Shopify linkage (attribute-only)
+          const signedEmail = newSession?.user?.email || null;
+          const userId = newSession?.user?.id || undefined;
+
+          if (signedEmail) {
+            void syncShopifyWelcome(signedEmail, userId, passId);
           }
         })();
+      } else {
+        // Other auth events: keep pass fresh
+        void ensurePassId();
       }
     });
 
@@ -182,14 +268,11 @@ export function AuthGate({ children }: AuthGateProps) {
 
     const fetchStats = async () => {
       try {
-        // IMPORTANT: this endpoint should return the number of *new users* (delta),
-        // not the full total, because we add BASELINE_USERS on the frontend.
+        // expecting: { ok: true, totalUsers: <number> }
         const res = await fetch(`${API_BASE_URL}/public/stats/total-users`);
         if (!res.ok) return;
 
         const json = await res.json().catch(() => ({} as any));
-
-        // expecting: { ok: true, totalUsers: <number> }
         if (!cancelled && json.ok && typeof json.totalUsers === "number" && json.totalUsers >= 0) {
           setNewUsers(json.totalUsers);
         }
@@ -205,7 +288,7 @@ export function AuthGate({ children }: AuthGateProps) {
     };
   }, []);
 
-  // ✅ Email OTP flow — sync Shopify immediately on "Sign in" click (lead capture)
+  // ✅ Email OTP flow — lead capture WITHOUT setting identity
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = email.trim();
@@ -214,17 +297,11 @@ export function AuthGate({ children }: AuthGateProps) {
     setError(null);
     setLoading(true);
 
-    // Fire-and-forget: create/upsert Shopify customer NOW (even if user never clicks magic link)
-    void (async () => {
-      const preShopifyId = await syncShopifyWelcome(trimmed, undefined);
-      if (preShopifyId && typeof window !== "undefined") {
-        try {
-          window.localStorage.setItem("minaCustomerId", preShopifyId);
-        } catch {
-          // ignore
-        }
-      }
-    })();
+    // Ensure passId exists first (anon)
+    const passId = await ensurePassId();
+
+    // Fire-and-forget: create/upsert Shopify customer NOW (attribute-only)
+    void syncShopifyWelcome(trimmed, undefined, passId);
 
     try {
       const { error: supaError } = await supabase.auth.signInWithOtp({
@@ -238,16 +315,6 @@ export function AuthGate({ children }: AuthGateProps) {
 
       setOtpSent(true);
       setSentTo(trimmed);
-
-      // fallback (don’t overwrite a real Shopify id if it arrives)
-      try {
-        if (typeof window !== "undefined") {
-          const existing = window.localStorage.getItem("minaCustomerId");
-          if (!existing) window.localStorage.setItem("minaCustomerId", trimmed);
-        }
-      } catch {
-        // ignore
-      }
     } catch (err: any) {
       setError(err?.message || "Failed to send login link.");
     } finally {
@@ -258,6 +325,10 @@ export function AuthGate({ children }: AuthGateProps) {
   const handleGoogleLogin = async () => {
     setError(null);
     setGoogleOpening(true);
+
+    // Ensure pass exists before redirect (best effort)
+    void ensurePassId();
+
     try {
       const { error: supaError } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -286,7 +357,6 @@ export function AuthGate({ children }: AuthGateProps) {
             <p className="mina-auth-text">Loading…</p>
           </div>
 
-          {/* ✅ always show baseline+new */}
           <div className="mina-auth-footer">{displayedUsersLabel}</div>
         </div>
         <div className="mina-auth-right" />
@@ -422,7 +492,6 @@ export function AuthGate({ children }: AuthGateProps) {
           )}
         </div>
 
-        {/* ✅ always show baseline+new */}
         <div className="mina-auth-footer">{displayedUsersLabel}</div>
       </div>
 
