@@ -6,7 +6,8 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "./lib/supabaseClient";
 import StudioLeft from "./StudioLeft";
 import { loadAdminConfig } from "./lib/adminConfig";
-import AdminLink from "./components/AdminLink"; 
+import AdminLink from "./components/AdminLink";
+import { usePassId } from "./components/AuthGate";
 
 
 const API_BASE_URL =
@@ -18,27 +19,6 @@ const TOPUP_URL =
   "https://www.faltastudio.com/checkouts/cn/hWN6EhbqQW5KrdIuBO3j5HKV/en-ae?_r=AQAB9NY_ccOV_da3y7VmTxJU-dDoLEOCdhP9sg2YlvDwLQQ";
 
 const LIKE_STORAGE_KEY = "minaLikedMap";
-const LEGACY_CUSTOMER_STORAGE_KEY = "minaLegacyCustomerId";
-
-function readLegacyCustomerId(fallback: string): string {
-  try {
-    if (typeof window !== "undefined") {
-      const v = window.localStorage.getItem(LEGACY_CUSTOMER_STORAGE_KEY);
-      if (v && v.trim()) return v.trim();
-    }
-  } catch {
-    // ignore
-  }
-  return fallback;
-}
-
-function persistLegacyCustomerId(id: string) {
-  try {
-    if (typeof window !== "undefined") window.localStorage.setItem(LEGACY_CUSTOMER_STORAGE_KEY, id);
-  } catch {
-    // ignore
-  }
-}
 // ============================================================================
 // [PART 1 END]
 // ============================================================================
@@ -119,7 +99,7 @@ type GenerationRecord = {
   id: string;
   type: string;
   sessionId: string;
-  customerId: string;
+  passId: string;
   platform: string;
   prompt: string;
   outputUrl: string;
@@ -138,7 +118,7 @@ type GenerationRecord = {
 
 type FeedbackRecord = {
   id: string;
-  customerId: string;
+  passId: string;
   resultType: string;
   platform: string;
   prompt: string;
@@ -150,7 +130,7 @@ type FeedbackRecord = {
 
 type HistoryResponse = {
   ok: boolean;
-  customerId: string;
+  passId: string;
   credits: {
     balance: number;
 
@@ -224,9 +204,7 @@ type AspectOption = {
   platformKey: string;
 };
 
-type MinaAppProps = {
-  initialCustomerId?: string;
-};
+type MinaAppProps = Record<string, never>;
 // ============================================================================
 // [PART 2 END]
 // ============================================================================
@@ -316,31 +294,6 @@ const TEXTAREA_FLOAT_DISTANCE_PX = 12; // tiny translate to avoid layout jump
 
 function classNames(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
-}
-
-function getInitialCustomerId(initialCustomerId?: string): string {
-  try {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const fromUrl = params.get("customerId");
-      if (fromUrl && fromUrl.trim().length > 0) return fromUrl.trim();
-
-      const stored = window.localStorage.getItem("minaCustomerId");
-      if (stored && stored.trim().length > 0) return stored.trim();
-    }
-  } catch {
-    // ignore
-  }
-  if (initialCustomerId && initialCustomerId.trim().length > 0) return initialCustomerId.trim();
-  return "anonymous";
-}
-
-function persistCustomerId(id: string) {
-  try {
-    if (typeof window !== "undefined") window.localStorage.setItem("minaCustomerId", id);
-  } catch {
-    // ignore
-  }
 }
 
 function formatTime(ts?: string | null) {
@@ -515,28 +468,12 @@ function pickNearestAspectOption(ratio: number, options: AspectOption[]): Aspect
 // ============================================================================
 // [PART 4 START] Component
 // ============================================================================
-const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
+const MinaApp: React.FC<MinaAppProps> = () => {
   // -------------------------
   // 4.1 Global tab + customer
   // -------------------------
   const [activeTab, setActiveTab] = useState<"studio" | "profile">("studio");
-
-  // Legacy fallback (anonymous / dev). In production, Supabase user id overrides this.
-  const [customerId, setCustomerId] = useState<string>(() => getInitialCustomerId(initialCustomerId));
-  const [customerIdInput, setCustomerIdInput] = useState<string>(customerId);
-
-  // Keep a stable “legacy” id around so Profile can still load older archives
-  const legacyCustomerIdRef = useRef<string>(customerId);
-
-  useEffect(() => {
-    const seeded = readLegacyCustomerId(customerId);
-    legacyCustomerIdRef.current = seeded;
-    if (seeded && seeded !== "anonymous") persistLegacyCustomerId(seeded);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ✅ Supabase identity (production truth)
-  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const passId = usePassId();
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
@@ -831,8 +768,7 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
   const briefLength = brief.trim().length;
   const stillBriefLength = stillBrief.trim().length;
   const uploadsPending = Object.values(uploads).some((arr) => arr.some((it) => it.uploading));
-  // ✅ Production customer identity: always use Supabase user id when logged in
-  const effectiveCustomerId = authUserId || customerId;
+  const currentPassId = passId;
 
   // ✅ Always show newest first in Profile
   const sortedHistoryGenerations = useMemo(() => {
@@ -1192,14 +1128,9 @@ useEffect(() => {
 
 
   // ========================================================================
-  // [PART 6 START] Effects – persist customer + bootstrap
+  // [PART 6 START] Effects – bootstrap
   // ========================================================================
   useEffect(() => {
-    setCustomerIdInput(customerId);
-    persistCustomerId(customerId);
-  }, [customerId]);
-
-    useEffect(() => {
     let cancelled = false;
 
     const applySession = async () => {
@@ -1225,21 +1156,6 @@ useEffect(() => {
           if (!cancelled && !error && row?.email) setIsAdmin(true);
         }
 
-        const uid = data.session?.user?.id || null;
-        setAuthUserId(uid);
-
-        // ✅ Production: force customerId to Supabase user id when logged in
-        if (!cancelled && uid) {
-          setCustomerId((prev) => {
-            // Preserve any pre-login customerId as “legacy” for archive fallback
-            if (prev && prev !== uid && prev !== "anonymous") {
-              legacyCustomerIdRef.current = prev;
-              persistLegacyCustomerId(prev);
-            }
-            return prev !== uid ? uid : prev;
-          });
-          setCustomerIdInput(uid);
-        }
       } catch {
         if (!cancelled) {
           setCurrentUserEmail(null);
@@ -1273,20 +1189,6 @@ useEffect(() => {
         }
       }
 
-      const uid = session?.user?.id || null;
-      setAuthUserId(uid);
-
-      // ✅ Production: force customerId to Supabase user id when logged in
-      if (uid) {
-        setCustomerId((prev) => {
-          if (prev && prev !== uid && prev !== "anonymous") {
-            legacyCustomerIdRef.current = prev;
-            persistLegacyCustomerId(prev);
-          }
-          return prev !== uid ? uid : prev;
-        });
-        setCustomerIdInput(uid);
-      }
     });
 
     return () => {
@@ -1329,6 +1231,10 @@ const apiFetch = async (path: string, init: RequestInit = {}) => {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
+  if (currentPassId && !headers.has("X-Mina-Pass-Id")) {
+    headers.set("X-Mina-Pass-Id", currentPassId);
+  }
+
   // Ensure JSON content-type when body is present and caller didn't specify
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -1367,11 +1273,11 @@ const extractExpiresAt = (obj: any): string | null => {
 };
 
 const fetchCredits = async () => {
-  if (!API_BASE_URL || !effectiveCustomerId) return;
+  if (!API_BASE_URL || !currentPassId) return;
   try {
     setCreditsLoading(true);
 
-    const params = new URLSearchParams({ customerId: effectiveCustomerId });
+    const params = new URLSearchParams({ passId: currentPassId });
     const res = await apiFetch(`/credits/balance?${params.toString()}`);
     if (!res.ok) return;
 
@@ -1396,13 +1302,13 @@ const fetchCredits = async () => {
 
 const ensureSession = async (): Promise<string | null> => {
   if (sessionId) return sessionId;
-  if (!API_BASE_URL || !effectiveCustomerId) return null;
+  if (!API_BASE_URL || !currentPassId) return null;
 
   try {
     const res = await apiFetch("/sessions/start", {
       method: "POST",
       body: JSON.stringify({
-        customerId: effectiveCustomerId,
+        passId: currentPassId,
         platform: currentAspect.platformKey,
         title: sessionTitle,
       }),
@@ -1421,79 +1327,37 @@ const ensureSession = async (): Promise<string | null> => {
   return null;
 };
 
-const fetchHistoryForCustomer = async (cid: string): Promise<HistoryResponse> => {
-  const res = await apiFetch(`/history/customer/${encodeURIComponent(cid)}`);
+const fetchHistoryForPass = async (pid: string): Promise<HistoryResponse> => {
+  const res = await apiFetch(`/history/pass/${encodeURIComponent(pid)}`);
   if (!res.ok) throw new Error(`Status ${res.status}`);
   const json = (await res.json().catch(() => ({}))) as HistoryResponse;
   if (!json.ok) throw new Error("History error");
   return json;
 };
 
-const mergeById = <T extends { id: string }>(a: T[], b: T[]) => {
-  const map = new Map<string, T>();
-  [...a, ...b].forEach((item) => {
-    if (item && item.id) map.set(item.id, item);
-  });
-  return Array.from(map.values());
-};
-
-// fetchHistory: load primary + legacy archives (so Profile never looks empty after auth switch)
+// fetchHistory: load single MEGA ledger by pass id
 const fetchHistory = async () => {
-  if (!API_BASE_URL || !effectiveCustomerId) return;
-
-  const primaryId = effectiveCustomerId;
-  const legacyId =
-    legacyCustomerIdRef.current && legacyCustomerIdRef.current !== primaryId
-      ? legacyCustomerIdRef.current
-      : null;
+  if (!API_BASE_URL || !currentPassId) return;
 
   try {
     setHistoryLoading(true);
     setHistoryError(null);
 
-    let primary: HistoryResponse | null = null;
-    let legacy: HistoryResponse | null = null;
-    let lastErr: any = null;
+    const history = await fetchHistoryForPass(currentPassId);
 
-    try {
-      primary = await fetchHistoryForCustomer(primaryId);
-    } catch (e) {
-      lastErr = e;
-      primary = null;
-    }
-
-    if (legacyId) {
-      try {
-        legacy = await fetchHistoryForCustomer(legacyId);
-      } catch (e) {
-        if (!lastErr) lastErr = e;
-        legacy = null;
-      }
-    }
-
-    if (!primary && !legacy) {
-      throw lastErr || new Error("Unable to load history.");
-    }
-
-    // Prefer the credits source that has a higher balance (helps during migration)
-    const chosenCredits =
-      primary?.credits && legacy?.credits
-        ? (Number(legacy.credits.balance) > Number(primary.credits.balance) ? legacy.credits : primary.credits)
-        : primary?.credits || legacy?.credits;
-
-    if (chosenCredits) {
+    if (history?.credits) {
       setCredits((prev) => ({
-        balance: chosenCredits.balance,
+        balance: history.credits.balance,
         meta: {
           imageCost: prev?.meta?.imageCost ?? adminConfig.pricing?.imageCost ?? 1,
           motionCost: prev?.meta?.motionCost ?? adminConfig.pricing?.motionCost ?? 5,
-          expiresAt: chosenCredits.expiresAt ?? prev?.meta?.expiresAt ?? null,
+          expiresAt: history.credits.expiresAt ?? prev?.meta?.expiresAt ?? null,
         },
       }));
     }
 
-    const gens = mergeById(primary?.generations || [], legacy?.generations || []);
-    const feedbacks = mergeById(primary?.feedbacks || [], legacy?.feedbacks || []);
+    const gens = history?.generations || [];
+    const feedbacks = history?.feedbacks || [];
 
     // Normalize links into stable R2 (but never drop items if that fails)
     const updated = await Promise.all(
@@ -1520,13 +1384,13 @@ const fetchHistory = async () => {
 
 useEffect(() => {
   if (activeTab !== "profile") return;
-  if (!effectiveCustomerId) return;
+  if (!currentPassId) return;
 
   setVisibleHistoryCount(20);
   void fetchCredits();
   void fetchHistory();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [activeTab, effectiveCustomerId]);
+}, [activeTab, currentPassId]);
 
 
 const getEditorialNumber = (id: string, index: number) => {
@@ -1627,7 +1491,7 @@ async function uploadFileToR2(panel: UploadPanelKey, file: File): Promise<string
     body: JSON.stringify({
       dataUrl,
       kind: panel, // "product" | "logo" | "inspiration"
-      customerId: effectiveCustomerId,
+      passId: currentPassId,
     }),
   });
 
@@ -1650,7 +1514,7 @@ async function storeRemoteToR2(url: string, kind: string): Promise<string> {
     body: JSON.stringify({
       url,
       kind, // "generations" | "motions" | etc.
-      customerId: effectiveCustomerId,
+      passId: currentPassId,
     }),
   });
 
@@ -1708,6 +1572,11 @@ const handleGenerateStill = async () => {
     return;
   }
 
+  if (!currentPassId) {
+    setStillError("Missing Pass ID for MEGA session.");
+    return;
+  }
+
   const sid = await ensureSession();
   if (!sid) {
     setStillError("Could not start Mina session.");
@@ -1724,7 +1593,7 @@ const handleGenerateStill = async () => {
     const safeAspectRatio = REPLICATE_ASPECT_RATIO_MAP[currentAspect.ratio] || "2:3";
 
     const payload: {
-      customerId: string;
+      passId: string;
       sessionId: string;
       brief: string;
       tone: string;
@@ -1736,7 +1605,7 @@ const handleGenerateStill = async () => {
       logoImageUrl?: string;
       styleImageUrls?: string[];
     } = {
-      customerId: effectiveCustomerId!,
+      passId: currentPassId,
       sessionId: sid,
       brief: trimmed,
       tone,
@@ -1872,6 +1741,7 @@ const applyMotionSuggestionText = async (text: string) => {
 
 const handleSuggestMotion = async () => {
   if (!API_BASE_URL || !motionReferenceImageUrl || motionSuggestLoading || motionSuggestTyping) return;
+  if (!currentPassId) return;
 
   setAnimateMode(true);
 
@@ -1882,7 +1752,7 @@ const handleSuggestMotion = async () => {
     const res = await apiFetch("/motion/suggest", {
       method: "POST",
       body: JSON.stringify({
-        customerId: effectiveCustomerId,
+        passId: currentPassId,
         referenceImageUrl: motionReferenceImageUrl,
         tone,
         platform: animateAspectOption.platformKey,
@@ -1912,6 +1782,11 @@ const handleSuggestMotion = async () => {
 const handleGenerateMotion = async () => {
   if (!API_BASE_URL || !motionReferenceImageUrl || !motionTextTrimmed) return;
 
+  if (!currentPassId) {
+    setMotionError("Missing Pass ID for MEGA session.");
+    return;
+  }
+
   const sid = await ensureSession();
   if (!sid) {
     setMotionError("Could not start Mina session.");
@@ -1928,7 +1803,7 @@ const handleGenerateMotion = async () => {
     const res = await apiFetch("/motion/generate", {
       method: "POST",
       body: JSON.stringify({
-        customerId: effectiveCustomerId,
+        passId: currentPassId,
         sessionId: sid,
         lastImageUrl: motionReferenceImageUrl,
         motionDescription: motionTextTrimmed,
@@ -2013,6 +1888,8 @@ const handleLikeCurrentStill = async () => {
   const targetMedia = currentMotion || currentStill;
   if (!targetMedia) return;
 
+  if (!currentPassId) return;
+
   const resultType = currentMotion ? "motion" : "image";
   const likeKey = getCurrentMediaKey();
   const nextLiked = likeKey ? !likedMap[likeKey] : false;
@@ -2028,7 +1905,7 @@ const handleLikeCurrentStill = async () => {
     await apiFetch("/feedback/like", {
       method: "POST",
       body: JSON.stringify({
-        customerId: effectiveCustomerId,
+        passId: currentPassId,
         resultType,
         platform: currentAspect.platformKey,
         prompt: currentMotion?.prompt || currentStill?.prompt || lastStillPrompt || stillBrief || brief,
@@ -2047,7 +1924,7 @@ const handleLikeCurrentStill = async () => {
 };
 
 const handleSubmitFeedback = async () => {
-  if (!API_BASE_URL || !feedbackText.trim()) return;
+  if (!API_BASE_URL || !feedbackText.trim() || !currentPassId) return;
   const comment = feedbackText.trim();
 
   const targetVideo = currentMotion?.url || "";
@@ -2060,7 +1937,7 @@ const handleSubmitFeedback = async () => {
     await apiFetch("/feedback/like", {
       method: "POST",
       body: JSON.stringify({
-        customerId: effectiveCustomerId,
+        passId: currentPassId,
         resultType: targetVideo ? "motion" : "image",
         platform: currentAspect.platformKey,
         prompt: lastStillPrompt || stillBrief || brief,
@@ -2418,22 +2295,11 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
     if (stylePresetKey === key) setStylePresetKey("vintage");
   };
 
-  const handleChangeCustomer = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = customerIdInput.trim();
-    if (!trimmed) return;
-    setCustomerId(trimmed);
-    setSessionId(null);
-    setStillItems([]);
-    setMotionItems([]);
-  };
-
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut();
     } finally {
       try {
-        window.localStorage.removeItem("minaCustomerId");
         window.localStorage.removeItem("minaProfileNumberMap");
         // keep likes/styles if you want; remove if you want a clean logout:
         // window.localStorage.removeItem("minaLikedMap");
