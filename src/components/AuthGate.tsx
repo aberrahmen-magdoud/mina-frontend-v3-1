@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabaseClient";
 
@@ -18,27 +18,37 @@ export function usePassId(): string | null {
   return React.useContext(PassIdContext);
 }
 
-// ✅ baseline: your “3,7k” starting point
+// ✅ baseline: your “3,7k” starting point (set to what you want)
 const BASELINE_USERS = 0;
 
 // ----------------------------------------------------------------------------
 // Pass ID helpers
 // ----------------------------------------------------------------------------
-function readStoredPassId(): string | null {
+function safeLocalStorageGet(key: string): string | null {
   try {
-    const v = window.localStorage.getItem(PASS_ID_STORAGE_KEY);
+    if (typeof window === "undefined") return null;
+    const v = window.localStorage.getItem(key);
     return v && v.trim() ? v.trim() : null;
   } catch {
     return null;
   }
 }
 
-function persistPassId(passId: string) {
+function safeLocalStorageSet(key: string, value: string) {
   try {
-    window.localStorage.setItem(PASS_ID_STORAGE_KEY, passId);
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(key, value);
   } catch {
     // ignore
   }
+}
+
+function readStoredPassId(): string | null {
+  return safeLocalStorageGet(PASS_ID_STORAGE_KEY);
+}
+
+function persistPassId(passId: string) {
+  safeLocalStorageSet(PASS_ID_STORAGE_KEY, passId);
 }
 
 async function getSupabaseAccessToken(): Promise<string | null> {
@@ -70,7 +80,6 @@ async function ensurePassId(): Promise<string | null> {
     const res = await fetch(`${API_BASE_URL}/me`, {
       method: "GET",
       headers,
-      // If your backend uses cookies, this helps (safe even if it doesn't)
       credentials: "include",
     });
 
@@ -104,6 +113,7 @@ async function syncShopifyWelcome(
 ): Promise<string | null> {
   const clean = (email || "").trim().toLowerCase();
   if (!API_BASE_URL || !clean) return null;
+  if (typeof window === "undefined") return null;
 
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -200,17 +210,27 @@ export function AuthGate({ children }: AuthGateProps) {
   // ✅ this holds “new users count” coming from your API
   const [newUsers, setNewUsers] = useState<number | null>(null);
 
+  // Keep if you want emergency bypass (otherwise delete)
   const [bypassForNow] = useState(false);
 
-  // ✅ final displayed count
   const displayedUsers = BASELINE_USERS + (newUsers ?? 0);
   const displayedUsersLabel = `${formatUserCount(displayedUsers)} curators use Mina`;
 
-  const refreshPassId = React.useCallback(async () => {
+  const refreshPassId = useCallback(async () => {
     const next = await ensurePassId();
     if (next) setPassId(next);
     return next;
   }, []);
+
+  // ✅ Children are always wrapped with passId context
+  const gatedChildren = useMemo(
+    () => <PassIdContext.Provider value={passId}>{children}</PassIdContext.Provider>,
+    [children, passId]
+  );
+
+  // ✅ MEGA gating: ONLY mount children when we have a real supabase user id
+  const hasUserId = !!session?.user?.id;
+  const isAuthed = hasUserId || bypassForNow;
 
   // Session bootstrap + auth listener
   useEffect(() => {
@@ -218,15 +238,12 @@ export function AuthGate({ children }: AuthGateProps) {
 
     const init = async () => {
       try {
-        // 1) get session
         const { data } = await supabase.auth.getSession();
         if (!mounted) return;
         setSession(data.session ?? null);
 
-        // 2) ensure passId exists even for anonymous users
-        const pid = await refreshPassId();
-        if (!mounted) return;
-        if (pid) setPassId(pid);
+        // Ensure passId exists (anon ok), and later links when JWT exists
+        await refreshPassId();
       } finally {
         if (mounted) setInitializing(false);
       }
@@ -237,7 +254,7 @@ export function AuthGate({ children }: AuthGateProps) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, newSession) => {
-      setSession(newSession);
+      setSession(newSession ?? null);
 
       if (event === "SIGNED_OUT") {
         setEmail("");
@@ -247,24 +264,21 @@ export function AuthGate({ children }: AuthGateProps) {
         setError(null);
         setGoogleOpening(false);
 
-        // ✅ keep MEGA continuity: still ensure an anonymous pass exists
+        // keep MEGA continuity: still ensure anon pass exists
         void refreshPassId();
         return;
       }
 
-      // ✅ After successful auth, ensure passId again so backend can link mg_user_id to passId
       if (event === "SIGNED_IN") {
         void (async () => {
           const nextPassId = await refreshPassId();
 
-          // Optional Shopify linkage (attribute-only)
           const signedEmail = newSession?.user?.email || null;
           const userId = newSession?.user?.id || undefined;
 
           if (signedEmail) void syncShopifyWelcome(signedEmail, userId, nextPassId);
         })();
       } else {
-        // Other auth events: keep pass fresh
         void refreshPassId();
       }
     });
@@ -273,7 +287,7 @@ export function AuthGate({ children }: AuthGateProps) {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [refreshPassId]);
 
   // Public stats (optional)
   useEffect(() => {
@@ -281,7 +295,6 @@ export function AuthGate({ children }: AuthGateProps) {
 
     const fetchStats = async () => {
       try {
-        // expecting: { ok: true, totalUsers: <number> }
         const res = await fetch(`${API_BASE_URL}/public/stats/total-users`);
         if (!res.ok) return;
 
@@ -310,11 +323,8 @@ export function AuthGate({ children }: AuthGateProps) {
     setError(null);
     setLoading(true);
 
-    // Ensure passId exists first (anon)
-    const passId = await refreshPassId();
-
-    // Fire-and-forget: create/upsert Shopify customer NOW (attribute-only)
-    void syncShopifyWelcome(trimmed, undefined, passId);
+    const pid = await refreshPassId();
+    void syncShopifyWelcome(trimmed, undefined, pid);
 
     try {
       const { error: supaError } = await supabase.auth.signInWithOtp({
@@ -339,7 +349,6 @@ export function AuthGate({ children }: AuthGateProps) {
     setError(null);
     setGoogleOpening(true);
 
-    // Ensure pass exists before redirect (best effort)
     void refreshPassId();
 
     try {
@@ -356,6 +365,7 @@ export function AuthGate({ children }: AuthGateProps) {
     }
   };
 
+  // ✅ While we’re checking local session storage, don’t mount MinaApp yet
   if (initializing) {
     return (
       <div className="mina-auth-shell">
@@ -377,7 +387,8 @@ export function AuthGate({ children }: AuthGateProps) {
     );
   }
 
-  if (session || bypassForNow) {
+  // ✅ THIS is the key line: MinaApp (children) mounts ONLY when session.user.id exists
+  if (isAuthed) {
     return gatedChildren;
   }
 
@@ -388,11 +399,6 @@ export function AuthGate({ children }: AuthGateProps) {
   const openInNewTab = inboxHref.startsWith("http");
 
   const showBack = (emailMode && hasEmail) || otpSent;
-
-  const gatedChildren = useMemo(
-    () => <PassIdContext.Provider value={passId}>{children}</PassIdContext.Provider>,
-    [children, passId]
-  );
 
   return (
     <div className="mina-auth-shell">
@@ -468,7 +474,11 @@ export function AuthGate({ children }: AuthGateProps) {
                       </label>
 
                       <div className={hasEmail ? "fade-block delay" : "fade-block hidden"}>
-                        <button type="submit" className="mina-auth-link mina-auth-main small" disabled={loading || !hasEmail}>
+                        <button
+                          type="submit"
+                          className="mina-auth-link mina-auth-main small"
+                          disabled={loading || !hasEmail}
+                        >
                           {loading ? "Sending link…" : "Sign in"}
                         </button>
                       </div>
