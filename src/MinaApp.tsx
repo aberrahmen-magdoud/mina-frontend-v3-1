@@ -34,6 +34,9 @@ type HealthState = {
 type CreditsMeta = {
   imageCost: number;
   motionCost: number;
+
+  // ISO date when the current credits expire (optional, if backend returns it)
+  expiresAt?: string | null;
 };
 
 type CreditsState = {
@@ -129,6 +132,10 @@ type HistoryResponse = {
   customerId: string;
   credits: {
     balance: number;
+
+    // Optional: when the current credits expire (if backend returns it)
+    expiresAt?: string | null;
+
     history?: {
       id: string;
       amount: number;
@@ -492,8 +499,14 @@ const MinaApp: React.FC<MinaAppProps> = ({ initialCustomerId }) => {
   // 4.1 Global tab + customer
   // -------------------------
   const [activeTab, setActiveTab] = useState<"studio" | "profile">("studio");
+
+  // Legacy fallback (anonymous / dev). In production, Supabase user id overrides this.
   const [customerId, setCustomerId] = useState<string>(() => getInitialCustomerId(initialCustomerId));
   const [customerIdInput, setCustomerIdInput] = useState<string>(customerId);
+
+  // ✅ Supabase identity (production truth)
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [adminConfig, setAdminConfig] = useState(loadAdminConfig());
@@ -787,17 +800,29 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
   const briefLength = brief.trim().length;
   const stillBriefLength = stillBrief.trim().length;
   const uploadsPending = Object.values(uploads).some((arr) => arr.some((it) => it.uploading));
+  // ✅ Production customer identity: always use Supabase user id when logged in
+  const effectiveCustomerId = authUserId || customerId;
+
+  // ✅ Always show newest first in Profile
+  const sortedHistoryGenerations = useMemo(() => {
+    const copy = [...historyGenerations];
+    copy.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return copy;
+  }, [historyGenerations]);
+
   const historyIndexMap = useMemo(
     () =>
-      historyGenerations.reduce<Record<string, number>>((acc, item, idx) => {
+      sortedHistoryGenerations.reduce<Record<string, number>>((acc, item, idx) => {
         acc[item.id] = idx;
         return acc;
       }, {}),
-    [historyGenerations]
+    [sortedHistoryGenerations]
   );
+
   const visibleHistory = useMemo(
-    () => historyGenerations.slice(0, Math.min(visibleHistoryCount, historyGenerations.length)),
-    [historyGenerations, visibleHistoryCount]
+    () =>
+      sortedHistoryGenerations.slice(0, Math.min(visibleHistoryCount, sortedHistoryGenerations.length)),
+    [sortedHistoryGenerations, visibleHistoryCount]
   );
 
   // UI stages
@@ -1169,10 +1194,13 @@ useEffect(() => {
           if (!cancelled && !error && row?.email) setIsAdmin(true);
         }
 
-        // Optional: if customerId is still default/anonymous, adopt Supabase user.id (stable)
-        const uid = data.session?.user?.id;
-        if (!cancelled && uid && (!customerId || customerId === "anonymous")) {
-          setCustomerId(uid);
+        const uid = data.session?.user?.id || null;
+        setAuthUserId(uid);
+
+        // ✅ Production: force customerId to Supabase user id when logged in
+        if (!cancelled && uid) {
+          setCustomerId((prev) => (prev !== uid ? uid : prev));
+          setCustomerIdInput(uid);
         }
       } catch {
         if (!cancelled) {
@@ -1207,10 +1235,13 @@ useEffect(() => {
         }
       }
 
-      // Optional: adopt Supabase user.id when customerId is still default/anonymous
-      const uid = session?.user?.id;
-      if (uid && (!customerId || customerId === "anonymous")) {
-        setCustomerId(uid);
+      const uid = session?.user?.id || null;
+      setAuthUserId(uid);
+
+      // ✅ Production: force customerId to Supabase user id when logged in
+      if (uid) {
+        setCustomerId((prev) => (prev !== uid ? uid : prev));
+        setCustomerIdInput(uid);
       }
     });
 
@@ -1276,15 +1307,42 @@ const handleCheckHealth = async () => {
   }
 };
 
+const extractExpiresAt = (obj: any): string | null => {
+  const v =
+    obj?.expiresAt ??
+    obj?.expirationDate ??
+    obj?.expiry ??
+    obj?.expiration ??
+    obj?.meta?.expiresAt ??
+    obj?.meta?.expirationDate ??
+    obj?.meta?.expiry ??
+    obj?.meta?.expiration ??
+    null;
+
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+};
+
 const fetchCredits = async () => {
-  if (!API_BASE_URL || !customerId) return;
+  if (!API_BASE_URL || !effectiveCustomerId) return;
   try {
     setCreditsLoading(true);
-    const params = new URLSearchParams({ customerId });
+
+    const params = new URLSearchParams({ customerId: effectiveCustomerId });
     const res = await apiFetch(`/credits/balance?${params.toString()}`);
     if (!res.ok) return;
-    const json = (await res.json()) as { balance: number; meta?: { imageCost: number; motionCost: number } };
-    setCredits({ balance: json.balance, meta: json.meta });
+
+    const json = (await res.json().catch(() => ({}))) as any;
+
+    const expiresAt = extractExpiresAt(json);
+
+    setCredits((prev) => ({
+      balance: Number(json?.balance ?? prev?.balance ?? 0),
+      meta: {
+        imageCost: Number(json?.meta?.imageCost ?? prev?.meta?.imageCost ?? adminConfig.pricing?.imageCost ?? 1),
+        motionCost: Number(json?.meta?.motionCost ?? prev?.meta?.motionCost ?? adminConfig.pricing?.motionCost ?? 5),
+        expiresAt,
+      },
+    }));
   } catch {
     // silent
   } finally {
@@ -1294,13 +1352,13 @@ const fetchCredits = async () => {
 
 const ensureSession = async (): Promise<string | null> => {
   if (sessionId) return sessionId;
-  if (!API_BASE_URL || !customerId) return null;
+  if (!API_BASE_URL || !effectiveCustomerId) return null;
 
   try {
     const res = await apiFetch("/sessions/start", {
       method: "POST",
       body: JSON.stringify({
-        customerId,
+        customerId: effectiveCustomerId,
         platform: currentAspect.platformKey,
         title: sessionTitle,
       }),
@@ -1321,37 +1379,48 @@ const ensureSession = async (): Promise<string | null> => {
 
 // fetchHistory: always copy generation URLs into R2 before displaying
 const fetchHistory = async () => {
-  if (!API_BASE_URL || !customerId) return;
+  if (!API_BASE_URL || !effectiveCustomerId) return;
+
   try {
     setHistoryLoading(true);
-    const res = await apiFetch(`/history/customer/${encodeURIComponent(customerId)}`);
+    setHistoryError(null);
+
+    const res = await apiFetch(`/history/customer/${encodeURIComponent(effectiveCustomerId)}`);
     if (!res.ok) throw new Error(`Status ${res.status}`);
-    const json = (await res.json()) as HistoryResponse;
+
+    const json = (await res.json().catch(() => ({}))) as HistoryResponse;
     if (!json.ok) throw new Error("History error");
 
-    // update credit balance
-    setCredits((prev) => ({ balance: json.credits.balance, meta: prev?.meta }));
+    // update credit balance + optional expiry
+    setCredits((prev) => ({
+      balance: json.credits.balance,
+      meta: {
+        imageCost: prev?.meta?.imageCost ?? adminConfig.pricing?.imageCost ?? 1,
+        motionCost: prev?.meta?.motionCost ?? adminConfig.pricing?.motionCost ?? 5,
+        expiresAt: json.credits.expiresAt ?? prev?.meta?.expiresAt ?? null,
+      },
+    }));
 
-    // fetch and store each generation’s image in R2 (stable, non-expiring)
     const gens = json.generations || [];
+
+    // ✅ Production behavior:
+    // - Try to normalize links into stable R2
+    // - BUT never drop items if that fails
     const updated = await Promise.all(
       gens.map(async (g) => {
+        const original = g.outputUrl;
+
         try {
-          const r2 = await storeRemoteToR2(g.outputUrl, "generations");
+          const r2 = await storeRemoteToR2(original, "generations");
           const stable = stripSignedQuery(r2);
-
-          // ✅ Never show replicate links in profile
-          if (isReplicateUrl(stable)) return null;
-
-          return { ...g, outputUrl: stable };
+          return { ...g, outputUrl: stable || original };
         } catch {
-          // If anything fails, hide it (because you only want R2 non-expiring links)
-          return null;
+          return { ...g, outputUrl: original };
         }
       })
     );
 
-    setHistoryGenerations(updated.filter(Boolean) as GenerationRecord[]);
+    setHistoryGenerations(updated);
     setHistoryFeedbacks(json.feedbacks || []);
   } catch (err: any) {
     setHistoryError(err?.message || "Unable to load history.");
@@ -1359,6 +1428,16 @@ const fetchHistory = async () => {
     setHistoryLoading(false);
   }
 };
+
+useEffect(() => {
+  if (activeTab !== "profile") return;
+  if (!effectiveCustomerId) return;
+
+  setVisibleHistoryCount(20);
+  void fetchCredits();
+  void fetchHistory();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeTab, effectiveCustomerId]);
 
 
 const getEditorialNumber = (id: string, index: number) => {
@@ -1459,7 +1538,7 @@ async function uploadFileToR2(panel: UploadPanelKey, file: File): Promise<string
     body: JSON.stringify({
       dataUrl,
       kind: panel, // "product" | "logo" | "inspiration"
-      customerId, // track who uploaded
+      customerId: effectiveCustomerId,
     }),
   });
 
@@ -1482,7 +1561,7 @@ async function storeRemoteToR2(url: string, kind: string): Promise<string> {
     body: JSON.stringify({
       url,
       kind, // "generations" | "motions" | etc.
-      customerId,
+      customerId: effectiveCustomerId,
     }),
   });
 
@@ -1568,7 +1647,7 @@ const handleGenerateStill = async () => {
       logoImageUrl?: string;
       styleImageUrls?: string[];
     } = {
-      customerId,
+      customerId: effectiveCustomerId!,
       sessionId: sid,
       brief: trimmed,
       tone,
@@ -1714,7 +1793,7 @@ const handleSuggestMotion = async () => {
     const res = await apiFetch("/motion/suggest", {
       method: "POST",
       body: JSON.stringify({
-        customerId,
+        customerId: effectiveCustomerId,
         referenceImageUrl: motionReferenceImageUrl,
         tone,
         platform: animateAspectOption.platformKey,
@@ -1760,7 +1839,7 @@ const handleGenerateMotion = async () => {
     const res = await apiFetch("/motion/generate", {
       method: "POST",
       body: JSON.stringify({
-        customerId,
+        customerId: effectiveCustomerId,
         sessionId: sid,
         lastImageUrl: motionReferenceImageUrl,
         motionDescription: motionTextTrimmed,
@@ -1860,7 +1939,7 @@ const handleLikeCurrentStill = async () => {
     await apiFetch("/feedback/like", {
       method: "POST",
       body: JSON.stringify({
-        customerId,
+        customerId: effectiveCustomerId,
         resultType,
         platform: currentAspect.platformKey,
         prompt: currentMotion?.prompt || currentStill?.prompt || lastStillPrompt || stillBrief || brief,
@@ -1892,7 +1971,7 @@ const handleSubmitFeedback = async () => {
     await apiFetch("/feedback/like", {
       method: "POST",
       body: JSON.stringify({
-        customerId,
+        customerId: effectiveCustomerId,
         resultType: targetVideo ? "motion" : "image",
         platform: currentAspect.platformKey,
         prompt: lastStillPrompt || stillBrief || brief,
@@ -2264,6 +2343,14 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
     try {
       await supabase.auth.signOut();
     } finally {
+      try {
+        window.localStorage.removeItem("minaCustomerId");
+        window.localStorage.removeItem("minaProfileNumberMap");
+        // keep likes/styles if you want; remove if you want a clean logout:
+        // window.localStorage.removeItem("minaLikedMap");
+      } catch {
+        // ignore
+      }
       if (typeof window !== "undefined") window.location.reload();
     }
   };
@@ -2565,10 +2652,12 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
 const renderProfileBody = () => {
   // Show expiration date if provided
   const expirationCandidate =
+    credits?.meta?.expiresAt ||
     (credits?.meta as any)?.expiresAt ||
     (credits?.meta as any)?.expirationDate ||
     (credits?.meta as any)?.expiry ||
     (credits?.meta as any)?.expiration;
+
   const expirationLabel = formatDateOnly(expirationCandidate);
 
   // Layout variants for grid sizing
@@ -2739,6 +2828,17 @@ const renderProfileBody = () => {
                 Matchas remaining
               </span>
               <span className="profile-meta-value">{credits ? credits.balance : "—"}</span>
+            </div>
+            <div className="profile-meta-block">
+              <span
+                className="profile-meta-title"
+                style={{ textTransform: "none", letterSpacing: "normal" }}
+              >
+                Signed in as
+              </span>
+              <span className="profile-meta-value" title={currentUserEmail || ""}>
+                {currentUserEmail || "—"}
+              </span>
             </div>
             <div className="profile-meta-block">
               <span
