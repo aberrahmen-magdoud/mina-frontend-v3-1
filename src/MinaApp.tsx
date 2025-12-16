@@ -292,6 +292,39 @@ const TEXTAREA_FLOAT_DISTANCE_PX = 12; // tiny translate to avoid layout jump
 function classNames(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
 }
+// ------------------------------------------
+// Small helpers used by Profile/Supabase code
+// ------------------------------------------
+function pickString(obj: any, keys: string[], fallback = ""): string {
+  if (!obj || typeof obj !== "object") return fallback;
+  for (const k of keys) {
+    const v = obj?.[k];
+    if (typeof v === "string" && v.trim().length) return v;
+    if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  }
+  return fallback;
+}
+
+function pickNumber(obj: any, keys: string[], fallback = 0): number {
+  if (!obj || typeof obj !== "object") return fallback;
+  for (const k of keys) {
+    const v = obj?.[k];
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string") {
+      const n = Number(v);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return fallback;
+}
+
+function truncateMiddle(value: string, max = 20): string {
+  const s = String(value || "");
+  if (s.length <= max) return s;
+  const left = Math.ceil(max * 0.6);
+  const right = Math.floor(max * 0.3);
+  return `${s.slice(0, left)}…${s.slice(Math.max(0, s.length - right))}`;
+}
 
 function getInitialCustomerId(initialCustomerId?: string): string {
   try {
