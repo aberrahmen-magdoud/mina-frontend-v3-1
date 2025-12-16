@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabaseClient";
 
@@ -11,6 +11,12 @@ const API_BASE_URL =
 
 // ✅ MEGA identity storage (single identity)
 const PASS_ID_STORAGE_KEY = "minaPassId";
+
+const PassIdContext = React.createContext<string | null>(null);
+
+export function usePassId(): string | null {
+  return React.useContext(PassIdContext);
+}
 
 // ✅ baseline: your “3,7k” starting point
 const BASELINE_USERS = 0;
@@ -179,6 +185,7 @@ function formatUserCount(n: number | null): string {
 export function AuthGate({ children }: AuthGateProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [initializing, setInitializing] = useState(true);
+  const [passId, setPassId] = useState<string | null>(() => readStoredPassId());
 
   const [email, setEmail] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -199,6 +206,12 @@ export function AuthGate({ children }: AuthGateProps) {
   const displayedUsers = BASELINE_USERS + (newUsers ?? 0);
   const displayedUsersLabel = `${formatUserCount(displayedUsers)} curators use Mina`;
 
+  const refreshPassId = React.useCallback(async () => {
+    const next = await ensurePassId();
+    if (next) setPassId(next);
+    return next;
+  }, []);
+
   // Session bootstrap + auth listener
   useEffect(() => {
     let mounted = true;
@@ -211,7 +224,9 @@ export function AuthGate({ children }: AuthGateProps) {
         setSession(data.session ?? null);
 
         // 2) ensure passId exists even for anonymous users
-        void ensurePassId();
+        const pid = await refreshPassId();
+        if (!mounted) return;
+        if (pid) setPassId(pid);
       } finally {
         if (mounted) setInitializing(false);
       }
@@ -233,26 +248,24 @@ export function AuthGate({ children }: AuthGateProps) {
         setGoogleOpening(false);
 
         // ✅ keep MEGA continuity: still ensure an anonymous pass exists
-        void ensurePassId();
+        void refreshPassId();
         return;
       }
 
       // ✅ After successful auth, ensure passId again so backend can link mg_user_id to passId
       if (event === "SIGNED_IN") {
         void (async () => {
-          const passId = await ensurePassId();
+          const nextPassId = await refreshPassId();
 
           // Optional Shopify linkage (attribute-only)
           const signedEmail = newSession?.user?.email || null;
           const userId = newSession?.user?.id || undefined;
 
-          if (signedEmail) {
-            void syncShopifyWelcome(signedEmail, userId, passId);
-          }
+          if (signedEmail) void syncShopifyWelcome(signedEmail, userId, nextPassId);
         })();
       } else {
         // Other auth events: keep pass fresh
-        void ensurePassId();
+        void refreshPassId();
       }
     });
 
@@ -298,7 +311,7 @@ export function AuthGate({ children }: AuthGateProps) {
     setLoading(true);
 
     // Ensure passId exists first (anon)
-    const passId = await ensurePassId();
+    const passId = await refreshPassId();
 
     // Fire-and-forget: create/upsert Shopify customer NOW (attribute-only)
     void syncShopifyWelcome(trimmed, undefined, passId);
@@ -327,7 +340,7 @@ export function AuthGate({ children }: AuthGateProps) {
     setGoogleOpening(true);
 
     // Ensure pass exists before redirect (best effort)
-    void ensurePassId();
+    void refreshPassId();
 
     try {
       const { error: supaError } = await supabase.auth.signInWithOAuth({
@@ -365,7 +378,7 @@ export function AuthGate({ children }: AuthGateProps) {
   }
 
   if (session || bypassForNow) {
-    return <>{children}</>;
+    return gatedChildren;
   }
 
   const trimmed = email.trim();
@@ -375,6 +388,11 @@ export function AuthGate({ children }: AuthGateProps) {
   const openInNewTab = inboxHref.startsWith("http");
 
   const showBack = (emailMode && hasEmail) || otpSent;
+
+  const gatedChildren = useMemo(
+    () => <PassIdContext.Provider value={passId}>{children}</PassIdContext.Provider>,
+    [children, passId]
+  );
 
   return (
     <div className="mina-auth-shell">
