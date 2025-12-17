@@ -216,19 +216,23 @@ async function persistPassIdToMegaCustomers(opts: {
   // Fallback: update existing row else insert
   try {
     const { data: existing, error: selErr } = await supabase
-      .from(MEGA_CUSTOMERS_TABLE)
-      .select(`${COL_PASS_ID}`)
-      .eq(COL_USER_ID, userId)
-      .limit(1)
-      .maybeSingle();
+  .from(MEGA_CUSTOMERS_TABLE)
+  .select(COL_USER_ID)
+  .eq(COL_USER_ID, userId)
+  .maybeSingle();
 
-    if (!selErr && existing?.[COL_PASS_ID]) {
-      const patch: any = { [COL_PASS_ID]: passId };
-      if (email) patch[COL_EMAIL] = email;
+if (!selErr && existing) {
+  const patch: any = { [COL_PASS_ID]: passId };
+  if (email) patch[COL_EMAIL] = email;
 
-      await supabase.from(MEGA_CUSTOMERS_TABLE).update(patch).eq(COL_PASS_ID, existing[COL_PASS_ID]);
-      return;
-    }
+  await supabase
+    .from(MEGA_CUSTOMERS_TABLE)
+    .update(patch)
+    .eq(COL_USER_ID, userId);
+
+  return;
+}
+
 
     const insertPayload: any = {
       [COL_USER_ID]: userId,
