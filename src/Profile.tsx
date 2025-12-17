@@ -22,7 +22,7 @@ export default function Profile() {
   };
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 100 }}>
       <div
         style={{
           display: "flex",
