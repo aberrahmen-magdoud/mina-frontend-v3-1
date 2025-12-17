@@ -487,6 +487,15 @@ const [editingNumberValue, setEditingNumberValue] = useState<string>("");
 // =====================
 // [NUMBER MAP END]
 // =====================
+  // =======================
+// History state (REQUIRED)
+// =======================
+const [historyGenerations, setHistoryGenerations] = useState<GenerationRecord[]>([]);
+const [historyFeedbacks, setHistoryFeedbacks] = useState<FeedbackRecord[]>([]);
+const [historyLoading, setHistoryLoading] = useState(false);
+const [historyError, setHistoryError] = useState<string | null>(null);
+const [visibleHistoryCount, setVisibleHistoryCount] = useState(20);
+
   // -------------------------
   // 4.1 Global tab + customer
   // -------------------------
