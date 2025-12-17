@@ -1,5 +1,5 @@
 import React from "react";
-import { supabase } from "../lib/supabaseClient"; // adjust path if needed
+import { supabase } from "./lib/supabaseClient";
 
 export default function Profile() {
   const handleLogout = async () => {
