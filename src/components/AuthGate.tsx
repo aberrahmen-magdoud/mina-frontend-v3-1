@@ -27,7 +27,7 @@ const PASS_ID_STORAGE_KEY = "minaPassId";
 
 
 // baseline users label (optional)
-const BASELINE_USERS = 0;
+const BASELINE_USERS = 3700;
 
 // --------------------
 // PassId context
