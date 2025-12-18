@@ -487,16 +487,8 @@ export default function Profile({ passId, apiBaseUrl, onBackToStudio }: ProfileP
   return (
     <div className="profile-shell">
       <div className="profile-topbar">
-        <a
-          className="profile-logo-link"
-          href="/studio"
-          onClick={(e) => {
-            e.preventDefault();
-            handleBackToStudio();
-          }}
-        >
-          <img className="profile-logo" src="/mina-logo.svg" alt="Mina" />
-        </a>
+        <div />
+
 
         <div className="profile-topbar-right">
           <button type="button" className="studio-header-cta" onClick={handleBackToStudio}>
