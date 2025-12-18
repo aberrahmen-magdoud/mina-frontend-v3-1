@@ -2,185 +2,164 @@
 // FILE: src/Profile.tsx
 // Mina — Profile (Archive)
 // - Mina-style header (logo left, Back to Studio right, Logout far right)
-// - Customer meta row (mega_customer + mega_generation stats)
-// - Archive: 7-col grid, infinite load (10/page)
+// - Meta row (pass + email + stats)
+// - Archive grid, "infinite" reveal (10/page, client-side)
 // - Click item => download (no new tab)
 // - Prompt line + tiny "view more"
-// - Date + Delete with confirm ("Yes delete" normal, "No keep" bold)
-// - Filters (motion / creation / liked / recent / session) => non-matching dim to 10%
+// - Date + Delete with confirm
+// - Filters (motion/type / creation/platform / liked / recent / session) => non-matching dim to 10%
 // =============================================================
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
 import "./Profile.css";
 
-const PASS_ID_STORAGE_KEY = "minaPassId";
 const PAGE_SIZE = 10;
 
-// Best-effort field picking (DB schema tolerant)
-function pick(obj, keys, fallback = "") {
+type GenerationRecord = {
+  id: string;
+  type?: string | null;
+  sessionId?: string | null;
+  passId?: string | null;
+  platform?: string | null;
+  prompt?: string | null;
+  outputUrl?: string | null;
+  createdAt?: string | null;
+  meta?: Record<string, unknown> | null;
+};
+
+type FeedbackRecord = {
+  id: string;
+  passId?: string | null;
+  resultType?: string | null;
+  platform?: string | null;
+  prompt?: string | null;
+  comment?: string | null;
+  imageUrl?: string | null;
+  videoUrl?: string | null;
+  createdAt?: string | null;
+};
+
+type HistoryResponse = {
+  ok: boolean;
+  passId: string;
+  credits?: { balance: number; expiresAt?: string | null };
+  generations?: GenerationRecord[];
+  feedbacks?: FeedbackRecord[];
+};
+
+type ProfileProps = {
+  passId: string | null | undefined;
+  apiBaseUrl: string;
+  onBackToStudio?: () => void;
+};
+
+function pick(obj: any, keys: string[], fallback: any = ""): any {
   if (!obj) return fallback;
   for (const k of keys) {
-    if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== "") {
-      return obj[k];
-    }
+    const v = obj[k];
+    if (v !== undefined && v !== null && String(v).trim() !== "") return v;
   }
   return fallback;
 }
 
-function formatDate(iso) {
+function toBool(v: unknown): boolean {
+  if (v === true || v === false) return v;
+  if (typeof v === "number") return v !== 0;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    if (!s) return false;
+    if (["true", "1", "yes", "y", "t"].includes(s)) return true;
+    if (["false", "0", "no", "n", "f"].includes(s)) return false;
+    return Boolean(s);
+  }
+  return Boolean(v);
+}
+
+function formatDate(iso?: string | null): string {
   if (!iso) return "";
   try {
     const d = new Date(iso);
-    return d.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-    });
+    if (Number.isNaN(d.getTime())) return String(iso);
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
   } catch {
     return String(iso);
   }
 }
 
-function extFromUrl(url) {
+function extFromUrl(url?: string | null): string {
   if (!url) return "";
   const clean = url.split("?")[0].split("#")[0];
   const m = clean.match(/\.([a-zA-Z0-9]+)$/);
   return m ? m[1].toLowerCase() : "";
 }
 
-function isVideoUrl(url) {
+function isVideoUrl(url?: string | null): boolean {
   const ext = extFromUrl(url);
   return ["mp4", "webm", "mov", "m4v"].includes(ext);
 }
 
-function safeFilename(base, url) {
+function safeFilename(base: string, url?: string | null): string {
   const ext = extFromUrl(url);
   const suffix = ext ? `.${ext}` : ".bin";
   return `${base}${suffix}`;
 }
 
-// Try multiple possible “owner” columns without breaking if column doesn't exist
-async function fetchByOwnerKey({
-  table,
-  select,
-  ownerValue,
-  orderBy = "created_at",
-  ascending = false,
-  rangeFrom,
-  rangeTo,
-}) {
-  const ownerKeys = ["pass_id", "passId", "customer_pass_id", "customer_id", "customerId"];
-  let lastError = null;
-
-  for (const ownerKey of ownerKeys) {
-    const q = supabase
-      .from(table)
-      .select(select)
-      .order(orderBy, { ascending })
-      .range(rangeFrom, rangeTo);
-
-    const { data, error } = await q.eq(ownerKey, ownerValue);
-
-    if (!error) return { data: data || [], ownerKeyUsed: ownerKey, error: null };
-
-    lastError = error;
-    const msg = String(error.message || "").toLowerCase();
-    // If it's a "column does not exist" style error, keep trying other keys
-    if (msg.includes("column") && msg.includes("does not exist")) continue;
-
-    // Otherwise: stop (permissions / network / etc)
-    break;
+async function getSupabaseAccessToken(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token || null;
+  } catch {
+    return null;
   }
-
-  return { data: [], ownerKeyUsed: null, error: lastError };
 }
 
-async function fetchCustomer(passId) {
-  // Same tolerant approach for mega_customer lookup
-  const keys = ["pass_id", "passId", "id", "customer_id", "customerId"];
-  let lastError = null;
+export default function Profile({ passId, apiBaseUrl, onBackToStudio }: ProfileProps) {
+  const [email, setEmail] = useState<string>("");
+  const [allItems, setAllItems] = useState<GenerationRecord[]>([]);
+  const [feedbacks, setFeedbacks] = useState<FeedbackRecord[]>([]);
 
-  for (const k of keys) {
-    const { data, error } = await supabase
-      .from("mega_customer")
-      .select("*")
-      .eq(k, passId)
-      .limit(1);
-
-    if (!error && data && data.length) return { customer: data[0], error: null };
-    if (error) {
-      lastError = error;
-      const msg = String(error.message || "").toLowerCase();
-      if (msg.includes("column") && msg.includes("does not exist")) continue;
-      break;
-    }
-  }
-
-  return { customer: null, error: lastError };
-}
-
-async function fetchCounts(passId) {
-  // total
-  const totalRes = await fetchByOwnerKey({
-    table: "mega_generation",
-    select: "id",
-    ownerValue: passId,
-    rangeFrom: 0,
-    rangeTo: 0,
-  });
-
-  // If we found a usable ownerKey, we can use it for cheap HEAD counts:
-  const ownerKey = totalRes.ownerKeyUsed;
-
-  let total = null;
-  let liked = null;
-
-  if (ownerKey) {
-    const { count: totalCount, error: totalErr } = await supabase
-      .from("mega_generation")
-      .select("id", { count: "exact", head: true })
-      .eq(ownerKey, passId);
-
-    if (!totalErr) total = totalCount ?? 0;
-
-    const { count: likedCount, error: likedErr } = await supabase
-      .from("mega_generation")
-      .select("id", { count: "exact", head: true })
-      .eq(ownerKey, passId)
-      .eq("liked", true);
-
-    if (!likedErr) liked = likedCount ?? 0;
-  }
-
-  return { total, liked, ownerKeyUsed: ownerKey || null };
-}
-
-export default function Profile() {
-  const [passId, setPassId] = useState("");
-  const [customer, setCustomer] = useState(null);
-
-  const [counts, setCounts] = useState({ total: null, liked: null });
-  const [ownerKeyUsed, setOwnerKeyUsed] = useState(null);
-
-  const [items, setItems] = useState([]);
   const [isBootLoading, setIsBootLoading] = useState(true);
-  const [isPageLoading, setIsPageLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState("");
 
-  const [expandedPromptId, setExpandedPromptId] = useState(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  // paging (client-side)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const hasMore = visibleCount < allItems.length;
+
+  const [expandedPromptId, setExpandedPromptId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Filters
-  const [filterMotion, setFilterMotion] = useState("all");
-  const [filterCreation, setFilterCreation] = useState("all"); // create / animate / (or inferred)
+  const [filterMotion, setFilterMotion] = useState("all"); // all / still / motion
+  const [filterCreation, setFilterCreation] = useState("all"); // platform
   const [filterLiked, setFilterLiked] = useState(false);
   const [filterRecent, setFilterRecent] = useState(false); // last 7 days
   const [filterSession, setFilterSession] = useState("all");
 
-  const pageRef = useRef(0);
-  const sentinelRef = useRef(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Local liked map (from MinaApp)
+  const likedMap = useMemo<Record<string, boolean>>(() => {
+    try {
+      const raw = window.localStorage.getItem("minaLikedMap");
+      return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+    } catch {
+      return {};
+    }
+  }, []);
+
+  const apiFetch = useCallback(
+    async (path: string, init: RequestInit = {}) => {
+      if (!apiBaseUrl) throw new Error("Missing API base URL");
+      const headers = new Headers(init.headers || {});
+      const token = await getSupabaseAccessToken();
+      if (token && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
+      if (passId && !headers.has("X-Mina-Pass-Id")) headers.set("X-Mina-Pass-Id", passId);
+      if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+      return fetch(`${apiBaseUrl}${path}`, { ...init, headers });
+    },
+    [apiBaseUrl, passId]
+  );
 
   const handleLogout = async () => {
     try {
@@ -188,334 +167,334 @@ export default function Profile() {
     } catch {
       // ignore
     }
-    try {
-      localStorage.removeItem(PASS_ID_STORAGE_KEY);
-    } catch {
-      // ignore
-    }
-    window.location.href = "/";
+    // Let AuthGate handle redirect on reload
+    window.location.reload();
   };
 
   const handleBackToStudio = () => {
-    // Adjust if your studio route differs
+    if (onBackToStudio) return onBackToStudio();
     window.location.href = "/studio";
   };
 
-  const loadNextPage = useCallback(
-    async ({ reset = false } = {}) => {
-      if (!passId) return;
-      if (!hasMore && !reset) return;
-      if (isPageLoading) return;
+  const normalizeGen = useCallback((g: GenerationRecord): GenerationRecord => {
+    // Normalize key casing (so our pick() works consistently)
+    return {
+      ...g,
+      id: String(g.id),
+      type: (g.type ?? null) as any,
+      sessionId: (g.sessionId ?? null) as any,
+      platform: (g.platform ?? null) as any,
+      prompt: (g.prompt ?? null) as any,
+      outputUrl: (g.outputUrl ?? null) as any,
+      createdAt: (g.createdAt ?? null) as any,
+      meta: (g.meta ?? null) as any,
+    };
+  }, []);
 
-      setIsPageLoading(true);
-      setError("");
-
-      try {
-        const page = reset ? 0 : pageRef.current;
-        const from = page * PAGE_SIZE;
-        const to = from + PAGE_SIZE - 1;
-
-        let data = [];
-        let usedKey = ownerKeyUsed;
-
-        if (usedKey) {
-          const q = supabase
-            .from("mega_generation")
-            .select("*")
-            .order("created_at", { ascending: false })
-            .range(from, to)
-            .eq(usedKey, passId);
-
-          const { data: d, error: e } = await q;
-          if (e) throw e;
-          data = d || [];
-        } else {
-          const res = await fetchByOwnerKey({
-            table: "mega_generation",
-            select: "*",
-            ownerValue: passId,
-            rangeFrom: from,
-            rangeTo: to,
-          });
-          if (res.error) throw res.error;
-          data = res.data || [];
-          usedKey = res.ownerKeyUsed;
-          if (usedKey) setOwnerKeyUsed(usedKey);
-        }
-
-        if (reset) {
-          pageRef.current = 1;
-          setItems(data);
-        } else {
-          pageRef.current = page + 1;
-          setItems((prev) => [...prev, ...data]);
-        }
-
-        setHasMore(data.length === PAGE_SIZE);
-      } catch (e) {
-        setError(String(e?.message || e || "Failed to load archive."));
-      } finally {
-        setIsPageLoading(false);
-      }
-    },
-    [passId, hasMore, isPageLoading, ownerKeyUsed]
-  );
-
-  // Boot: read passId + fetch customer + counts + first page
+  // Boot: user email + history
   useEffect(() => {
-    let mounted = true;
+    let cancelled = false;
+    const ac = new AbortController();
 
     (async () => {
       setIsBootLoading(true);
       setError("");
 
-      let stored = "";
-      try {
-        stored = localStorage.getItem(PASS_ID_STORAGE_KEY) || "";
-      } catch {
-        stored = "";
-      }
-
-      if (!stored) {
+      if (!passId || !String(passId).trim()) {
         setIsBootLoading(false);
         setError("Missing pass id. Please log in again.");
         return;
       }
 
-      if (!mounted) return;
-      setPassId(stored);
-
       try {
-        const [custRes, countRes] = await Promise.all([fetchCustomer(stored), fetchCounts(stored)]);
-
-        if (!mounted) return;
-
-        if (custRes?.customer) setCustomer(custRes.customer);
-        if (custRes?.error && !custRes.customer) {
-          // We can still render profile without customer row
-          // Keep it silent unless you want to show it:
-          // setError(String(custRes.error.message || custRes.error));
+        // email (optional)
+        try {
+          const { data } = await supabase.auth.getSession();
+          const e = (data.session?.user?.email || "").trim();
+          if (!cancelled) setEmail(e);
+        } catch {
+          // ignore
         }
 
-        if (countRes) {
-          setCounts({ total: countRes.total, liked: countRes.liked });
-          if (countRes.ownerKeyUsed) setOwnerKeyUsed(countRes.ownerKeyUsed);
+        const res = await apiFetch(`/history/pass/${encodeURIComponent(passId)}`, {
+          method: "GET",
+          signal: ac.signal,
+        });
+
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(`History failed (${res.status})${txt ? `: ${txt.slice(0, 220)}` : ""}`);
         }
 
-        // First page
-        pageRef.current = 0;
-        setHasMore(true);
-        await loadNextPage({ reset: true });
-      } catch (e) {
-        setError(String(e?.message || e || "Failed to load profile."));
+        const json = (await res.json().catch(() => null)) as HistoryResponse | null;
+        if (!json || json.ok !== true) throw new Error("History error (invalid response).");
+
+        const gens = Array.isArray(json.generations) ? json.generations.map(normalizeGen) : [];
+        const fbs = Array.isArray(json.feedbacks) ? json.feedbacks : [];
+
+        // Sort newest first (defensive)
+        gens.sort((a, b) => {
+          const ta = new Date(a.createdAt || "").getTime() || 0;
+          const tb = new Date(b.createdAt || "").getTime() || 0;
+          return tb - ta;
+        });
+
+        if (!cancelled) {
+          setAllItems(gens);
+          setFeedbacks(fbs);
+          setVisibleCount(PAGE_SIZE);
+        }
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message || "Failed to load profile.");
       } finally {
-        if (mounted) setIsBootLoading(false);
+        if (!cancelled) setIsBootLoading(false);
       }
     })();
 
     return () => {
-      mounted = false;
+      cancelled = true;
+      ac.abort();
     };
-  }, [loadNextPage]);
+  }, [apiFetch, normalizeGen, passId]);
 
-  // Infinite load sentinel
+  // Infinite reveal sentinel
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
 
     const io = new IntersectionObserver(
       (entries) => {
-        const first = entries[0];
-        if (first?.isIntersecting) loadNextPage();
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((c) => Math.min(allItems.length, c + PAGE_SIZE));
+        }
       },
       { root: null, threshold: 0.1 }
     );
 
     io.observe(el);
     return () => io.disconnect();
-  }, [loadNextPage]);
+  }, [allItems.length]);
 
-  // Build filter options from loaded items
-  const motionOptions = useMemo(() => {
-    const set = new Set();
-    for (const it of items) {
-      const m = pick(it, ["motion", "motion_style", "motionStyle", "motion_name"], "");
-      if (m) set.add(m);
+  const items = useMemo(() => allItems.slice(0, visibleCount), [allItems, visibleCount]);
+
+  // Liked inference (server feedbacks + local liked map)
+  const likedUrlSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const f of feedbacks) {
+      const comment = (f.comment || "").trim();
+      // Mina uses /feedback/like with comment: "" to represent likes
+      if (comment !== "") continue;
+      const u = (f.imageUrl || f.videoUrl || "").trim();
+      if (u) set.add(u);
+    }
+    return set;
+  }, [feedbacks]);
+
+  const isLiked = useCallback(
+    (g: GenerationRecord) => {
+      const url = (g.outputUrl || "").trim();
+      const id = String(g.id || "");
+      const kind = isVideoUrl(url) || String(g.type || "").toLowerCase().includes("motion") ? "motion" : "still";
+
+      const candidates = [
+        `${kind}:${id}`,
+        `${kind}:${url}`,
+        `motion:${id}`,
+        `motion:${url}`,
+        `still:${id}`,
+        `still:${url}`,
+      ];
+
+      for (const k of candidates) {
+        if (likedMap[k]) return true;
+      }
+      if (url && likedUrlSet.has(url)) return true;
+      return false;
+    },
+    [likedMap, likedUrlSet]
+  );
+
+  const totalCount = allItems.length;
+  const likedCount = useMemo(() => allItems.reduce((acc, g) => acc + (isLiked(g) ? 1 : 0), 0), [allItems, isLiked]);
+
+  // Filter options
+  const motionOptions = useMemo(() => ["all", "still", "motion"], []);
+
+  const creationOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const it of allItems) {
+      const p = String(pick(it, ["platform"], "") || "").trim();
+      if (p) set.add(p);
     }
     return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
-  }, [items]);
+  }, [allItems]);
 
   const sessionOptions = useMemo(() => {
-    const set = new Set();
-    for (const it of items) {
-      const s = pick(it, ["session", "session_id", "sessionId"], "");
+    const set = new Set<string>();
+    for (const it of allItems) {
+      const s = String(pick(it, ["sessionId", "session_id", "session"], "") || "").trim();
       if (s) set.add(s);
     }
-    return ["all", ...Array.from(set)];
-  }, [items]);
+    return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
+  }, [allItems]);
 
   const isMatch = useCallback(
-    (it) => {
-      // motion
-      if (filterMotion !== "all") {
-        const m = pick(it, ["motion", "motion_style", "motionStyle", "motion_name"], "");
-        if (m !== filterMotion) return false;
-      }
+    (it: GenerationRecord) => {
+      const url = (it.outputUrl || "").trim();
+      const kind = isVideoUrl(url) || String(it.type || "").toLowerCase().includes("motion") ? "motion" : "still";
 
-      // creation (mode/type)
+      if (filterMotion !== "all" && kind !== filterMotion) return false;
+
       if (filterCreation !== "all") {
-        const c = pick(it, ["creation", "mode", "kind", "type", "pipeline"], "");
-        if (c !== filterCreation) return false;
+        const p = String(pick(it, ["platform"], "") || "").trim();
+        if (p !== filterCreation) return false;
       }
 
-      // session
       if (filterSession !== "all") {
-        const s = pick(it, ["session", "session_id", "sessionId"], "");
+        const s = String(pick(it, ["sessionId", "session_id", "session"], "") || "").trim();
         if (s !== filterSession) return false;
       }
 
-      // liked
-      if (filterLiked) {
-        const liked = Boolean(pick(it, ["liked", "is_liked", "isLiked"], false));
-        if (!liked) return false;
-      }
+      if (filterLiked && !isLiked(it)) return false;
 
-      // recent (7 days)
       if (filterRecent) {
-        const created = pick(it, ["created_at", "createdAt"], "");
-        if (!created) return false;
+        const created = String(pick(it, ["createdAt", "created_at", "createdAt"], it.createdAt || "") || "");
         const dt = new Date(created).getTime();
         const now = Date.now();
         const sevenDays = 7 * 24 * 60 * 60 * 1000;
-        if (Number.isNaN(dt) || now - dt > sevenDays) return false;
+        if (!dt || Number.isNaN(dt) || now - dt > sevenDays) return false;
       }
 
       return true;
     },
-    [filterCreation, filterLiked, filterMotion, filterRecent, filterSession]
+    [filterCreation, filterLiked, filterMotion, filterRecent, filterSession, isLiked]
   );
 
-  const resolveUrls = useCallback(async (it) => {
-    // Prefer explicit thumb + download url fields if present
-    const thumbUrl =
-      pick(it, ["thumb_url", "thumbnail_url", "preview_url", "thumbUrl", "previewUrl"], "") ||
-      pick(it, ["output_url", "url", "public_url", "file_url", "image_url"], "");
+  const downloadItem = useCallback(async (g: GenerationRecord, indexNumber: number) => {
+    try {
+      setError("");
+      const url = (g.outputUrl || "").trim();
+      if (!url) return;
 
-    let downloadUrl =
-      pick(it, ["download_url", "output_url", "url", "public_url", "file_url", "image_url"], "") ||
-      "";
+      const base = `mina-${indexNumber}`;
+      const filename = safeFilename(base, url);
 
-    // If stored in Supabase Storage, create signed URL (best effort)
-    const bucket = pick(it, ["bucket", "storage_bucket", "storageBucket"], "");
-    const path = pick(it, ["path", "storage_path", "storagePath", "file_path"], "");
+      // no new tab: fetch -> blob -> a.download
+      const res = await fetch(url, { credentials: "omit" });
+      if (!res.ok) throw new Error(`Download failed (${res.status}).`);
 
-    if (!downloadUrl && bucket && path) {
-      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60);
-      if (!error && data?.signedUrl) downloadUrl = data.signedUrl;
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      URL.revokeObjectURL(href);
+    } catch (e: any) {
+      setError(e?.message || "Download failed.");
     }
-
-    // If thumb missing but bucket/path exist, try signed url too
-    let resolvedThumb = thumbUrl;
-    if (!resolvedThumb && bucket && path) {
-      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60);
-      if (!error && data?.signedUrl) resolvedThumb = data.signedUrl;
-    }
-
-    return { thumbUrl: resolvedThumb, downloadUrl };
   }, []);
 
-  const downloadItem = useCallback(
-    async (it, indexNumber) => {
-      try {
-        const { downloadUrl } = await resolveUrls(it);
-        if (!downloadUrl) return;
+  const tryDeleteRemote = useCallback(
+    async (id: string) => {
+      // 1) Try likely backend endpoints (best-effort)
+      const candidates: Array<{ method: string; path: string }> = [
+        { method: "DELETE", path: `/generations/${encodeURIComponent(id)}` },
+        { method: "DELETE", path: `/history/generation/${encodeURIComponent(id)}` },
+        { method: "POST", path: `/history/generation/${encodeURIComponent(id)}/delete` },
+      ];
 
-        const base = `mina-${indexNumber}`;
-        const filename = safeFilename(base, downloadUrl);
-
-        const res = await fetch(downloadUrl, { credentials: "omit" });
-        if (!res.ok) throw new Error("Download failed.");
-
-        const blob = await res.blob();
-        const href = URL.createObjectURL(blob);
-
-        const a = document.createElement("a");
-        a.href = href;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-
-        URL.revokeObjectURL(href);
-      } catch (e) {
-        setError(String(e?.message || e || "Download failed."));
+      for (const c of candidates) {
+        try {
+          const res = await apiFetch(c.path, { method: c.method });
+          if (res.ok) return true;
+          if (res.status === 404) continue;
+        } catch {
+          // ignore, try next
+        }
       }
+
+      // 2) Try Supabase tables (name drift)
+      const tableCandidates = ["mega_generation", "mega_generations", "generations", "generation", "mega_generation_v2"];
+      for (const t of tableCandidates) {
+        try {
+          const { error } = await supabase.from(t).delete().eq("id", id);
+          if (!error) return true;
+
+          const msg = String((error as any)?.message || "").toLowerCase();
+          // table missing / not exposed => try next
+          if (msg.includes("does not exist") || msg.includes("not found") || msg.includes("404")) continue;
+
+          // other errors (RLS, etc) => stop
+          return false;
+        } catch {
+          // try next
+        }
+      }
+
+      return false;
     },
-    [resolveUrls]
+    [apiFetch]
   );
 
   const deleteItem = useCallback(
-    async (it) => {
-      const id = pick(it, ["id", "generation_id", "generationId"], "");
+    async (g: GenerationRecord) => {
+      const id = String(g.id || "").trim();
       if (!id) return;
 
       try {
         setError("");
+        const ok = await tryDeleteRemote(id);
+        if (!ok) throw new Error("Delete is not configured on the server yet.");
 
-        const { error: delErr } = await supabase.from("mega_generation").delete().eq("id", id);
-        if (delErr) throw delErr;
-
-        setItems((prev) => prev.filter((x) => pick(x, ["id"], "") !== id));
+        setAllItems((prev) => prev.filter((x) => String(x.id) !== id));
         setConfirmDeleteId(null);
-      } catch (e) {
-        setError(String(e?.message || e || "Delete failed."));
+      } catch (e: any) {
+        setError(e?.message || "Delete failed.");
       }
     },
-    []
+    [tryDeleteRemote]
   );
 
-  // Card sizing pattern (big / small like your reference)
-  const cardVariantClass = useCallback((i) => {
+  const cardVariantClass = useCallback((i: number) => {
     if (i % 19 === 0) return "profile-card--hero";
     if (i % 11 === 0) return "profile-card--tall";
     if (i % 7 === 0) return "profile-card--wide";
     return "profile-card--mini";
   }, []);
 
-  // Customer meta (small plain text)
-  const customerEmail = pick(customer, ["email", "customer_email", "mail"], "");
-  const customerName = pick(customer, ["name", "full_name", "fullName"], "");
-  const customerCreated = pick(customer, ["created_at", "createdAt"], "");
-  const customerPlan = pick(customer, ["plan", "tier", "subscription"], "");
-
   const metaPairs = useMemo(() => {
-    const out = [];
-
+    const out: Array<{ k: string; v: string }> = [];
     if (passId) out.push({ k: "Pass", v: passId });
-    if (customerName) out.push({ k: "Name", v: customerName });
-    if (customerEmail) out.push({ k: "Email", v: customerEmail });
-    if (customerPlan) out.push({ k: "Plan", v: customerPlan });
-    if (customerCreated) out.push({ k: "Joined", v: formatDate(customerCreated) });
+    if (email) out.push({ k: "Email", v: email });
+    out.push({ k: "Creations", v: String(totalCount) });
+    out.push({ k: "Liked", v: String(likedCount) });
 
-    if (counts.total !== null) out.push({ k: "Creations", v: String(counts.total) });
-    if (counts.liked !== null) out.push({ k: "Liked", v: String(counts.liked) });
-
-    // Sessions (from loaded set; will grow as infinite loads)
-    const sessions = new Set();
-    for (const it of items) {
-      const s = pick(it, ["session", "session_id", "sessionId"], "");
+    const sessions = new Set<string>();
+    for (const it of allItems) {
+      const s = String(pick(it, ["sessionId"], "") || "").trim();
       if (s) sessions.add(s);
     }
     if (sessions.size) out.push({ k: "Sessions", v: String(sessions.size) });
 
     return out;
-  }, [passId, customerName, customerEmail, customerPlan, customerCreated, counts.total, counts.liked, items]);
+  }, [allItems, email, likedCount, passId, totalCount]);
 
   return (
     <div className="profile-shell">
       <div className="profile-topbar">
-        <a className="profile-logo-link" href="/studio" onClick={(e) => { e.preventDefault(); handleBackToStudio(); }}>
-          {/* Put your real Mina logo in /public/mina-logo.svg (or change this src) */}
+        <a
+          className="profile-logo-link"
+          href="/studio"
+          onClick={(e) => {
+            e.preventDefault();
+            handleBackToStudio();
+          }}
+        >
           <img className="profile-logo" src="/mina-logo.svg" alt="Mina" />
         </a>
 
@@ -544,28 +523,23 @@ export default function Profile() {
           <div className="profile-archive-title">Archive</div>
           <div className="profile-archive-sub">
             {items.length ? `${items.length}${hasMore ? "+" : ""} loaded` : "No creations yet."}
-            {ownerKeyUsed ? ` • key: ${ownerKeyUsed}` : ""}
           </div>
         </div>
 
         <div className="profile-filters">
-          {/* Motion */}
+          {/* Motion (still/motion) */}
           <label className="profile-filter">
             <span className="profile-filter-label">Motion</span>
-            <select
-              className="profile-filter-select"
-              value={filterMotion}
-              onChange={(e) => setFilterMotion(e.target.value)}
-            >
+            <select className="profile-filter-select" value={filterMotion} onChange={(e) => setFilterMotion(e.target.value)}>
               {motionOptions.map((m) => (
                 <option key={m} value={m}>
-                  {m === "all" ? "All" : m}
+                  {m === "all" ? "All" : m === "still" ? "Still" : "Motion"}
                 </option>
               ))}
             </select>
           </label>
 
-          {/* Creation */}
+          {/* Creation (platform) */}
           <label className="profile-filter">
             <span className="profile-filter-label">Creation</span>
             <select
@@ -620,73 +594,48 @@ export default function Profile() {
       {error ? <div className="error-text profile-error">{error}</div> : null}
 
       <div className="profile-grid">
-        {items.map((it, i) => {
+        {items.map((g, i) => {
           const n = i + 1;
           const variant = cardVariantClass(i);
-          const dim = !isMatch(it);
+          const dim = !isMatch(g);
 
-          const prompt = pick(it, ["prompt", "text", "input_prompt", "inputPrompt"], "");
-          const createdAt = pick(it, ["created_at", "createdAt"], "");
-          const liked = Boolean(pick(it, ["liked", "is_liked", "isLiked"], false));
+          const prompt = String(g.prompt || "").trim();
+          const createdAt = g.createdAt || "";
+          const url = String(g.outputUrl || "").trim();
+          const liked = isLiked(g);
 
-          const thumbFallback =
-            pick(it, ["thumb_url", "thumbnail_url", "preview_url", "thumbUrl", "previewUrl"], "") ||
-            pick(it, ["output_url", "url", "public_url", "file_url", "image_url"], "");
-
-          const showExpanded = expandedPromptId === pick(it, ["id"], `idx-${i}`);
+          const showExpanded = expandedPromptId === String(g.id);
 
           return (
-            <div
-              key={pick(it, ["id"], `idx-${i}`)}
-              className={`profile-card ${variant} ${dim ? "is-dim" : ""}`}
-            >
+            <div key={String(g.id)} className={`profile-card ${variant} ${dim ? "is-dim" : ""}`}>
               <div className="profile-card-top">
-                <button
-                  type="button"
-                  className="profile-card-show"
-                  onClick={() => downloadItem(it, n)}
-                  title="Download"
-                >
+                <button type="button" className="profile-card-show" onClick={() => downloadItem(g, n)} title="Download">
                   {n}. Show
                 </button>
 
                 {liked ? <div className="profile-card-liked">Liked</div> : <div className="profile-card-liked ghost"> </div>}
               </div>
 
-              <button
-                type="button"
-                className="profile-card-media"
-                onClick={() => downloadItem(it, n)}
-                title="Download"
-              >
-                {/* We keep it simple: image only. If your archive includes video, we still download on click. */}
-                {thumbFallback ? (
-                  <img
-                    src={thumbFallback}
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                    draggable="false"
-                  />
+              <button type="button" className="profile-card-media" onClick={() => downloadItem(g, n)} title="Download">
+                {url ? (
+                  isVideoUrl(url) ? (
+                    <video src={url} muted playsInline preload="metadata" style={{ width: "100%", height: "100%", display: "block" }} />
+                  ) : (
+                    <img src={url} alt="" loading="lazy" decoding="async" draggable="false" />
+                  )
                 ) : (
                   <div className="profile-card-media-empty" />
                 )}
               </button>
 
               <div className="profile-card-promptline">
-                <div className={`profile-card-prompt ${showExpanded ? "expanded" : ""}`}>
-                  {prompt || "—"}
-                </div>
+                <div className={`profile-card-prompt ${showExpanded ? "expanded" : ""}`}>{prompt || "—"}</div>
 
                 {prompt && prompt.length > 60 ? (
                   <button
                     type="button"
                     className="profile-card-viewmore"
-                    onClick={() =>
-                      setExpandedPromptId((prev) =>
-                        prev === pick(it, ["id"], `idx-${i}`) ? null : pick(it, ["id"], `idx-${i}`)
-                      )
-                    }
+                    onClick={() => setExpandedPromptId((prev) => (prev === String(g.id) ? null : String(g.id)))}
                   >
                     {showExpanded ? "less" : "view more"}
                   </button>
@@ -696,29 +645,17 @@ export default function Profile() {
               <div className="profile-card-bottom">
                 <div className="profile-card-date">{formatDate(createdAt)}</div>
 
-                {confirmDeleteId === pick(it, ["id"], "") ? (
+                {confirmDeleteId === String(g.id) ? (
                   <div className="profile-card-confirm">
-                    <button
-                      type="button"
-                      className="profile-card-confirm-yes"
-                      onClick={() => deleteItem(it)}
-                    >
+                    <button type="button" className="profile-card-confirm-yes" onClick={() => deleteItem(g)}>
                       Yes delete
                     </button>
-                    <button
-                      type="button"
-                      className="profile-card-confirm-no"
-                      onClick={() => setConfirmDeleteId(null)}
-                    >
+                    <button type="button" className="profile-card-confirm-no" onClick={() => setConfirmDeleteId(null)}>
                       No keep
                     </button>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    className="profile-card-delete"
-                    onClick={() => setConfirmDeleteId(pick(it, ["id"], ""))}
-                  >
+                  <button type="button" className="profile-card-delete" onClick={() => setConfirmDeleteId(String(g.id))}>
                     Delete
                   </button>
                 )}
@@ -733,12 +670,10 @@ export default function Profile() {
       <div className="profile-foot">
         {isBootLoading ? (
           <div className="profile-foot-note">Loading…</div>
-        ) : isPageLoading ? (
-          <div className="profile-foot-note">Loading more…</div>
         ) : hasMore ? (
           <div className="profile-foot-note">Scroll to load more.</div>
         ) : (
-          <div className="profile-foot-note">End of archive.</div>
+          <div className="profile-foot-note">{allItems.length ? "End of archive." : "No creations yet."}</div>
         )}
       </div>
     </div>
