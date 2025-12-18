@@ -12,6 +12,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
+import { useAuthContext, usePassId } from "./components/AuthGate";
 import "./Profile.css";
 import TopLoadingBar from "./components/TopLoadingBar";
 
@@ -44,7 +45,13 @@ function fmtDateTime(iso: string | null) {
   return d.toLocaleString();
 }
 
-export default function Profile() {
+type ProfileProps = {
+  passId?: string | null;
+  apiBaseUrl?: string;
+  onBackToStudio?: () => void;
+};
+
+export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio }: ProfileProps) {
   const [email, setEmail] = useState("");
   const [historyErr, setHistoryErr] = useState("");
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -68,17 +75,30 @@ export default function Profile() {
 
   const [expandedPromptIds, setExpandedPromptIds] = useState<Record<string, boolean>>({});
 
+  // Pull session + passId from the shared auth context so we reuse the same
+  // token/AuthGate pass id instead of re-checking Supabase on this screen.
+  const authCtx = useAuthContext();
+  const ctxPassId = usePassId();
+
   const apiBase =
+    apiBaseUrl ||
     (import.meta as any).env?.VITE_MINA_API_BASE_URL ||
     (import.meta as any).env?.VITE_API_BASE_URL ||
     "";
 
   useEffect(() => {
+    // Prefer the email already known by AuthGate; fall back to a direct
+    // Supabase session check if the context is still warming up.
+    if (authCtx?.session?.user?.email) {
+      setEmail(String(authCtx.session.user.email));
+      return;
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       const em = data.session?.user?.email || "";
       setEmail(em ? String(em) : "");
     });
-  }, []);
+  }, [authCtx?.session]);
 
   async function fetchHistory() {
     setHistoryErr("");
@@ -89,18 +109,32 @@ export default function Profile() {
         return;
       }
 
+      // Reuse the token/pass id provided by AuthGate whenever possible so we
+      // don't wait on another Supabase round trip.
       const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token || null;
+      const token = authCtx?.accessToken || data.session?.access_token || null;
 
-      const passId = String(localStorage.getItem("minaPassId") || "").trim();
+      const passId = (propPassId || ctxPassId || localStorage.getItem("minaPassId") || "").trim();
 
       const headers: Record<string, string> = { Accept: "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
       if (passId) headers["X-Mina-Pass-Id"] = passId;
 
-      // ✅ FIX: your backend is GET /history (not /history/pass/:id)
-      const resp = await fetch(`${apiBase}/history`, { method: "GET", headers });
-      const text = await resp.text();
+      // Try the primary /history endpoint first; if it fails, fall back to
+      // /history/pass/:id to stay compatible with either backend flavor.
+      const hitHistory = async (url: string) => {
+        const res = await fetch(url, { method: "GET", headers });
+        const text = await res.text();
+        return { res, text } as const;
+      };
+
+      let { res: resp, text } = await hitHistory(`${apiBase}/history`);
+
+      if (!resp.ok && passId) {
+        const fallback = await hitHistory(`${apiBase}/history/pass/${encodeURIComponent(passId)}`);
+        resp = fallback.res;
+        text = fallback.text;
+      }
 
       let json: any = null;
       try {
@@ -144,7 +178,7 @@ export default function Profile() {
   useEffect(() => {
     void fetchHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBase]);
+  }, [apiBase, propPassId, ctxPassId, authCtx?.accessToken]);
 
   const likedUrlSet = useMemo(() => {
     const s = new Set<string>();
@@ -207,10 +241,10 @@ export default function Profile() {
     setExpandedPromptIds((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const logout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch {}
+  const logout = () => {
+    supabase.auth.signOut().catch(() => {
+      /* ignore sign-out errors so the page can reset instantly */
+    });
     window.location.reload();
   };
 
@@ -222,9 +256,15 @@ export default function Profile() {
         <div className="profile-topbar">
           <div /> {/* keep spacing exactly (space-between) */}
         <div className="profile-topbar-right">
-          <a className="profile-toplink" href="/studio">
-            Back to studio
-          </a>
+          {onBackToStudio ? (
+            <button className="profile-toplink" type="button" onClick={onBackToStudio}>
+              Back to studio
+            </button>
+          ) : (
+            <a className="profile-toplink" href="/studio">
+              Back to studio
+            </a>
+          )}
           <span className="profile-topsep">|</span>
           <a
             className="profile-toplink"
