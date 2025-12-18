@@ -115,19 +115,25 @@ async function ensurePassIdViaBackend(existingPassId?: string | null): Promise<s
 
   const token = await getSupabaseAccessToken();
   const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
+
   if (existing) headers["X-Mina-Pass-Id"] = existing;
 
-  try {
-  const res = await fetch(`${API_BASE_URL}/me`, {
-  method: "GET",
-  headers,
-  // ✅ IMPORTANT: do NOT send cookies for cross-origin API calls
-  // You are using Authorization Bearer token, so credentials are not needed.
-  credentials: "omit",
-});
+  if (token && token.trim() && token !== "null" && token !== "undefined") {
+    headers["Authorization"] = `Bearer ${token.trim()}`;
+  }
 
-    if (!res.ok) return existing;
+  try {
+    const res = await fetch(`${API_BASE_URL}/me`, {
+      method: "GET",
+      headers,
+      // ✅ IMPORTANT: do NOT send cookies for cross-origin API calls
+      // You are using Authorization Bearer token, so credentials are not needed.
+      credentials: "omit",
+    });
+
+    if (!res.ok) {
+      return existing || generateLocalPassId();
+    }
 
     const json = (await res.json().catch(() => ({} as any))) as any;
     const nextRaw =
