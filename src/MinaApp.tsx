@@ -6,14 +6,34 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "./lib/supabaseClient";
 import StudioLeft from "./StudioLeft";
 import { isAdmin as checkIsAdmin, loadAdminConfig } from "./lib/adminConfig";
-import { usePassId } from "./components/AuthGate";
+import { useAuthContext, usePassId } from "./components/AuthGate";
 import Profile from "./Profile";
 import TopLoadingBar from "./components/TopLoadingBar";
 
 
-const API_BASE_URL =
-  import.meta.env.VITE_MINA_API_BASE_URL ||
-  "https://mina-editorial-ai-api.onrender.com";
+const normalizeBase = (raw?: string | null) => {
+  if (!raw) return "";
+  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+};
+
+// Prefer an env override, then fall back to same-origin /api so production
+// builds avoid CORS errors when the backend is reverse-proxied. On SSR builds
+// (no window), we retain the Render URL as a last resort to keep dev usable.
+const API_BASE_URL = (() => {
+  const envBase = normalizeBase(
+    import.meta.env.VITE_MINA_API_BASE_URL ||
+      (import.meta as any).env?.VITE_API_BASE_URL ||
+      (import.meta as any).env?.VITE_BACKEND_URL
+  );
+  if (envBase) return envBase;
+
+  if (typeof window !== "undefined") {
+    if (window.location.origin.includes("localhost")) return "http://localhost:3000";
+    return `${window.location.origin}/api`;
+  }
+
+  return "https://mina-editorial-ai-api.onrender.com";
+})();
 
 const LIKE_STORAGE_KEY = "minaLikedMap";
 // ============================================================================
@@ -129,14 +149,15 @@ type GenerationRecord = {
   prompt: string;
   outputUrl: string;
   createdAt: string;
-  meta?: {
-    tone?: string;
-    platform?: string;
-    minaVisionEnabled?: boolean;
-    stylePresetKey?: string;
-    productImageUrl?: string;
-    styleImageUrls?: string[];
-    aspectRatio?: string;
+    meta?: {
+      tone?: string;
+      platform?: string;
+      minaVisionEnabled?: boolean;
+      stylePresetKey?: string;
+      stylePresetKeys?: string[];
+      productImageUrl?: string;
+      styleImageUrls?: string[];
+      aspectRatio?: string;
     [key: string]: unknown;
   } | null;
 };
@@ -534,6 +555,16 @@ const [historyFeedbacks, setHistoryFeedbacks] = useState<FeedbackRecord[]>([]);
 const [historyLoading, setHistoryLoading] = useState(false);
 const [historyError, setHistoryError] = useState<string | null>(null);
 const [visibleHistoryCount, setVisibleHistoryCount] = useState(20);
+// Cache profile payloads per passId so tab switches reuse the last fetch instead
+// of re-normalizing every generation URL.
+const historyCacheRef = useRef<Record<string, { generations: GenerationRecord[]; feedbacks: FeedbackRecord[] }>>({});
+const historyDirtyRef = useRef<boolean>(false);
+
+// Cache credits per passId to skip duplicate balance calls when navigating
+// between Studio/Profile for the same user.
+const creditsCacheRef = useRef<Record<string, CreditsState>>({});
+const creditsDirtyRef = useRef<boolean>(true);
+const creditsCacheAtRef = useRef<Record<string, number>>({});
 
   // -------------------------
   // 4.1 Global tab + customer
@@ -561,7 +592,7 @@ const [visibleHistoryCount, setVisibleHistoryCount] = useState(20);
   // -------------------------
   // App boot loading bar
   // -------------------------
-  const [booting, setBooting] = useState(true);
+  const [booting] = useState(false);
   const [pendingRequests, setPendingRequests] = useState(0);
 
   // -------------------------
@@ -599,6 +630,7 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
   const [motionGenerating, setMotionGenerating] = useState(false);
   const [motionError, setMotionError] = useState<string | null>(null);
   const [isRightMediaDark, setIsRightMediaDark] = useState(false);
+  const [activeMediaKind, setActiveMediaKind] = useState<"still" | "motion" | null>(null);
 
   // Feedback
   const [feedbackText, setFeedbackText] = useState("");
@@ -636,8 +668,8 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
     inspiration: [],
   });
 
-  // Style selection (hover selects too)
-  const [stylePresetKey, setStylePresetKey] = useState<string>("vintage");
+  // Style selection (allow multiple, default to none)
+  const [stylePresetKeys, setStylePresetKeys] = useState<string[]>([]);
   const [minaVisionEnabled, setMinaVisionEnabled] = useState(true);
 
   // Inline rename for styles (no new panel)
@@ -670,7 +702,15 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
   }, []);
 
   useEffect(() => {
-    const allowedMotionKeys: MotionStyleKey[] = ["melt", "drop", "expand", "satisfying", "slow_motion", "fix_camera"];
+    const allowedMotionKeys: MotionStyleKey[] = [
+      "melt",
+      "drop",
+      "expand",
+      "satisfying",
+      "slow_motion",
+      "fix_camera",
+      "loop",
+    ];
     const fromConfig = adminConfig.styles?.movementKeywords || [];
     const filtered = fromConfig.filter((k): k is MotionStyleKey => allowedMotionKeys.includes(k as MotionStyleKey));
     if (filtered.length) setMotionStyleKeys(filtered);
@@ -759,12 +799,14 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
   }, [customStyleImages]);
 
   useEffect(() => {
+    const currentBrief = brief;
     if (animateMode) {
-      const currentBrief = brief;
       setStillBrief(currentBrief);
-      setBrief(motionDescription || currentBrief);
+      setMotionDescription("");
+      setBrief("");
+      setTypingUiHidden(true);
+      window.setTimeout(() => setTypingUiHidden(false), 220);
     } else {
-      const currentBrief = brief;
       setMotionDescription(currentBrief);
       setBrief(stillBrief || currentBrief);
     }
@@ -815,6 +857,13 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
   const uploadsPending = Object.values(uploads).some((arr) => arr.some((it) => it.uploading));
   const currentPassId = passId;
 
+  // Mark caches dirty anytime the passId changes so the next Profile visit
+  // reloads fresh data for the new user.
+  useEffect(() => {
+    historyDirtyRef.current = true;
+    creditsDirtyRef.current = true;
+  }, [currentPassId]);
+
   // UI stages
   const stageHasPills = uiStage >= 1;
   const showPanels = uiStage >= 1;
@@ -839,6 +888,10 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
   const latestStill: StillItem | null = stillItems[0] || null;
   const currentStill: StillItem | null = stillItems[stillIndex] || stillItems[0] || null;
   const currentMotion: MotionItem | null = motionItems[motionIndex] || motionItems[0] || null;
+
+  const parseTs = (iso?: string | null) => (iso ? Date.parse(iso) || 0 : 0);
+  const newestStillAt = parseTs(stillItems[0]?.createdAt);
+  const newestMotionAt = parseTs(motionItems[0]?.createdAt);
 
   const animateImage = uploads.product[0] || null;
   const animateAspectOption = ASPECT_OPTIONS.find((opt) => opt.key === animateAspectKey) || currentAspect;
@@ -869,7 +922,27 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
   const imageCost = credits?.meta?.imageCost ?? adminConfig.pricing?.imageCost ?? 1;
   const motionCost = credits?.meta?.motionCost ?? adminConfig.pricing?.motionCost ?? 5;
 
+  const motionCreditsOk = (credits?.balance ?? 0) >= motionCost;
+  const motionBlockReason = motionCreditsOk ? null : "Buy more credits to animate.";
+
   const briefHintVisible = showDescribeMore;
+
+  useEffect(() => {
+    if (activeMediaKind === null) {
+      if (!newestStillAt && !newestMotionAt) return;
+      setActiveMediaKind(newestMotionAt > newestStillAt ? "motion" : "still");
+      return;
+    }
+
+    if (activeMediaKind === "motion" && !motionItems.length && stillItems.length) {
+      setActiveMediaKind("still");
+      return;
+    }
+
+    if (activeMediaKind === "still" && !stillItems.length && motionItems.length) {
+      setActiveMediaKind("motion");
+    }
+  }, [activeMediaKind, newestMotionAt, newestStillAt, motionItems.length, stillItems.length]);
 
   useEffect(() => {
     if (isTyping) {
@@ -897,8 +970,10 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
     }, TYPING_REVEAL_DELAY_MS);
   }, [isTyping, typingUiHidden]);
 
-  // Style key for API (avoid unknown custom keys)
-  const stylePresetKeyForApi = stylePresetKey.startsWith("custom-") ? "custom-style" : stylePresetKey;
+  // Style keys for API (avoid unknown custom keys)
+  const normalizeStyleKeyForApi = (k: string) => (k.startsWith("custom-") ? "custom-style" : k);
+  const stylePresetKeysForApi = (stylePresetKeys.length ? stylePresetKeys : ["none"]).map(normalizeStyleKeyForApi);
+  const primaryStyleKeyForApi = stylePresetKeysForApi[0] || "none";
 
   useEffect(() => {
     let cancelled = false;
@@ -1155,51 +1230,31 @@ useEffect(() => {
   // ========================================================================
   // Part 6 wires up lifecycle hooks: on-mount bootstrapping for session/admin
   // context plus cleanup-safe listeners (storage sync, window resize, etc.).
+  // ✅ Reuse the Supabase session handed down by AuthGate so we don't double
+  // check auth on mount. This also keeps the studio shell visible while the
+  // session hydrates.
+  const authContext = useAuthContext();
+
   useEffect(() => {
+    const email = authContext?.session?.user?.email?.toLowerCase() || null;
+    setCurrentUserEmail(email);
+
     let cancelled = false;
-
-    const applySession = async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (cancelled) return;
-
-        const email = (data.session?.user?.email || "").toLowerCase() || null;
-        setCurrentUserEmail(email);
-
-        const ok = await checkIsAdmin();
-        if (!cancelled) setIsAdminUser(ok);
-      } catch {
-        if (!cancelled) {
-          setCurrentUserEmail(null);
-          setIsAdminUser(false);
-        }
-      } finally {
-        // ✅ boot ends here (first load only)
-        if (!cancelled) setBooting(false);
-      }
-    };
-
-    void applySession();
-
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (cancelled) return;
-
-      const email = (session?.user?.email || "").toLowerCase() || null;
-      setCurrentUserEmail(email);
+    const syncAdmin = async () => {
       try {
         const ok = await checkIsAdmin();
         if (!cancelled) setIsAdminUser(ok);
       } catch {
         if (!cancelled) setIsAdminUser(false);
       }
-    });
+    };
+
+    void syncAdmin();
 
     return () => {
       cancelled = true;
-      sub.subscription.unsubscribe();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authContext]);
 
 
   // ========================================================================
@@ -1217,7 +1272,9 @@ useEffect(() => {
 // Supabase → API auth bridge
 // Every Mina API call remains API-based, but gets Supabase JWT automatically.
 // ------------------------------------------------------------------------
-const getSupabaseAccessToken = async (): Promise<string | null> => {
+const getSupabaseAccessToken = async (accessTokenFromAuth: string | null): Promise<string | null> => {
+  // Prefer the token already loaded by AuthGate to avoid a second session fetch.
+  if (accessTokenFromAuth) return accessTokenFromAuth;
   try {
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token || null;
@@ -1232,7 +1289,7 @@ const apiFetch = async (path: string, init: RequestInit = {}) => {
     if (!API_BASE_URL) throw new Error("Missing API base URL");
 
     const headers = new Headers(init.headers || {});
-    const token = await getSupabaseAccessToken();
+    const token = await getSupabaseAccessToken(authContext?.accessToken || null);
 
     // Attach JWT for your backend to verify (safe even if backend ignores it)
     if (token && !headers.has("Authorization")) {
@@ -1285,6 +1342,17 @@ const extractExpiresAt = (obj: any): string | null => {
 const fetchCredits = async () => {
   if (!API_BASE_URL || !currentPassId) return;
   try {
+    // Reuse cached balance unless a new generation/passId change marked it
+    // dirty, or the cache is older than ~30s.
+    const cached = creditsCacheRef.current[currentPassId];
+    const cachedAt = creditsCacheAtRef.current[currentPassId] || 0;
+    const isStale = Date.now() - cachedAt > 30_000;
+
+    if (!creditsDirtyRef.current && cached && !isStale) {
+      setCredits(cached);
+      return;
+    }
+
     setCreditsLoading(true);
 
     const params = new URLSearchParams({ passId: currentPassId });
@@ -1295,14 +1363,19 @@ const fetchCredits = async () => {
 
     const expiresAt = extractExpiresAt(json);
 
-    setCredits((prev) => ({
-      balance: Number(json?.balance ?? prev?.balance ?? 0),
+    const nextCredits: CreditsState = {
+      balance: Number(json?.balance ?? credits?.balance ?? 0),
       meta: {
-        imageCost: Number(json?.meta?.imageCost ?? prev?.meta?.imageCost ?? adminConfig.pricing?.imageCost ?? 1),
-        motionCost: Number(json?.meta?.motionCost ?? prev?.meta?.motionCost ?? adminConfig.pricing?.motionCost ?? 5),
+        imageCost: Number(json?.meta?.imageCost ?? credits?.meta?.imageCost ?? adminConfig.pricing?.imageCost ?? 1),
+        motionCost: Number(json?.meta?.motionCost ?? credits?.meta?.motionCost ?? adminConfig.pricing?.motionCost ?? 5),
         expiresAt,
       },
-    }));
+    };
+
+    creditsCacheRef.current[currentPassId] = nextCredits;
+    creditsCacheAtRef.current[currentPassId] = Date.now();
+    creditsDirtyRef.current = false;
+    setCredits(nextCredits);
   } catch {
     // silent
   } finally {
@@ -1350,6 +1423,14 @@ const fetchHistory = async () => {
   if (!API_BASE_URL || !currentPassId) return;
 
   try {
+    // Serve cached profile data unless a new generation invalidated it.
+    if (!historyDirtyRef.current && historyCacheRef.current[currentPassId]) {
+      const cached = historyCacheRef.current[currentPassId];
+      setHistoryGenerations(cached.generations);
+      setHistoryFeedbacks(cached.feedbacks);
+      return;
+    }
+
     setHistoryLoading(true);
     setHistoryError(null);
 
@@ -1383,6 +1464,9 @@ const fetchHistory = async () => {
       })
     );
 
+    historyCacheRef.current[currentPassId] = { generations: updated, feedbacks };
+    historyDirtyRef.current = false;
+
     setHistoryGenerations(updated);
     setHistoryFeedbacks(feedbacks);
   } catch (err: any) {
@@ -1401,6 +1485,26 @@ useEffect(() => {
   void fetchHistory();
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [activeTab, currentPassId]);
+
+useEffect(() => {
+  const markCreditsDirty = () => {
+    creditsDirtyRef.current = true;
+    void fetchCredits();
+  };
+
+  const handleVisibility = () => {
+    if (!document.hidden) markCreditsDirty();
+  };
+
+  window.addEventListener("focus", markCreditsDirty);
+  document.addEventListener("visibilitychange", handleVisibility);
+
+  return () => {
+    window.removeEventListener("focus", markCreditsDirty);
+    document.removeEventListener("visibilitychange", handleVisibility);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [currentPassId]);
 
 
 const getEditorialNumber = (id: string, index: number) => {
@@ -1430,11 +1534,12 @@ const handleCancelNumberEdit = () => {
 };
 
 const handleDownloadGeneration = (item: GenerationRecord, label: string) => {
+  const safeLabel = `mina-v3-prompt-${label || item.id}`;
+  const filename = buildDownloadName(item.outputUrl, safeLabel, guessDownloadExt(item.outputUrl, ".png"));
+
   const link = document.createElement("a");
   link.href = item.outputUrl;
-  link.download = `mina-v3-prompt-${label || item.id}`;
-  link.target = "_blank";
-  link.rel = "noreferrer";
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -1580,29 +1685,31 @@ const handleGenerateStill = async () => {
   const trimmed = stillBrief.trim();
   if (trimmed.length < 40) return;
 
+  // Flip UI state immediately so the CTA responds instantly
+  setStillGenerating(true);
+  setStillError(null);
+  setMinaOverrideText(null);
+
   if (!API_BASE_URL) {
     setStillError("Missing API base URL (VITE_MINA_API_BASE_URL).");
+    setStillGenerating(false);
     return;
   }
 
   if (!currentPassId) {
     setStillError("Missing Pass ID for MEGA session.");
+    setStillGenerating(false);
     return;
   }
 
   const sid = await ensureSession();
   if (!sid) {
     setStillError("Could not start Mina session.");
+    setStillGenerating(false);
     return;
   }
 
   try {
-    // clear old “real” message so placeholder can run while generating
-    setMinaOverrideText(null);
-
-    setStillGenerating(true);
-    setStillError(null);
-
     const safeAspectRatio = REPLICATE_ASPECT_RATIO_MAP[currentAspect.ratio] || "2:3";
 
     const payload: {
@@ -1613,6 +1720,7 @@ const handleGenerateStill = async () => {
       platform: string;
       minaVisionEnabled: boolean;
       stylePresetKey: string;
+      stylePresetKeys?: string[];
       aspectRatio: string;
       productImageUrl?: string;
       logoImageUrl?: string;
@@ -1624,7 +1732,8 @@ const handleGenerateStill = async () => {
       tone,
       platform: currentAspect.platformKey,
       minaVisionEnabled,
-      stylePresetKey: stylePresetKeyForApi,
+      stylePresetKey: primaryStyleKeyForApi,
+      stylePresetKeys: stylePresetKeysForApi,
       aspectRatio: safeAspectRatio,
     };
 
@@ -1695,6 +1804,10 @@ const handleGenerateStill = async () => {
     // store remote AFTER we already showed text (faster UX)
     const storedUrl = await storeRemoteToR2(url, "generations");
 
+    // Mark profile caches dirty so Profile reloads fresh history/credits next time.
+    historyDirtyRef.current = true;
+    creditsDirtyRef.current = true;
+
     const item: StillItem = {
       id: data.generationId || `still_${Date.now()}`,
       url: storedUrl,
@@ -1708,6 +1821,8 @@ const handleGenerateStill = async () => {
       setStillIndex(0);
       return next;
     });
+
+    setActiveMediaKind("still");
 
     setLastStillPrompt(item.prompt);
 
@@ -1734,6 +1849,19 @@ const handleGenerateStill = async () => {
   // ========================================================================
   // Part 10 mirrors the still flow but for motion: suggestion prompts, video
   // generation, and handling the active motion clip selection.
+const chunkSuggestion = (text: string) => {
+  const words = text
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter(Boolean);
+
+  const lines: string[] = [];
+  for (let i = 0; i < words.length; i += 4) {
+    lines.push(words.slice(i, i + 4).join(" "));
+  }
+  return lines;
+};
+
 const applyMotionSuggestionText = async (text: string) => {
   if (!text) return;
   if (describeMoreTimeoutRef.current !== null) {
@@ -1743,12 +1871,15 @@ const applyMotionSuggestionText = async (text: string) => {
   setShowDescribeMore(false);
   setMotionSuggestTyping(true);
 
-  for (let i = 0; i < text.length; i++) {
-    const next = text.slice(0, i + 1);
-    setMotionDescription(next);
-    setBrief(next);
+  const lines = chunkSuggestion(text);
+  let accumulated = "";
+
+  for (const line of lines) {
+    accumulated = accumulated ? `${accumulated}\n${line}` : line;
+    setMotionDescription(accumulated);
+    setBrief(accumulated);
     // eslint-disable-next-line no-await-in-loop
-    await new Promise((resolve) => setTimeout(resolve, 12));
+    await new Promise((resolve) => setTimeout(resolve, 40));
   }
 
   setMotionSuggestTyping(false);
@@ -1772,7 +1903,8 @@ const handleSuggestMotion = async () => {
         tone,
         platform: animateAspectOption.platformKey,
         minaVisionEnabled,
-        stylePresetKey: stylePresetKeyForApi,
+        stylePresetKey: primaryStyleKeyForApi,
+        stylePresetKeys: stylePresetKeysForApi,
         motionStyles: motionStyleKeys,
         aspectRatio: animateAspectOption.ratio,
       }),
@@ -1797,24 +1929,25 @@ const handleSuggestMotion = async () => {
 const handleGenerateMotion = async () => {
   if (!API_BASE_URL || !motionReferenceImageUrl || !motionTextTrimmed) return;
 
+  // Flip UI state immediately so the CTA responds instantly
+  setMotionGenerating(true);
+  setMotionError(null);
+  setMinaOverrideText(null);
+
   if (!currentPassId) {
     setMotionError("Missing Pass ID for MEGA session.");
+    setMotionGenerating(false);
     return;
   }
 
   const sid = await ensureSession();
   if (!sid) {
     setMotionError("Could not start Mina session.");
+    setMotionGenerating(false);
     return;
   }
 
   try {
-    // clear old “real” message so placeholder can run while generating
-    setMinaOverrideText(null);
-
-    setMotionGenerating(true);
-    setMotionError(null);
-
     const res = await apiFetch("/motion/generate", {
       method: "POST",
       body: JSON.stringify({
@@ -1825,7 +1958,8 @@ const handleGenerateMotion = async () => {
         tone,
         platform: animateAspectOption.platformKey,
         minaVisionEnabled,
-        stylePresetKey: stylePresetKeyForApi,
+        stylePresetKey: primaryStyleKeyForApi,
+        stylePresetKeys: stylePresetKeysForApi,
         motionStyles: motionStyleKeys,
         aspectRatio: animateAspectOption.ratio,
       }),
@@ -1858,6 +1992,10 @@ const handleGenerateMotion = async () => {
 
     const storedUrl = await storeRemoteToR2(url, "motions");
 
+    // Mark profile caches dirty so the next Profile visit pulls the latest run.
+    historyDirtyRef.current = true;
+    creditsDirtyRef.current = true;
+
     const item: MotionItem = {
       id: data.generationId || `motion_${Date.now()}`,
       url: storedUrl,
@@ -1866,10 +2004,12 @@ const handleGenerateMotion = async () => {
     };
 
     setMotionItems((prev) => {
-      const next = [...prev, item];
-      setMotionIndex(next.length - 1);
+      const next = [item, ...prev];
+      setMotionIndex(0);
       return next;
     });
+
+    setActiveMediaKind("motion");
 
     if (data.credits?.balance !== undefined) {
       setCredits((prev) => ({
@@ -1899,6 +2039,49 @@ const getCurrentMediaKey = () => {
 
   const rawKey = currentMotion?.id || currentStill?.id || currentMotion?.url || currentStill?.url;
   return rawKey ? `${mediaType}:${rawKey}` : null;
+};
+
+const guessDownloadExt = (url: string, fallbackExt: string) => {
+  const lower = url.toLowerCase();
+  if (lower.endsWith(".mp4")) return ".mp4";
+  if (lower.endsWith(".webm")) return ".webm";
+  if (lower.endsWith(".mov")) return ".mov";
+  if (lower.endsWith(".m4v")) return ".m4v";
+  if (lower.match(/\.jpe?g$/)) return ".jpg";
+  if (lower.endsWith(".png")) return ".png";
+  if (lower.endsWith(".gif")) return ".gif";
+  if (lower.endsWith(".webp")) return ".webp";
+  return fallbackExt;
+};
+
+const buildDownloadName = (url: string, fallbackBase: string, fallbackExt: string) => {
+  try {
+    const parsed = new URL(url);
+    const last = parsed.pathname.split("/").filter(Boolean).pop();
+    if (last && last.includes(".")) return last;
+  } catch {
+    /* ignore */
+  }
+
+  const ext = guessDownloadExt(url, fallbackExt);
+  return fallbackBase.endsWith(ext) ? fallbackBase : `${fallbackBase}${ext}`;
+};
+
+const forceSaveUrl = async (url: string, filename: string) => {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Download failed with ${res.status}`);
+
+  const blob = await res.blob();
+  const blobUrl = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  URL.revokeObjectURL(blobUrl);
 };
 
 const handleLikeCurrentStill = async () => {
@@ -1973,39 +2156,25 @@ const handleSubmitFeedback = async () => {
   }
 };
 
-const handleDownloadCurrentStill = () => {
+const handleDownloadCurrentStill = async () => {
   const target = currentMotion?.url || currentStill?.url;
   if (!target) return;
 
-  let filename = "";
-  try {
-    const parsed = new URL(target);
-    const last = parsed.pathname.split("/").filter(Boolean).pop();
-    if (last && last.includes(".")) filename = last;
-  } catch {
-    // fallback below
-  }
-
-  if (!filename) {
-    const safePrompt =
-      (lastStillPrompt || brief || "Mina-image")
-        .replace(/[^a-z0-9]+/gi, "-")
-        .toLowerCase()
-        .slice(0, 80) || "mina-image";
-    filename = currentMotion ? `mina-motion-${safePrompt}.mp4` : `mina-image-${safePrompt}.png`;
-  }
-
-  const a = document.createElement("a");
-  a.href = target;
   const safePrompt =
     (lastStillPrompt || stillBrief || brief || "Mina-image")
       .replace(/[^a-z0-9]+/gi, "-")
       .toLowerCase()
       .slice(0, 80) || "mina-image";
-  a.download = `Mina-v3-${safePrompt}`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  const fallbackBase = currentMotion ? `mina-motion-${safePrompt}` : `mina-image-${safePrompt}`;
+  const filename = buildDownloadName(target, fallbackBase, guessDownloadExt(target, currentMotion ? ".mp4" : ".png"));
+
+  try {
+    await forceSaveUrl(target, filename);
+  } catch (err: any) {
+    const msg = err?.message || "Download failed.";
+    if (currentMotion) setMotionError(msg);
+    else setStillError(msg);
+  }
 };
 
 const currentMediaKey = getCurrentMediaKey();
@@ -2310,8 +2479,8 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
       delete copy[key];
       return copy;
     });
-    // if deleting selected, fall back to vintage
-    if (stylePresetKey === key) setStylePresetKey("vintage");
+    // Remove deleted styles from any selection
+    setStylePresetKeys((prev) => prev.filter((k) => k !== key));
   };
 
   const handleSignOut = async () => {
@@ -2461,7 +2630,10 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
       };
 
       setCustomStyles((prev) => [newStyle, ...prev]);
-      setStylePresetKey(newKey);
+      setStylePresetKeys((prev) => {
+        const next = prev.filter((k) => k !== newKey);
+        return [newKey, ...next];
+      });
 
       // close modal
       setCustomStylePanelOpen(false);
@@ -2493,9 +2665,7 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
     setCustomPresets(updated);
     saveCustomStyles(updated);
 
-    if (stylePresetKey === key) {
-      setStylePresetKey("vintage");
-    }
+    setStylePresetKeys((prev) => prev.filter((k) => k !== key));
   };
   // ========================================================================
   // [PART 13 END]
@@ -2506,6 +2676,11 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
   // ========================================================================
   // Part 15 extracts the right-pane renderer (image/video preview + controls)
   // so the JSX below stays readable.
+
+  const mediaKindForDisplay =
+    activeMediaKind ?? (newestMotionAt > newestStillAt ? "motion" : newestStillAt ? "still" : null);
+  const displayedMotion = mediaKindForDisplay === "motion" ? currentMotion : null;
+  const displayedStill = mediaKindForDisplay === "motion" ? null : currentStill;
 
   // Keep lazy component stable across renders (no remounting)
   const StudioRightLazyRef = useRef<
@@ -2523,13 +2698,13 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
       <React.Suspense
         fallback={
           <div className="studio-right">
-            
+
           </div>
         }
       >
         <StudioRight
-          currentStill={currentStill}
-          currentMotion={currentMotion}
+          currentStill={displayedStill}
+          currentMotion={displayedMotion}
           stillItems={stillItems}
           stillIndex={stillIndex}
           setStillIndex={setStillIndex}
@@ -2631,20 +2806,14 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
   // ========================================================================
   // Part 18 composes the full studio layout: left controls, right preview, and
   // conditional overlays/loaders.
+  // Keep the top loading bar limited to "heavy" actions so navigation between
+  // tabs doesn't cause flicker.
   const topBarActive =
-    booting ||
     pendingRequests > 0 ||
     uploadsPending ||
     stillGenerating ||
     motionGenerating ||
-    motionSuggestLoading ||
-    motionSuggestTyping ||
-    customStyleTraining ||
-    feedbackSending ||
-    likeSubmitting ||
-    historyLoading ||
-    creditsLoading ||
-    checkingHealth;
+    customStyleTraining;
   const appUi = (
     <div className="mina-studio-root">
       <div className={classNames("mina-drag-overlay", globalDragging && "show")} />
@@ -2659,7 +2828,12 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
           <div className="studio-header-right">
             {activeTab === "studio" && (
               <>
-                <button type="button" className="studio-header-cta" onClick={handleToggleAnimateMode}>
+                <button
+                  type="button"
+                  className="studio-header-cta"
+                  onClick={handleToggleAnimateMode}
+                  disabled={stillGenerating || motionGenerating || pendingRequests > 0}
+                >
                   {animateMode ? "Create" : "Animate this"}
                 </button>
 
@@ -2722,8 +2896,8 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
               productInputRef={productInputRef}
               logoInputRef={logoInputRef}
               inspirationInputRef={inspirationInputRef}
-              stylePresetKey={stylePresetKey}
-              setStylePresetKey={setStylePresetKey}
+              stylePresetKeys={stylePresetKeys}
+              setStylePresetKeys={setStylePresetKeys}
               stylePresets={computedStylePresets}
               customStyles={customStyles}
               getStyleLabel={getStyleLabel}
@@ -2746,6 +2920,8 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
               motionSuggesting={motionSuggestLoading || motionSuggestTyping}
               canCreateMotion={canCreateMotion}
               motionHasImage={!!motionReferenceImageUrl}
+              motionCreditsOk={motionCreditsOk}
+              motionBlockReason={motionBlockReason}
               motionGenerating={motionGenerating}
               motionError={motionError}
               onCreateMotion={handleGenerateMotion}
