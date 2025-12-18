@@ -1,0 +1,39 @@
+/* Tiny top-of-page loading line (indeterminate) */
+.mina-top-loading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+
+  height: 2px;
+  z-index: 9999;
+
+  /* track */
+  background: rgba(8, 10, 0, 0.1);
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.mina-top-loading::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -35%;
+
+  height: 100%;
+  width: 35%;
+
+  /* moving bar */
+  background: rgba(8, 10, 0, 0.9);
+
+  animation: minaTopLoadingMove 900ms ease-in-out infinite;
+}
+
+@keyframes minaTopLoadingMove {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(385%);
+  }
+}
