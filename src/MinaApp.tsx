@@ -2655,12 +2655,6 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
                 </button>
               </>
             )}
-
-            {activeTab === "profile" && (
-              <button type="button" className="link-button subtle" onClick={() => setActiveTab("studio")}>
-                Back to studio
-              </button>
-            )}
           </div>
         </div>
 
