@@ -669,6 +669,10 @@
 
 /* force motion style labels to a single line with ellipsis */
 .studio-motion-style-label {
+  padding-top: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   max-width: 110px;
   white-space: nowrap;
   overflow: hidden;

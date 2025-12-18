@@ -629,6 +629,7 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
   const [motionGenerating, setMotionGenerating] = useState(false);
   const [motionError, setMotionError] = useState<string | null>(null);
   const [isRightMediaDark, setIsRightMediaDark] = useState(false);
+  const [activeMediaKind, setActiveMediaKind] = useState<"still" | "motion" | null>(null);
 
   // Feedback
   const [feedbackText, setFeedbackText] = useState("");
@@ -700,7 +701,15 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
   }, []);
 
   useEffect(() => {
-    const allowedMotionKeys: MotionStyleKey[] = ["melt", "drop", "expand", "satisfying", "slow_motion", "fix_camera"];
+    const allowedMotionKeys: MotionStyleKey[] = [
+      "melt",
+      "drop",
+      "expand",
+      "satisfying",
+      "slow_motion",
+      "fix_camera",
+      "loop",
+    ];
     const fromConfig = adminConfig.styles?.movementKeywords || [];
     const filtered = fromConfig.filter((k): k is MotionStyleKey => allowedMotionKeys.includes(k as MotionStyleKey));
     if (filtered.length) setMotionStyleKeys(filtered);
@@ -879,6 +888,10 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
   const currentStill: StillItem | null = stillItems[stillIndex] || stillItems[0] || null;
   const currentMotion: MotionItem | null = motionItems[motionIndex] || motionItems[0] || null;
 
+  const parseTs = (iso?: string | null) => (iso ? Date.parse(iso) || 0 : 0);
+  const newestStillAt = parseTs(stillItems[0]?.createdAt);
+  const newestMotionAt = parseTs(motionItems[0]?.createdAt);
+
   const animateImage = uploads.product[0] || null;
   const animateAspectOption = ASPECT_OPTIONS.find((opt) => opt.key === animateAspectKey) || currentAspect;
   const animateAspectIconUrl = ASPECT_ICON_URLS[animateAspectOption.key];
@@ -912,6 +925,23 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
   const motionBlockReason = motionCreditsOk ? null : "Buy more credits to animate.";
 
   const briefHintVisible = showDescribeMore;
+
+  useEffect(() => {
+    if (activeMediaKind === null) {
+      if (!newestStillAt && !newestMotionAt) return;
+      setActiveMediaKind(newestMotionAt > newestStillAt ? "motion" : "still");
+      return;
+    }
+
+    if (activeMediaKind === "motion" && !motionItems.length && stillItems.length) {
+      setActiveMediaKind("still");
+      return;
+    }
+
+    if (activeMediaKind === "still" && !stillItems.length && motionItems.length) {
+      setActiveMediaKind("motion");
+    }
+  }, [activeMediaKind, newestMotionAt, newestStillAt, motionItems.length, stillItems.length]);
 
   useEffect(() => {
     if (isTyping) {
@@ -1766,6 +1796,8 @@ const handleGenerateStill = async () => {
       return next;
     });
 
+    setActiveMediaKind("still");
+
     setLastStillPrompt(item.prompt);
 
     // Update credits
@@ -1930,10 +1962,12 @@ const handleGenerateMotion = async () => {
     };
 
     setMotionItems((prev) => {
-      const next = [...prev, item];
-      setMotionIndex(next.length - 1);
+      const next = [item, ...prev];
+      setMotionIndex(0);
       return next;
     });
+
+    setActiveMediaKind("motion");
 
     if (data.credits?.balance !== undefined) {
       setCredits((prev) => ({
@@ -2601,6 +2635,11 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
   // Part 15 extracts the right-pane renderer (image/video preview + controls)
   // so the JSX below stays readable.
 
+  const mediaKindForDisplay =
+    activeMediaKind ?? (newestMotionAt > newestStillAt ? "motion" : newestStillAt ? "still" : null);
+  const displayedMotion = mediaKindForDisplay === "motion" ? currentMotion : null;
+  const displayedStill = mediaKindForDisplay === "motion" ? null : currentStill;
+
   // Keep lazy component stable across renders (no remounting)
   const StudioRightLazyRef = useRef<
     React.LazyExoticComponent<React.ComponentType<any>> | null
@@ -2617,13 +2656,13 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
       <React.Suspense
         fallback={
           <div className="studio-right">
-            
+
           </div>
         }
       >
         <StudioRight
-          currentStill={currentStill}
-          currentMotion={currentMotion}
+          currentStill={displayedStill}
+          currentMotion={displayedMotion}
           stillItems={stillItems}
           stillIndex={stillIndex}
           setStillIndex={setStillIndex}
