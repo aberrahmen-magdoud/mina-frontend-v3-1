@@ -70,6 +70,28 @@ function buildDownloadName(url: string, fallback: string) {
   return `${fallback}${guessDownloadExt(url, ".png")}`;
 }
 
+const normalizeBase = (raw?: string | null) => {
+  if (!raw) return "";
+  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+};
+
+const resolveApiBase = (override?: string | null) => {
+  const envBase = normalizeBase(
+    override ||
+      (import.meta as any).env?.VITE_MINA_API_BASE_URL ||
+      (import.meta as any).env?.VITE_API_BASE_URL ||
+      (import.meta as any).env?.VITE_BACKEND_URL
+  );
+  if (envBase) return envBase;
+
+  if (typeof window !== "undefined") {
+    if (window.location.origin.includes("localhost")) return "http://localhost:3000";
+    return `${window.location.origin}/api`;
+  }
+
+  return "https://mina-editorial-ai-api.onrender.com";
+};
+
 type ProfileProps = {
   passId?: string | null;
   apiBaseUrl?: string;
@@ -105,11 +127,7 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
   const authCtx = useAuthContext();
   const ctxPassId = usePassId();
 
-  const apiBase =
-    apiBaseUrl ||
-    (import.meta as any).env?.VITE_MINA_API_BASE_URL ||
-    (import.meta as any).env?.VITE_API_BASE_URL ||
-    "";
+  const apiBase = useMemo(() => resolveApiBase(apiBaseUrl), [apiBaseUrl]);
 
   useEffect(() => {
     // Prefer the email already known by AuthGate; fall back to a direct
@@ -168,7 +186,9 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
         json = null;
       }
 
-      if (!resp.ok || !json?.ok) {
+      const hasGenerations = Array.isArray(json?.generations);
+
+      if (!resp.ok || (!json?.ok && !hasGenerations)) {
         setHistoryErr(
           json?.message ||
             json?.error ||
