@@ -455,12 +455,6 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
         ? selectedMotionCards[0].label
         : `${selectedMotionCards.length} styles`;
 
-  const typeForMeLabel = !props.motionHasImage
-    ? "Add an image"
-    : !motionCreditsOk
-      ? "Buy more credits"
-      : "Type for me";
-
   const renderPillIcon = (src: string, fallback: React.ReactNode, isPlus?: boolean) => (
     <span
       className={classNames(
@@ -698,8 +692,15 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                             }
                           >
                             {renderPillIcon(TYPE_FOR_ME_ICON, "✎")}
-                            <span className="studio-pill-main">{typeForMeLabel}</span>
+                            <span className="studio-pill-main">Type for me</span>
                           </button>
+                          {(!motionHasImage || !motionCreditsOk) && (
+                            <div className="studio-pill-note">
+                              {!motionHasImage
+                                ? "Add an image to animate."
+                                : motionBlockReason || "Buy more credits to animate."}
+                            </div>
+                          )}
 
                           {/* Image */}
                           <button
