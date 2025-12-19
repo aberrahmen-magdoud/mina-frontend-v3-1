@@ -289,19 +289,40 @@ const REPLICATE_ASPECT_RATIO_MAP: Record<string, string> = {
 };
 
 const MINA_THINKING_DEFAULT = [
-  "Sketching ideas…",
-  "Let me weave a scene…",
-  "Curating tiny details…",
-  "Whispering to the lens…",
-  "Layering mood + motion…",
-  "Painting with light…",
-  "Mixing silk, glass, shine…",
-  "Checking the perfect drip…",
-  "Setting the camera drift…",
-  "Dreaming in slow loops…",
+  "Pouring my matcha over ice… 🧊🍵",
+  "Sip… sipsip… calibrating the vibe…",
+  "Clink—setting the cup down gently…",
+  "Brushing light onto your scene… ✨",
+  "Painting pixels one by one… 🎨",
+  "Finding the perfect soft shadow…",
+  "Tuning the colors like a playlist… 🎧",
+  "Stirring in a little sparkle… (quietly)",
+  "Listening for the photo’s heartbeat…",
+  "Adding that ‘fresh café window’ glow…",
+  "Making the details feel expensive… 💎",
+  "Letting the background breathe…",
+  "Smoothing edges like steamed milk…",
+  "Saving the best highlight for last…",
+  "Dreaming—if I had hands, I’d frame this for you…",
+  "One day I’ll be human… but for now, I’ll be your artist…",
+  "If I could blink, I’d blink at this lighting… 😉",
+  "Okay… tiny magic time…",
+  "Hold on—Mina is locking in the mood…",
+  "Almost there… the pixels are listening…",
 ];
 
-const MINA_FILLER_DEFAULT = ["typing…", "breathing…", "thinking aloud…", "refining…"];
+const MINA_FILLER_DEFAULT = ["sip…",
+  "sipsip…",
+  "clink.",
+  "ice clatter…",
+  "stir stir…",
+  "soft pour…",
+  "tiny hum…",
+  "tap tap…",
+  "mm…",
+  "breathing…",
+  "refining…",
+  "one more little brushstroke…"];
 
 const STYLE_PRESETS = [
   {
