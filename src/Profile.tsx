@@ -31,6 +31,17 @@ function isVideoUrl(url: string) {
   return u.endsWith(".mp4") || u.endsWith(".webm") || u.endsWith(".mov") || u.endsWith(".m4v");
 }
 
+function isImageUrl(url: string) {
+  const u = (url || "").split("?")[0].split("#")[0].toLowerCase();
+  return (
+    u.endsWith(".jpg") ||
+    u.endsWith(".jpeg") ||
+    u.endsWith(".png") ||
+    u.endsWith(".gif") ||
+    u.endsWith(".webp")
+  );
+}
+
 function fmtDate(iso: string | null) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -300,79 +311,78 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
 
 
   const items = useMemo(() => {
-  // ✅ Merge both: generations + feedbacks
-  const allRows = [...(generations || []), ...(feedbacks || [])];
+    // ✅ Merge both: generations + feedbacks
+    const allRows = [...(generations || []), ...(feedbacks || [])];
 
-  // 1) Map rows into UI items (only keep rows that have a URL)
-  let base = allRows
-    .map((g, idx) => {
-      const id = pick(g, ["mg_id", "id"], `row_${idx}`);
-      const createdAt = pick(g, ["mg_event_at", "mg_created_at", "createdAt"], "") || "";
-      const prompt = pick(g, ["mg_prompt", "prompt"], "") || "";
+    // 1) Map rows into UI items (only keep rows that have a URL)
+    let base = allRows
+      .map((g, idx) => {
+        const id = pick(g, ["mg_id", "id"], `row_${idx}`);
+        const createdAt = pick(g, ["mg_event_at", "mg_created_at", "createdAt"], "") || "";
+        const prompt = pick(g, ["mg_prompt", "prompt"], "") || "";
 
-      const out = pick(g, ["mg_output_url", "outputUrl"], "").trim();
-      const img = pick(g, ["mg_image_url", "imageUrl"], "").trim();
-      const vid = pick(g, ["mg_video_url", "videoUrl"], "").trim();
-      
-      const contentType = pick(g, ["mg_content_type", "contentType"], "").toLowerCase();
-      const kindHint = String(pick(g, ["mg_result_type", "resultType", "mg_type", "type"], "")).toLowerCase();
-      
-      // ✅ Strong video signal even when URL has no .mp4 extension
-      const looksVideo =
-        Boolean(vid) ||
-        contentType.includes("video") ||
-        kindHint.includes("motion") ||
-        kindHint.includes("video") ||
-        isVideoUrl(out) ||
-        isVideoUrl(vid);
-      
-      // If it looks like video but videoUrl field is empty, use outputUrl as the video source.
-      const videoUrl = vid || (looksVideo ? out : "");
-      const imageUrl = img || (!looksVideo ? out : "");
-      
-      // Prefer video first
-      const url = (videoUrl || imageUrl || out).trim();
-      const isMotion = Boolean(videoUrl) || looksVideo || isVideoUrl(url);
+        const out = pick(g, ["mg_output_url", "outputUrl"], "").trim();
+        const img = pick(g, ["mg_image_url", "imageUrl"], "").trim();
+        const vid = pick(g, ["mg_video_url", "videoUrl"], "").trim();
 
+        const contentType = pick(g, ["mg_content_type", "contentType"], "").toLowerCase();
+        const kindHint = String(pick(g, ["mg_result_type", "resultType", "mg_type", "type"], "")).toLowerCase();
 
-      const liked = url ? likedUrlSet.has(url) : false;
+        // ✅ Only render as video when we have an actual video URL.
+        const looksVideoMeta =
+          contentType.includes("video") ||
+          kindHint.includes("motion") ||
+          kindHint.includes("video");
 
-      return { id, createdAt, prompt, url, liked, isMotion };
-    })
-    .filter((x) => x.url);
+        const looksImage = isImageUrl(out) || isImageUrl(img);
 
-  // 2) Newest first
-  base.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+        // Prefer explicit video fields, then outputUrl if it clearly looks like video or metadata says motion/video
+        // and the URL is not obviously an image.
+        const videoUrl = vid || (isVideoUrl(out) ? out : looksVideoMeta && !looksImage ? out : "");
+        const imageUrl = img || (!videoUrl ? out : "");
 
-  // 3) ✅ Deduplicate by URL so you don’t see the same media twice
-  const seen = new Set<string>();
-  base = base.filter((it) => {
-    if (seen.has(it.url)) return false;
-    seen.add(it.url);
-    return true;
-  });
+        // Prefer video first
+        const url = (videoUrl || imageUrl || out).trim();
+        const isMotion = Boolean(videoUrl);
 
-  // 4) Apply your existing filters
-  let out = base;
+        const liked = url ? likedUrlSet.has(url) : false;
 
-  if (motion === "still") out = out.filter((x) => !x.isMotion);
-  if (motion === "motion") out = out.filter((x) => x.isMotion);
+        return { id, createdAt, prompt, url, liked, isMotion };
+      })
+      .filter((x) => x.url);
 
-  if (likedOnly) out = out.filter((x) => x.liked);
+    // 2) Newest first
+    base.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
 
-  if (recentOnly) out = out.slice(0, 60);
+    // 3) ✅ Deduplicate by URL so you don’t see the same media twice
+    const seen = new Set<string>();
+    base = base.filter((it) => {
+      if (seen.has(it.url)) return false;
+      seen.add(it.url);
+      return true;
+    });
 
-  // 5) Add your size classes AFTER sorting (stable layout)
-  out = out.map((it, idx) => {
-    let sizeClass = "profile-card--tall";
-    if (idx % 13 === 0) sizeClass = "profile-card--hero";
-    else if (idx % 9 === 0) sizeClass = "profile-card--wide";
-    else if (idx % 7 === 0) sizeClass = "profile-card--mini";
-    return { ...it, sizeClass };
-  });
+    // 4) Apply your existing filters
+    let out = base;
 
-  return out;
-}, [generations, feedbacks, likedUrlSet, motion, likedOnly, recentOnly]);
+    if (motion === "still") out = out.filter((x) => !x.isMotion);
+    if (motion === "motion") out = out.filter((x) => x.isMotion);
+
+    if (likedOnly) out = out.filter((x) => x.liked);
+
+    if (recentOnly) out = out.slice(0, 60);
+
+    // 5) Add your size classes AFTER sorting (stable layout)
+    out = out.map((it, idx) => {
+      let sizeClass = "profile-card--tall";
+      if (idx % 13 === 0) sizeClass = "profile-card--hero";
+      else if (idx % 9 === 0) sizeClass = "profile-card--wide";
+      else if (idx % 7 === 0) sizeClass = "profile-card--mini";
+      return { ...it, sizeClass };
+    });
+
+    return out;
+  }, [generations, feedbacks, likedUrlSet, motion, likedOnly, recentOnly]);
 
 
   const onTogglePrompt = (id: string) => {
