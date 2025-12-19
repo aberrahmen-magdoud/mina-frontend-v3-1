@@ -546,10 +546,10 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
                 <button
                   className="profile-card-show"
                   type="button"
-                  onClick={() => triggerDownload(it.url, it.id)}
+                  onClick={() => openLightbox(it.url, it.isMotion)}
                   disabled={!it.url}
                 >
-                  Download
+                  Open
                 </button>
 
                 {it.liked ? <span className="profile-card-liked">Liked</span> : null}
