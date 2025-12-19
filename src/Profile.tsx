@@ -76,6 +76,17 @@ function buildDownloadName(url: string) {
   return base.endsWith(ext) ? base : `${base}${ext}`;
 }
 
+function triggerDownload(url: string, id?: string | null) {
+  if (!url) return;
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = buildDownloadName(url);
+  if (id) a.setAttribute("data-id", id);
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 const normalizeBase = (raw?: string | null) => {
   if (!raw) return "";
   return raw.endsWith("/") ? raw.slice(0, -1) : raw;
@@ -419,18 +430,12 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
       <TopLoadingBar active={loadingHistory} />
       {lightbox ? (
         <div className="profile-lightbox" role="dialog" aria-modal="true" onClick={closeLightbox}>
-          <div className="profile-lightbox-content" onClick={(e) => e.stopPropagation()}>
-            <button className="profile-lightbox-close" type="button" onClick={closeLightbox}>
-              Close
-            </button>
-
-            <div className="profile-lightbox-media">
-              {lightbox.isMotion ? (
-                <video src={lightbox.url} autoPlay loop muted playsInline />
-              ) : (
-                <img src={lightbox.url} alt="" loading="lazy" />
-              )}
-            </div>
+          <div className="profile-lightbox-media">
+            {lightbox.isMotion ? (
+              <video src={lightbox.url} autoPlay loop muted playsInline />
+            ) : (
+              <img src={lightbox.url} alt="" loading="lazy" />
+            )}
           </div>
         </div>
       ) : null}
