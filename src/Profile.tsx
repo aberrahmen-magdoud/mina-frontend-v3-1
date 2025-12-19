@@ -84,7 +84,9 @@ const resolveApiBase = (override?: string | null) => {
     return `${window.location.origin}/api`;
   }
 
-  return "https://mina-editorial-ai-api.onrender.com";
+  // Default to the deployed API base (including /api) so history endpoints
+  // resolve correctly even when env vars are missing.
+  return "https://mina-editorial-ai-api.onrender.com/api";
 };
 
 type ProfileProps = {
