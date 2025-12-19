@@ -256,24 +256,47 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiBase, propPassId, ctxPassId, authCtx?.accessToken]);
 
+  // -----------------------------------------
+  // Likes: only count as "liked" when we have
+  // an EXPLICIT empty comment field.
+  // (If comment field is missing, it is NOT a like.)
+  // -----------------------------------------
   const likedUrlSet = useMemo(() => {
-  const s = new Set<string>();
+    const s = new Set<string>();
 
-  for (const f of feedbacks) {
-    const comment = pick(f, ["mg_comment", "comment"], "").trim();
-    // your “like” convention was: comment == ""
-    if (comment !== "") continue;
+    const hasKey = (obj: any, key: string) =>
+      obj && Object.prototype.hasOwnProperty.call(obj, key);
 
-    const out = pick(f, ["mg_output_url", "outputUrl"], "").trim();
-    const img = pick(f, ["mg_image_url", "imageUrl"], "").trim();
-    const vid = pick(f, ["mg_video_url", "videoUrl"], "").trim();
+    for (const f of feedbacks) {
+      // Only treat as feedback when record type is present and is "feedback"
+      const recTypeRaw = String(pick(f, ["mg_record_type", "recordType"], "") || "").toLowerCase();
+      if (recTypeRaw && recTypeRaw !== "feedback") continue;
 
-    const url = vid || (isVideoUrl(out) ? out : "") || img || out;
-    if (url) s.add(url);
-  }
+      const payload = (f as any)?.mg_payload ?? (f as any)?.payload ?? null;
+      const payloadComment =
+        typeof payload?.comment === "string" ? payload.comment.trim() : null;
 
-  return s;
-}, [feedbacks]);
+      const commentFieldPresent = hasKey(f, "mg_comment") || hasKey(f, "comment");
+      const commentValue = commentFieldPresent ? pick(f, ["mg_comment", "comment"], "") : null;
+      const commentTrim = typeof commentValue === "string" ? commentValue.trim() : null;
+
+      // ✅ Like only if we explicitly received an empty comment
+      const isLike =
+        (payloadComment !== null && payloadComment === "") ||
+        (commentTrim !== null && commentTrim === "");
+
+      if (!isLike) continue;
+
+      const out = pick(f, ["mg_output_url", "outputUrl"], "").trim();
+      const img = pick(f, ["mg_image_url", "imageUrl"], "").trim();
+      const vid = pick(f, ["mg_video_url", "videoUrl"], "").trim();
+
+      const url = vid || (isVideoUrl(out) ? out : "") || img || out;
+      if (url) s.add(url);
+    }
+
+    return s;
+  }, [feedbacks]);
 
 
   const items = useMemo(() => {
@@ -502,21 +525,38 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
                   Download
                 </button>
 
-                <span className={`profile-card-liked ${it.liked ? "" : "ghost"}`}>Liked</span>
+                {it.liked ? <span className="profile-card-liked">Liked</span> : null}
               </div>
 
               <div
                 className="profile-card-media"
                 role="button"
                 tabIndex={0}
-                onClick={() => triggerDownload(it.url, it.id)}
+                onClick={() => {
+                  // ✅ Don't hijack video clicks (play/pause/seek)
+                  if (!it.url) return;
+                  if (it.isMotion) return;
+                  triggerDownload(it.url, it.id);
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") triggerDownload(it.url, it.id);
+                  if (e.key === "Enter" || e.key === " ") {
+                    if (!it.url) return;
+                    if (it.isMotion) return;
+                    triggerDownload(it.url, it.id);
+                  }
                 }}
               >
                 {it.url ? (
                   it.isMotion ? (
-                    <video src={it.url} controls playsInline />
+                    <video
+                      src={it.url}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      // ✅ stop bubbling so the parent doesn't trigger download
+                      onClick={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    />
                   ) : (
                     <img src={it.url} alt="" loading="lazy" />
                   )
