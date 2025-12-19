@@ -1340,15 +1340,12 @@ const extractExpiresAt = (obj: any): string | null => {
 };
 
 const fetchCredits = async () => {
-  if (!API_BASE_URL) return;
-
-  const cacheKey = currentUserEmail || currentPassId;
-  if (!cacheKey) return;
+  if (!API_BASE_URL || !currentPassId) return;
   try {
     // Reuse cached balance unless a new generation/passId change marked it
     // dirty, or the cache is older than ~30s.
-    const cached = creditsCacheRef.current[cacheKey];
-    const cachedAt = creditsCacheAtRef.current[cacheKey] || 0;
+    const cached = creditsCacheRef.current[currentPassId];
+    const cachedAt = creditsCacheAtRef.current[currentPassId] || 0;
     const isStale = Date.now() - cachedAt > 30_000;
 
     if (!creditsDirtyRef.current && cached && !isStale) {
@@ -1358,12 +1355,8 @@ const fetchCredits = async () => {
 
     setCreditsLoading(true);
 
-    const emailKey = (currentUserEmail || "").trim().toLowerCase();
-    const params = new URLSearchParams();
-    if (emailKey) params.set("customerId", emailKey);
-
-    const path = params.toString() ? `/credits/balance?${params.toString()}` : `/credits/balance`;
-    const res = await apiFetch(path);
+    const params = new URLSearchParams({ passId: currentPassId });
+    const res = await apiFetch(`/credits/balance?${params.toString()}`);
     if (!res.ok) return;
 
     const json = (await res.json().catch(() => ({}))) as any;
@@ -1379,8 +1372,8 @@ const fetchCredits = async () => {
       },
     };
 
-    creditsCacheRef.current[cacheKey] = nextCredits;
-    creditsCacheAtRef.current[cacheKey] = Date.now();
+    creditsCacheRef.current[currentPassId] = nextCredits;
+    creditsCacheAtRef.current[currentPassId] = Date.now();
     creditsDirtyRef.current = false;
     setCredits(nextCredits);
   } catch {
