@@ -116,6 +116,7 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
 
   const [credits, setCredits] = useState<number | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{ url: string; isMotion: boolean } | null>(null);
   //DEBUGGer const [rawHistoryPayload, setRawHistoryPayload] = useState<any>(null);
 
   // Filters (ONLY these)
@@ -130,6 +131,13 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
   const [recentOnly, setRecentOnly] = useState(false);
 
   const [expandedPromptIds, setExpandedPromptIds] = useState<Record<string, boolean>>({});
+
+  const openLightbox = (url: string | null, isMotion: boolean) => {
+    if (!url) return;
+    setLightbox({ url, isMotion });
+  };
+
+  const closeLightbox = () => setLightbox(null);
 
   // Pull session + passId from the shared auth context so we reuse the same
   // token/AuthGate pass id instead of re-checking Supabase on this screen.
@@ -267,6 +275,16 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiBase, propPassId, ctxPassId, authCtx?.accessToken]);
 
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeLightbox();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [lightbox]);
+
   // -----------------------------------------
   // Likes: only count as "liked" when we have
   // an EXPLICIT empty comment field.
@@ -396,32 +414,26 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
     window.location.reload();
   };
 
-  const triggerDownload = (url: string, id: string) => {
-    if (!url) return;
-    const filename = buildDownloadName(url);
-    fetch(url)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Download failed with ${res.status}`);
-        return res.blob();
-      })
-      .then((blob) => {
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(blobUrl);
-      })
-      .catch(() => {
-        /* ignore download failure so UI stays responsive */
-      });
-  };
-
   return (
     <>
       <TopLoadingBar active={loadingHistory} />
+      {lightbox ? (
+        <div className="profile-lightbox" role="dialog" aria-modal="true" onClick={closeLightbox}>
+          <div className="profile-lightbox-content" onClick={(e) => e.stopPropagation()}>
+            <button className="profile-lightbox-close" type="button" onClick={closeLightbox}>
+              Close
+            </button>
+
+            <div className="profile-lightbox-media">
+              {lightbox.isMotion ? (
+                <video src={lightbox.url} autoPlay loop muted playsInline />
+              ) : (
+                <img src={lightbox.url} alt="" loading="lazy" />
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="profile-shell">
         {/* ✅ Top bar (row 1) — NO LOGO LEFT */}
         <div className="profile-topbar">
@@ -529,10 +541,10 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
                 <button
                   className="profile-card-show"
                   type="button"
-                  onClick={() => triggerDownload(it.url, it.id)}
+                  onClick={() => openLightbox(it.url, it.isMotion)}
                   disabled={!it.url}
                 >
-                  Download
+                  Open
                 </button>
 
                 {it.liked ? <span className="profile-card-liked">Liked</span> : null}
@@ -542,30 +554,26 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
                 className="profile-card-media"
                 role="button"
                 tabIndex={0}
-                onClick={() => {
-                  // ✅ Don't hijack video clicks (play/pause/seek)
-                  if (!it.url) return;
-                  if (it.isMotion) return;
-                  triggerDownload(it.url, it.id);
-                }}
+                onClick={() => openLightbox(it.url, it.isMotion)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    if (!it.url) return;
-                    if (it.isMotion) return;
-                    triggerDownload(it.url, it.id);
-                  }
+                  if (e.key === "Enter" || e.key === " ") openLightbox(it.url, it.isMotion);
                 }}
               >
                 {it.url ? (
                   it.isMotion ? (
                     <video
                       src={it.url}
-                      controls
+                      muted
+                      loop
                       playsInline
                       preload="metadata"
-                      // ✅ stop bubbling so the parent doesn't trigger download
-                      onClick={(e) => e.stopPropagation()}
-                      onPointerDown={(e) => e.stopPropagation()}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.play().catch(() => {});
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.pause();
+                        e.currentTarget.currentTime = 0;
+                      }}
                     />
                   ) : (
                     <img src={it.url} alt="" loading="lazy" />
