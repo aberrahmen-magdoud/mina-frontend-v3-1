@@ -143,75 +143,73 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
   async function fetchHistory() {
     setHistoryErr("");
     setLoadingHistory(true);
-
     try {
       if (!apiBase) {
         setHistoryErr("Missing VITE_MINA_API_BASE_URL (or VITE_API_BASE_URL).");
         return;
       }
 
-      // session + token
+      // Reuse the token/pass id provided by AuthGate whenever possible so we
+      // don't wait on another Supabase round trip.
       const { data } = await supabase.auth.getSession();
       const token = authCtx?.accessToken || data.session?.access_token || null;
 
-      // passId (best effort)
-      let passId = (propPassId || ctxPassId || localStorage.getItem("minaPassId") || "").trim();
-
-      // if missing, ask /me for canonical passId and store it
-      if (!passId) {
-        try {
-          const meHeaders: Record<string, string> = { Accept: "application/json" };
-          if (token) meHeaders.Authorization = `Bearer ${token}`;
-
-          const incoming = (localStorage.getItem("minaPassId") || "").trim();
-          if (incoming) meHeaders["X-Mina-Pass-Id"] = incoming;
-
-          const meRes = await fetch(`${apiBase}/me`, { method: "GET", headers: meHeaders });
-          const meJson = await meRes.json().catch(() => null);
-
-          const nextPassId = String(meJson?.passId || "").trim();
-          if (nextPassId) {
-            passId = nextPassId;
-            localStorage.setItem("minaPassId", nextPassId);
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      // ✅ IMPORTANT: use email as customerId when available (avoids your /history/pass 500)
-      const emailFromSession = String(
-        authCtx?.session?.user?.email || data.session?.user?.email || ""
-      )
-        .trim()
-        .toLowerCase();
-
-      // Prefer email for history lookup, fallback to passId
-      const customerKey = emailFromSession || passId;
+      const passId = (propPassId || ctxPassId || localStorage.getItem("minaPassId") || "").trim();
 
       const headers: Record<string, string> = { Accept: "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
       if (passId) headers["X-Mina-Pass-Id"] = passId;
 
-      const url = customerKey
-        ? `${apiBase}/history?customerId=${encodeURIComponent(customerKey)}`
-        : `${apiBase}/history`;
+      // Prefer the lightweight /history/trimmed endpoint when available; fall
+      // back to the full history payload to preserve compatibility with older
+      // backends.
+      const hitHistory = async (url: string) => {
+        const res = await fetch(url, { method: "GET", headers });
+        const text = await res.text();
+        return { res, text } as const;
+      };
 
-      const res = await fetch(url, { method: "GET", headers });
-      const text = await res.text();
+      const attempts = [`${apiBase}/history/trimmed`, `${apiBase}/history`];
 
-      let json: any = null;
-      try {
-        json = text ? JSON.parse(text) : null;
-      } catch {
-        json = null;
+      if (passId) {
+        attempts.push(`${apiBase}/history/pass/${encodeURIComponent(passId)}`);
       }
 
-      if (!res.ok || !(json?.ok || Array.isArray(json?.generations))) {
+      let resp: Response | null = null;
+      let text = "";
+      let json: any = null;
+      let success = false;
+
+      for (const url of attempts) {
+        const attempt = await hitHistory(url);
+        resp = attempt.res;
+        text = attempt.text;
+
+        try {
+          json = text ? JSON.parse(text) : null;
+        } catch {
+          json = null;
+        }
+
+        const hasGenerations = Array.isArray(json?.generations);
+        if (resp.ok && (json?.ok || hasGenerations)) {
+          success = true;
+          break;
+        }
+      }
+
+      if (!resp) {
+        setHistoryErr("History failed: empty response");
+        return;
+      }
+
+      const hasGenerations = Array.isArray(json?.generations);
+
+      if (!success) {
         setHistoryErr(
           json?.message ||
             json?.error ||
-            `History failed (${res.status}): ${text?.slice(0, 220) || "Unknown error"}`
+            `History failed (${resp.status}): ${text?.slice(0, 220) || "Unknown error"}`
         );
         setGenerations([]);
         setFeedbacks([]);
