@@ -2850,7 +2850,7 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
                   onClick={handleToggleAnimateMode}
                   disabled={stillGenerating || motionGenerating || pendingRequests > 0}
                 >
-                  {animateMode ? "Create" : "Animate this"}
+                  {animateMode ? "Create" : "Animate"}
                 </button>
 
                 <button
@@ -2859,7 +2859,7 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
                   onClick={handleLikeCurrentStill}
                   disabled={!currentStill && !currentMotion}
                 >
-                  {isCurrentLiked ? "ok" : "♡ more of this"}
+                  {isCurrentLiked ? "ok" : "Save it"}
                 </button>
 
                 <button
@@ -2868,7 +2868,7 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
                   onClick={handleDownloadCurrentStill}
                   disabled={!currentStill && !currentMotion}
                 >
-                  Download with logo
+                  Download
                 </button>
               </>
             )}
