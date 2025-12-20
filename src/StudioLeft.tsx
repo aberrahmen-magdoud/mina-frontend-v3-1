@@ -1046,7 +1046,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
 
                 <Collapse open={showPanels && (effectivePanel === "style" || activePanel === null)} delayMs={panelRevealDelayMs}>
                   <div className="studio-panel">
-                    <div className="studio-panel-title">Pick a mouvement style</div>
+                    <div className="studio-panel-title">Pick movement styles</div>
 
                     <div className="studio-style-row">
                       {MOTION_STYLES.map((m) => (
