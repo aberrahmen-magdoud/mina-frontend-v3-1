@@ -500,6 +500,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
             : "ready";
 
   const motionSuggesting = !!props.motionSuggesting;
+  const motionHasImage = !!props.motionHasImage;
   const canCreateMotion = props.canCreateMotion ?? briefLen >= 1;
   const motionCreditsOk = props.motionCreditsOk ?? true;
   const motionBlockReason = props.motionBlockReason || null;
