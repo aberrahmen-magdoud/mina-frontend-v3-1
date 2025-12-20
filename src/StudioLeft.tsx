@@ -499,11 +499,12 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
             : "ready";
 
   const motionSuggesting = !!props.motionSuggesting;
+  const motionHasImage = !!props.motionHasImage;
   const canCreateMotion = props.canCreateMotion ?? briefLen >= 1;
   const motionCreditsOk = props.motionCreditsOk ?? true;
   const motionBlockReason = props.motionBlockReason || null;
 
-  const typeForMeLabel = "Type for me";
+  const typeForMeLabel = motionSuggesting ? "Typing…" : "Type for me";
 
   const motionCreateState: "creating" | "describe_more" | "ready" = motionGenerating
     ? "creating"
@@ -519,7 +520,9 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
   const createLabel =
     createState === "creating"
       ? isMotion
-        ? "Animating…"
+        ? motionSuggesting
+          ? "Typing…"
+          : "Animating…"
         : "Creating…"
     : createState === "uploading"
       ? "Uploading…"
@@ -540,7 +543,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
       ? wantsMatcha
         ? false
         : isMotion
-          ? !hasMotionHandler || motionSuggesting || !motionCreditsOk
+          ? !hasMotionHandler || motionSuggesting || !motionCreditsOk || !motionHasImage || !canCreateMotion
           : !canCreateStill
       : (isMotion && (!hasMotionHandler || motionSuggesting || !motionCreditsOk)) ||
         (!isMotion && (!canCreateStill || !imageCreditsOk)));
