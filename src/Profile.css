@@ -494,3 +494,11 @@
   cursor: pointer;
 }
 
+/* Hover focus: dim other NON-dim cards to 0.8 */
+.profile-grid:hover .profile-card:not(:hover):not(.is-dim) {
+  opacity: 0.8;
+  transition: opacity 160ms ease;
+}
+.profile-grid:hover .profile-card:hover {
+  opacity: 1;
+}
