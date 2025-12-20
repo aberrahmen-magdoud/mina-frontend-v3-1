@@ -2985,7 +2985,7 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
               </a>
               <a
                 className="studio-footer-link"
-                href="https://www.faltastudio.com/pages/tutorial"
+                href="https://mina.faltastudio.com"
                 target="_blank"
                 rel="noreferrer"
               >
