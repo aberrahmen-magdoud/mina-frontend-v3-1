@@ -1393,8 +1393,19 @@ const fetchCredits = async () => {
 
     const expiresAt = extractExpiresAt(json);
 
+    const cachedBalance = cached?.balance ?? credits?.balance;
+    let balance = cachedBalance;
+
+    if (json?.balance !== undefined && json?.balance !== null) {
+      const parsed = Number(json.balance);
+      if (Number.isFinite(parsed)) balance = parsed;
+    }
+
+    // If the API omitted balance, keep any previous number instead of coercing to 0.
+    if (balance === undefined || balance === null) balance = cachedBalance ?? 0;
+
     const nextCredits: CreditsState = {
-      balance: Number(json?.balance ?? credits?.balance ?? 0),
+      balance,
       meta: {
         imageCost: Number(json?.meta?.imageCost ?? credits?.meta?.imageCost ?? adminConfig.pricing?.imageCost ?? 1),
         motionCost: Number(json?.meta?.motionCost ?? credits?.meta?.motionCost ?? adminConfig.pricing?.motionCost ?? 5),
@@ -2857,7 +2868,7 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
                   onClick={handleDownloadCurrentStill}
                   disabled={!currentStill && !currentMotion}
                 >
-                  Download
+                  Download with logo
                 </button>
               </>
             )}
