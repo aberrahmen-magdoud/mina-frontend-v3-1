@@ -10,7 +10,7 @@
 // - Filters (motion/type / creation/platform / liked / recent / session) => non-matching dim to 10%
 // =============================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
 import { useAuthContext, usePassId } from "./components/AuthGate";
 import "./Profile.css";
@@ -268,6 +268,99 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
       setEmail(em ? String(em) : "");
     });
   }, [authCtx?.session]);
+
+  // =============================================================
+// Grid video autoplay (IntersectionObserver)
+// - Plays ONLY when visible
+// - To avoid heavy CPU, plays only the MOST visible video
+// =============================================================
+const videoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
+
+const registerVideoEl = useCallback((id: string, el: HTMLVideoElement | null) => {
+  const m = videoElsRef.current;
+  if (el) m.set(id, el);
+  else m.delete(id);
+}, []);
+
+useEffect(() => {
+  if (typeof window === "undefined") return;
+  if (!("IntersectionObserver" in window)) return;
+
+  const els = videoElsRef.current;
+  const visible = new Map<HTMLVideoElement, number>();
+
+  const pauseAll = () => {
+    els.forEach((v) => {
+      try {
+        v.pause();
+      } catch {}
+    });
+  };
+
+  const playMostVisible = () => {
+    let best: HTMLVideoElement | null = null;
+    let bestRatio = 0;
+
+    visible.forEach((ratio, v) => {
+      if (ratio > bestRatio) {
+        bestRatio = ratio;
+        best = v;
+      }
+    });
+
+    els.forEach((v) => {
+      const shouldPlay = best === v;
+      try {
+        // enforce autoplay-safe flags (helps Safari)
+        v.muted = true;
+        (v as any).playsInline = true;
+
+        if (shouldPlay) {
+          if (v.paused) v.play().catch(() => {});
+        } else {
+          if (!v.paused) v.pause();
+        }
+      } catch {
+        // ignore
+      }
+    });
+  };
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        const v = e.target as HTMLVideoElement;
+        const ratio = e.intersectionRatio || 0;
+
+        // Only count as "visible" once it's meaningfully on screen
+        if (e.isIntersecting && ratio >= 0.35) visible.set(v, ratio);
+        else visible.delete(v);
+      }
+      playMostVisible();
+    },
+    {
+      root: null,
+      rootMargin: "200px 0px 200px 0px",
+      threshold: [0, 0.35, 0.7, 1],
+    }
+  );
+
+  // Observe current video nodes
+  els.forEach((v) => observer.observe(v));
+
+  const onVis = () => {
+    if (document.hidden) pauseAll();
+    else playMostVisible();
+  };
+  document.addEventListener("visibilitychange", onVis);
+
+  return () => {
+    document.removeEventListener("visibilitychange", onVis);
+    observer.disconnect();
+    pauseAll();
+  };
+}, [items]);
+
 
   async function fetchHistory() {
     setHistoryErr("");
@@ -678,21 +771,17 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
               >
                 {it.url ? (
                   it.isMotion ? (
-                    <video
-                      src={it.url}
-                      muted
-                      loop
-                      playsInline
-                      preload="metadata"
-                      onMouseEnter={(e) => {
-                        e.currentTarget.play().catch(() => {});
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.pause();
-                        e.currentTarget.currentTime = 0;
-                      }}
-                    />
-                  ) : (
+                   it.isMotion ? (
+                      <video
+                        ref={(el) => registerVideoEl(it.id, el)}
+                        src={it.url}
+                        muted
+                        loop
+                        playsInline
+                        preload="metadata"
+                      />
+                    ) : (
+
                     <img src={it.url} alt="" loading="lazy" />
                   )
                 ) : (
