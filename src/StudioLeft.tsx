@@ -370,7 +370,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
   } = props;
 
   const imageCreditsOk = imageCreditsOkProp ?? true;
-  const motionHasImage = !!motionHasImageProp;
+  const hasMotionImage = !!motionHasImageProp;
 
   const briefInputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -544,7 +544,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
       ? wantsMatcha
         ? false
         : isMotion
-          ? !hasMotionHandler || motionSuggesting || !motionCreditsOk || !motionHasImage || !canCreateMotion
+          ? !hasMotionHandler || motionSuggesting || !motionCreditsOk || !hasMotionImage || !canCreateMotion
           : !canCreateStill
       : (isMotion && (!hasMotionHandler || motionSuggesting || !motionCreditsOk)) ||
         (!isMotion && (!canCreateStill || !imageCreditsOk)));
@@ -730,7 +730,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                             style={pillBaseStyle(0)}
                             onClick={() => onTypeForMe?.()}
                             disabled={
-                              motionSuggesting || motionGenerating || !motionHasImage || !motionCreditsOk
+                              motionSuggesting || motionGenerating || !hasMotionImage || !motionCreditsOk
                             }
                           >
                             {renderPillIcon(TYPE_FOR_ME_ICON, "✎", false, { plain: true })}
