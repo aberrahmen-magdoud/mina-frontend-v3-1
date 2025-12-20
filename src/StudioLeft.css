@@ -719,3 +719,12 @@
     -webkit-overflow-scrolling: touch;
   }
 }
+
+@media (max-width: 960px) {
+  .studio-body--two-col {
+    display: grid;
+    grid-template-columns: 1fr;
+    overflow-x: hidden;
+  }
+}
+
