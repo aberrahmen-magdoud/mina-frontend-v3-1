@@ -298,7 +298,8 @@ video {
 }
 
 .mina-auth-brand img {
-  height: 18px;
+  height: 26px;
+  width: auto;
   display: block;
 }
 
@@ -560,6 +561,10 @@ video {
   .mina-auth-brand {
     left: 20px;
     top: 16px;
+  }
+
+  .mina-auth-brand img {
+    height: 22px;
   }
 
   .mina-auth-footer {
