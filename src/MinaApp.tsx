@@ -441,7 +441,7 @@ function hasSignedQuery(searchParams: URLSearchParams) {
 
 // ✅ Turn a signed URL into a non-expiring base URL (works when your R2 objects are public)
 function stripSignedQuery(url: string) {
-  try {
+    try {
     const parsed = new URL(url);
     if (!hasSignedQuery(parsed.searchParams)) return url;
     parsed.search = "";
@@ -900,6 +900,68 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
   useEffect(() => {
     setVisibleHistoryCount(20);
   }, [historyGenerations]);
+
+  useEffect(() => {
+    if (activeTab !== "studio") return;
+
+    try {
+      const raw = window.localStorage.getItem("mina_recreate_draft_v1");
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      window.localStorage.removeItem("mina_recreate_draft_v1");
+
+      // Minimal hydrate (works with your current state names)
+      const mode = String(draft?.mode || "still");
+      const briefText = String(draft?.brief || "").trim();
+      if (!briefText) return;
+
+      const ratio = String(draft?.settings?.aspect_ratio || "").replace("/", ":");
+      const idx = ASPECT_OPTIONS.findIndex((o) => o.ratio === ratio);
+      if (idx >= 0) setAspectIndex(idx);
+
+      if (Array.isArray(draft?.settings?.stylePresetKeys)) {
+        setStylePresetKeys(draft.settings.stylePresetKeys.map(String));
+      }
+
+      if (typeof draft?.settings?.minaVisionEnabled === "boolean") {
+        setMinaVisionEnabled(draft.settings.minaVisionEnabled);
+      }
+
+      const productUrl = String(draft?.assets?.productImageUrl || "");
+      const logoUrl = String(draft?.assets?.logoImageUrl || "");
+      const insp = Array.isArray(draft?.assets?.styleImageUrls) ? draft.assets.styleImageUrls : [];
+
+      setAnimateMode(mode === "motion");
+      setBrief(briefText);
+      if (mode === "motion") setMotionDescription(briefText);
+      else setStillBrief(briefText);
+
+      setUploads((prev) => ({
+        ...prev,
+        product: productUrl
+          ? [{ id: `product_re_${Date.now()}`, kind: "url", url: productUrl, remoteUrl: productUrl, uploading: false }]
+          : [],
+        logo: logoUrl
+          ? [{ id: `logo_re_${Date.now()}`, kind: "url", url: logoUrl, remoteUrl: logoUrl, uploading: false }]
+          : [],
+        inspiration: (insp || [])
+          .filter((u: any) => typeof u === "string" && u.startsWith("http"))
+          .slice(0, 4)
+          .map((u: string, i: number) => ({
+            id: `insp_re_${Date.now()}_${i}`,
+            kind: "url",
+            url: u,
+            remoteUrl: u,
+            uploading: false,
+          })),
+      }));
+
+      setActivePanel("product");
+      setUiStage((s) => (s < 3 ? 3 : s));
+    } catch {
+      // ignore
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== "profile") return undefined;
@@ -2256,83 +2318,82 @@ const handleSuggestMotion = async () => {
       return;
     }
 
-    try {
-      const mmaBody = {
-        inputs: {
-          motion_description: motionTextTrimmed,
-          tone,
-          platform: animateAspectOption.platformKey,
-        },
-        assets: {
-          // init image for video
-          image_url: motionReferenceImageUrl,
-        },
-        settings: {
-          aspect_ratio: animateAspectOption.ratio,
-          minaVisionEnabled,
-          stylePresetKey: primaryStyleKeyForApi,
-          stylePresetKeys: stylePresetKeysForApi,
-          motionStyles: motionStyleKeys,
-        },
-        history: {
-          sessionId: sessionId || null,
-          sessionTitle: sessionTitle || null,
-        },
-      };
+    const mmaBody = {
+      inputs: {
+        motion_description: motionTextTrimmed,
+        tone,
+        platform: animateAspectOption.platformKey,
+      },
+      assets: {
+        // init image for video
+        image_url: motionReferenceImageUrl,
+      },
+      settings: {
+        aspect_ratio: animateAspectOption.ratio,
+        minaVisionEnabled,
+        stylePresetKey: primaryStyleKeyForApi,
+        stylePresetKeys: stylePresetKeysForApi,
+        motionStyles: motionStyleKeys,
+      },
+      history: {
+        sessionId: sessionId || null,
+        sessionTitle: sessionTitle || null,
+      },
+    };
 
-      const res = await apiFetch("/mma/video/animate", {
-        method: "POST",
-        body: JSON.stringify(mmaBody),
-      });
+    const mmaRes = await apiFetch("/mma/video/animate", {
+      method: "POST",
+      body: JSON.stringify(mmaBody),
+    });
 
-      const createJson = (await res.json().catch(() => ({}))) as Partial<MmaCreateResponse>;
-      if (!res.ok || !createJson?.generation_id) {
-        const msg = (createJson as any)?.message || `Error ${res.status}: MMA video/animate failed.`;
-        throw new Error(msg);
+    const createJson = (await mmaRes.json().catch(() => ({}))) as Partial<MmaCreateResponse>;
+    if (!mmaRes.ok || !createJson?.generation_id) {
+      const msg = (createJson as any)?.message || `Error ${mmaRes.status}: MMA video/animate failed.`;
+      throw new Error(msg);
+    }
+
+    const generationId = String(createJson.generation_id);
+    const sseUrl = String(createJson.sse_url || `/mma/stream/${generationId}`);
+
+    const final = await waitForMmaDone(
+      generationId,
+      sseUrl,
+      40 * 60 * 1000,
+      (st, scan) => {
+        setMinaOverrideText(buildMmaOverlay(st, scan));
       }
+    );
 
-      const generationId = String(createJson.generation_id);
-      const sseUrl = String(createJson.sse_url || `/mma/stream/${generationId}`);
+    if (final.status === "error") {
+      const msg = final?.error?.message || final?.error?.code || "MMA motion failed.";
+      throw new Error(String(msg));
+    }
 
-      const final = await waitForMmaDone(
-        generationId,
-        sseUrl,
-        40 * 60 * 1000,
-        (st, scan) => {
-          setMinaOverrideText(buildMmaOverlay(st, scan));
-        }
-      );
+    const rawUrl = final.outputs?.kling_video_url || "";
+    if (!rawUrl) throw new Error("MMA returned no video URL.");
 
-      if (final.status === "error") {
-        const msg = final?.error?.message || final?.error?.code || "MMA motion failed.";
-        throw new Error(String(msg));
-      }
+    const stableUrl = normalizeNonExpiringUrl(rawUrl);
+    const finalUrl = isReplicateUrl(stableUrl) ? await storeRemoteToR2(stableUrl, "motions") : stableUrl;
 
-      const rawUrl = final.outputs?.kling_video_url || "";
-      if (!rawUrl) throw new Error("MMA returned no video URL.");
+    const promptText = (final.prompt || motionTextTrimmed).trim();
+    setMinaOverrideText(buildMmaOverlay("done", [], `Prompt:\n${promptText.slice(0, 380)}${promptText.length > 380 ? "…" : ""}`));
 
-      const stableUrl = normalizeNonExpiringUrl(rawUrl);
-      const finalUrl = isReplicateUrl(stableUrl) ? await storeRemoteToR2(stableUrl, "motions") : stableUrl;
+    historyDirtyRef.current = true;
+    creditsDirtyRef.current = true;
+    void fetchCredits();
 
-      const promptText = (final.prompt || motionTextTrimmed).trim();
-      setMinaOverrideText(buildMmaOverlay("done", [], `Prompt:\n${promptText.slice(0, 380)}${promptText.length > 380 ? "…" : ""}`));
+    const item: MotionItem = {
+      id: generationId,
+      url: finalUrl,
+      createdAt: new Date().toISOString(),
+      prompt: promptText,
+    };
 
-      historyDirtyRef.current = true;
-      creditsDirtyRef.current = true;
-      void fetchCredits();
-
-      const item: MotionItem = {
-        id: generationId,
-        url: finalUrl,
-        createdAt: new Date().toISOString(),
-        prompt: promptText,
-      };
-
-      setMotionItems((prev) => {
-        const next = [item, ...prev];
-        setMotionIndex(0);
-        return next;
-      });
+    setMotionItems((prev) => {
+      const next = [item, ...prev];
+      setMotionIndex(0);
+      return next;
+    });
 
       setActiveMediaKind("motion");
     } catch (err: any) {
@@ -3356,12 +3417,50 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
             </div>
           </div>
         ) : (
-            <Profile
-              passId={currentPassId}
-              apiBaseUrl={API_BASE_URL}
-              onBackToStudio={() => setActiveTab("studio")}
-            />
+          <Profile
+            email={currentUserEmail || ""}
+            credits={credits?.balance ?? null}
+            expiresAt={credits?.meta?.expiresAt ?? null}
+            generations={historyGenerations as any}
+            feedbacks={historyFeedbacks as any}
+            loading={historyLoading || creditsLoading}
+            error={historyError}
+            onRefresh={() => {
+              historyDirtyRef.current = true;
+              creditsDirtyRef.current = true;
+              void fetchCredits();
+              void fetchHistory();
+            }}
+            onDelete={async (id) => {
+              const res = await apiFetch(`/history/${encodeURIComponent(id)}`, { method: "DELETE" });
+              if (!res.ok) {
+                const txt = await res.text().catch(() => "");
+                throw new Error(`Delete failed (${res.status})${txt ? `: ${txt.slice(0, 180)}` : ""}`);
+              }
 
+              // remove locally (single source of truth)
+              setHistoryGenerations((prev) => prev.filter((g) => g.id !== id));
+              setHistoryFeedbacks((prev) => prev.filter((f) => f.id !== id));
+
+              // update in-memory cache so reopening Profile is instant
+              if (currentPassId && historyCacheRef.current[currentPassId]) {
+                historyCacheRef.current[currentPassId] = {
+                  generations: historyCacheRef.current[currentPassId].generations.filter((g) => g.id !== id),
+                  feedbacks: historyCacheRef.current[currentPassId].feedbacks.filter((f) => f.id !== id),
+                };
+              }
+            }}
+            onRecreate={(draft) => {
+              // simplest: store draft and switch tab; your studio-side effect (or existing apply function)
+              // can read this key and hydrate the studio state.
+              try {
+                window.localStorage.setItem("mina_recreate_draft_v1", JSON.stringify(draft));
+              } catch {}
+              setActiveTab("studio");
+            }}
+            onBackToStudio={() => setActiveTab("studio")}
+            onLogout={handleSignOut}
+          />
         )}
       </div>
 
