@@ -1,24 +1,23 @@
 // =============================================================
 // FILE: src/Profile.tsx
-// Mina — Profile (Archive)
+// Mina — Profile (Render-only, data comes from MinaApp)
 // - Mina-style header (logo left, Back to Studio right, Logout far right)
-// - Meta row (pass + email + stats)
-// - Archive grid
+// - Meta row (email + matchas + expiry)
+// - Archive grid (paged render)
 // - Click item => open lightbox (no new tab)
-// - Prompt line + tiny "view more"
+// - Prompt line + tiny "more"
+// - Expanded view shows "inputs used" + Re-create button (only when expanded)
 // - Filters (motion / liked / aspect) => non-matching dim
 // - Video autoplay via IntersectionObserver (plays only most-visible)
 // =============================================================
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "./lib/supabaseClient";
-import { useAuthContext, usePassId } from "./components/AuthGate";
 import "./Profile.css";
 import TopLoadingBar from "./components/TopLoadingBar";
 
 type Row = Record<string, any>;
 
-function pick(row: Row, keys: string[], fallback = ""): string {
+function pick(row: any, keys: string[], fallback = ""): string {
   for (const k of keys) {
     const v = row?.[k];
     if (v !== undefined && v !== null && String(v).trim() !== "") return String(v);
@@ -46,6 +45,43 @@ function normalizeMediaUrl(url: string) {
   if (!url) return "";
   const base = url.split(/[?#]/)[0];
   return base || url;
+}
+
+function fmtDate(iso: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
+}
+
+function guessDownloadExt(url: string, fallbackExt: string) {
+  const lower = url.toLowerCase();
+  if (lower.endsWith(".mp4")) return ".mp4";
+  if (lower.endsWith(".webm")) return ".webm";
+  if (lower.endsWith(".mov")) return ".mov";
+  if (lower.endsWith(".m4v")) return ".m4v";
+  if (lower.match(/\.jpe?g$/)) return ".jpg";
+  if (lower.endsWith(".png")) return ".png";
+  if (lower.endsWith(".gif")) return ".gif";
+  if (lower.endsWith(".webp")) return ".webp";
+  return fallbackExt;
+}
+
+function buildDownloadName(url: string) {
+  const base = "Mina_v3_prompt";
+  const ext = guessDownloadExt(url, ".png");
+  return base.endsWith(ext) ? base : `${base}${ext}`;
+}
+
+function triggerDownload(url: string, id?: string | null) {
+  if (!url) return;
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = buildDownloadName(url);
+  if (id) a.setAttribute("data-id", id);
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 type AspectKey = "9-16" | "3-4" | "2-3" | "1-1";
@@ -94,269 +130,173 @@ function normalizeAspectRatio(raw: string | null | undefined) {
   return "";
 }
 
+// Likes are feedback rows where comment is empty.
 function findLikeUrl(row: Row) {
-  const hasKey = (obj: any, key: string) => obj && Object.prototype.hasOwnProperty.call(obj, key);
-
   const payload = (row as any)?.mg_payload ?? (row as any)?.payload ?? null;
+
   const payloadComment = typeof payload?.comment === "string" ? payload.comment.trim() : null;
 
-  const commentFieldPresent = hasKey(row, "mg_comment") || hasKey(row, "comment");
+  const commentFieldPresent =
+    Object.prototype.hasOwnProperty.call(row, "mg_comment") ||
+    Object.prototype.hasOwnProperty.call(row, "comment");
+
   const commentValue = commentFieldPresent ? pick(row, ["mg_comment", "comment"], "") : null;
   const commentTrim = typeof commentValue === "string" ? commentValue.trim() : null;
-
-  const recTypeRaw = String(pick(row, ["mg_record_type", "recordType"], "") || "").toLowerCase();
-  if (recTypeRaw && recTypeRaw !== "feedback") return "";
 
   const isLike = (payloadComment !== null && payloadComment === "") || (commentTrim !== null && commentTrim === "");
   if (!isLike) return "";
 
-  const out = pick(row, ["mg_output_url", "outputUrl"], "").trim();
-  const img = pick(row, ["mg_image_url", "imageUrl"], "").trim();
-  const vid = pick(row, ["mg_video_url", "videoUrl"], "").trim();
+  const out = pick(row, ["mg_output_url", "outputUrl", "output_url"], "").trim();
+  const img = pick(row, ["mg_image_url", "imageUrl", "image_url"], "").trim();
+  const vid = pick(row, ["mg_video_url", "videoUrl", "video_url"], "").trim();
 
   return vid || (isVideoUrl(out) ? out : "") || img || out;
 }
 
-function fmtDate(iso: string | null) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
-}
-
-function guessDownloadExt(url: string, fallbackExt: string) {
-  const lower = url.toLowerCase();
-  if (lower.endsWith(".mp4")) return ".mp4";
-  if (lower.endsWith(".webm")) return ".webm";
-  if (lower.endsWith(".mov")) return ".mov";
-  if (lower.endsWith(".m4v")) return ".m4v";
-  if (lower.match(/\.jpe?g$/)) return ".jpg";
-  if (lower.endsWith(".png")) return ".png";
-  if (lower.endsWith(".gif")) return ".gif";
-  if (lower.endsWith(".webp")) return ".webp";
-  return fallbackExt;
-}
-
-function buildDownloadName(url: string) {
-  const base = "Mina_v3_prompt";
-  const ext = guessDownloadExt(url, ".png");
-  return base.endsWith(ext) ? base : `${base}${ext}`;
-}
-
-async function triggerDownload(url: string, id?: string | null) {
-  if (!url) return;
-
-  // Try fetch->blob so it saves directly (no navigation)
-  try {
-    const res = await fetch(url, { mode: "cors" });
-    if (!res.ok) throw new Error(`download_failed_${res.status}`);
-
-    const blob = await res.blob();
-    const objUrl = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = objUrl;
-    a.download = buildDownloadName(url);
-    if (id) a.setAttribute("data-id", id);
-    a.rel = "noopener";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-
-    URL.revokeObjectURL(objUrl);
-  } catch {
-    // Fallback: still try download attr (may open on some origins)
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = buildDownloadName(url);
-    if (id) a.setAttribute("data-id", id);
-    a.rel = "noopener";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }
-}
-
-const normalizeBase = (raw?: string | null) => {
-  if (!raw) return "";
-  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
-};
-
-const resolveApiBase = (override?: string | null) => {
-  const envBase = normalizeBase(
-    override ||
-      (import.meta as any).env?.VITE_MINA_API_BASE_URL ||
-      (import.meta as any).env?.VITE_API_BASE_URL ||
-      (import.meta as any).env?.VITE_BACKEND_URL
-  );
-  if (envBase) return envBase;
-
-  if (typeof window !== "undefined") {
-    if (window.location.origin.includes("localhost")) return "http://localhost:3000";
-    return `${window.location.origin}/api`;
-  }
-
-  return "https://mina-editorial-ai-api.onrender.com/api";
-};
-
-const PROFILE_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes "fresh"
-const PROFILE_CACHE_KEY_PREFIX = "mina_profile_cache_v1:";
-const RECREATE_DRAFT_KEY = "mina_recreate_draft_v1";
-
-function cacheKey(apiBase: string, passId: string) {
-  const a = (apiBase || "").trim();
-  const p = (passId || "").trim();
-  if (!a || !p) return "";
-  return `${PROFILE_CACHE_KEY_PREFIX}${a}::${p}`;
-}
-
-function readCache(key: string) {
-  try {
-    const raw = sessionStorage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return null;
-    if (typeof parsed.ts !== "number") return null;
-    return parsed as { ts: number; data: any };
-  } catch {
-    return null;
-  }
-}
-
-function writeCache(key: string, data: any) {
-  try {
-    sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
-  } catch {}
-}
-
-function getMmaVars(row: Row) {
-  const v = (row as any)?.mg_mma_vars ?? (row as any)?.mma_vars ?? null;
-  return v && typeof v === "object" ? v : null;
-}
-
-function pickAny(obj: any, keys: string[], fallback = ""): string {
-  for (const k of keys) {
-    const v = obj?.[k];
-    if (v !== undefined && v !== null && String(v).trim() !== "") return String(v);
-  }
-  return fallback;
-}
-
-function summarizeInputs(row: Row, isMotion: boolean, aspectRatio: string) {
-  const vars = getMmaVars(row);
-  const inputs = vars?.inputs || {};
-  const assets = vars?.assets || {};
-  const settings = vars?.settings || {};
-
-  // user brief (what they typed in textarea)
-  const userBrief = (
-    pickAny(inputs, [
-      "userBrief",
-      "brief",
-      "motion_user_brief",
-      "motionUserBrief",
-      "motionDescription",
-      "motion_description",
-      "prompt",
-    ]) || ""
-  ).trim();
-
-  // style text (if you store it)
-  const style = pickAny(inputs, ["style"], "").trim();
-  const movementStyle = pickAny(inputs, ["movement_style", "movementStyle"], "").trim();
-
-  // refs
-  const productUrl = pickAny(assets, ["productImageUrl", "product_image_url"], "").trim();
-  const logoUrl = pickAny(assets, ["logoImageUrl", "logo_image_url"], "").trim();
-  const inspArr = (assets.styleImageUrls || assets.style_image_urls) as any;
-  const inspCount = Array.isArray(inspArr)
-    ? inspArr.filter((x) => typeof x === "string" && x.startsWith("http")).length
-    : 0;
-
-  // kling frames
-  const start = pickAny(assets, ["start_image_url", "startImageUrl"], "").trim();
-  const end = pickAny(assets, ["end_image_url", "endImageUrl"], "").trim();
-
-  const metaParts: string[] = [];
-
-  if (!isMotion) {
-    const refs: string[] = [];
-    if (productUrl) refs.push("product");
-    if (logoUrl) refs.push("logo");
-    if (inspCount) refs.push(`${inspCount} insp`);
-    if (refs.length) metaParts.push(`Refs: ${refs.join(" + ")}`);
-  } else {
-    const frames: string[] = [];
-    if (start) frames.push("start");
-    if (end) frames.push("end");
-    if (frames.length) metaParts.push(`Frames: ${frames.join(" + ")}`);
-  }
-
-  if (style) metaParts.push(`Style: ${style}`);
-  if (isMotion && movementStyle) metaParts.push(`Motion: ${movementStyle}`);
-
-  const ratio =
-    aspectRatio ||
-    pickAny(settings, ["aspect_ratio", "aspectRatio"], "").trim() ||
-    pickAny(inputs, ["aspect_ratio", "aspectRatio"], "").trim();
-
-  if (ratio) metaParts.push(`Ratio: ${ratio}`);
-
-  // Mina prompt (the model prompt you stored)
-  const minaPrompt =
-    pick(row, ["mg_prompt", "prompt"], "").trim() ||
-    pickAny(vars?.prompts || {}, [isMotion ? "motion_prompt" : "clean_prompt"], "").trim();
-
-  return {
-    userBrief,
-    metaLine: metaParts.join(" • "),
-    minaPrompt,
-    vars,
+type RecreateDraft = {
+  mode: "still" | "motion";
+  brief: string;
+  settings: {
+    aspect_ratio?: string;
+    minaVisionEnabled?: boolean;
+    stylePresetKeys?: string[];
   };
-}
+  assets: {
+    productImageUrl?: string;
+    logoImageUrl?: string;
+    styleImageUrls?: string[];
+    kling_start_image_url?: string;
+    kling_end_image_url?: string;
+  };
+};
 
-function buildRecreateDraft(row: Row, isMotion: boolean) {
-  const vars = getMmaVars(row);
-  const inputs = vars?.inputs || {};
-  const assets = vars?.assets || {};
-  const settings = vars?.settings || {};
+function extractInputsForDisplay(row: Row) {
+  const payload = (row as any)?.mg_payload ?? (row as any)?.payload ?? null;
+  const meta = (row as any)?.mg_meta ?? (row as any)?.meta ?? null;
 
-  // Keep it simple: brief + assets urls + basic settings
+  const brief =
+    pick(row, ["mg_user_prompt", "userPrompt", "promptUser", "prompt_raw", "promptOriginal"], "") ||
+    pick(payload, ["userPrompt", "user_prompt", "userMessage", "brief", "prompt"], "") ||
+    pick(row, ["mg_prompt", "prompt"], "");
+
+  const aspect =
+    normalizeAspectRatio(
+      pick(row, ["mg_aspect_ratio", "aspect_ratio", "aspectRatio"], "") ||
+        pick(meta, ["aspectRatio", "aspect_ratio"], "") ||
+        pick(payload, ["aspect_ratio", "aspectRatio"], "")
+    ) || "";
+
+  const stylePresetKeysRaw =
+    meta?.stylePresetKeys ??
+    meta?.style_preset_keys ??
+    payload?.settings?.stylePresetKeys ??
+    payload?.settings?.style_preset_keys ??
+    payload?.inputs?.stylePresetKeys ??
+    null;
+
+  const stylePresetKeyRaw =
+    meta?.stylePresetKey ??
+    meta?.style_preset_key ??
+    payload?.settings?.stylePresetKey ??
+    payload?.settings?.style_preset_key ??
+    null;
+
+  const stylePresetKeys: string[] = Array.isArray(stylePresetKeysRaw)
+    ? stylePresetKeysRaw.map(String).filter(Boolean)
+    : stylePresetKeyRaw
+      ? [String(stylePresetKeyRaw)]
+      : [];
+
+  const minaVisionEnabled =
+    typeof meta?.minaVisionEnabled === "boolean"
+      ? meta.minaVisionEnabled
+      : typeof payload?.settings?.minaVisionEnabled === "boolean"
+        ? payload.settings.minaVisionEnabled
+        : typeof payload?.inputs?.minaVisionEnabled === "boolean"
+          ? payload.inputs.minaVisionEnabled
+          : undefined;
+
+  const productImageUrl =
+    meta?.productImageUrl ||
+    payload?.assets?.productImageUrl ||
+    payload?.assets?.product_image_url ||
+    payload?.assets?.product_image ||
+    "";
+
+  const logoImageUrl =
+    meta?.logoImageUrl ||
+    payload?.assets?.logoImageUrl ||
+    payload?.assets?.logo_image_url ||
+    payload?.assets?.logo_image ||
+    "";
+
+  const styleImageUrls =
+    meta?.styleImageUrls ||
+    payload?.assets?.styleImageUrls ||
+    payload?.assets?.style_image_urls ||
+    payload?.assets?.inspiration_image_urls ||
+    [];
+
+  const styleImages: string[] = Array.isArray(styleImageUrls)
+    ? styleImageUrls.map(String).filter((u) => u.startsWith("http"))
+    : [];
+
+  const tone = String(meta?.tone || payload?.inputs?.tone || payload?.tone || "").trim();
+  const platform = String(meta?.platform || payload?.inputs?.platform || payload?.platform || "").trim();
+
   return {
-    v: 1,
-    ts: Date.now(),
-    mode: isMotion ? "motion" : "still",
-    brief: pickAny(inputs, ["userBrief", "brief", "motion_user_brief", "motionDescription", "prompt"], "").trim(),
-    assets,
-    settings,
+    brief: String(brief || "").trim(),
+    aspectRatio: aspect,
+    stylePresetKeys,
+    minaVisionEnabled,
+    productImageUrl: String(productImageUrl || "").trim(),
+    logoImageUrl: String(logoImageUrl || "").trim(),
+    styleImageUrls: styleImages,
+    tone,
+    platform,
   };
 }
 
 type ProfileProps = {
-  passId?: string | null;
-  apiBaseUrl?: string;
+  email?: string;
+  credits?: number | null;
+  expiresAt?: string | null;
+
+  generations?: Row[];
+  feedbacks?: Row[];
+
+  loading?: boolean;
+  error?: string | null;
+
   onBackToStudio?: () => void;
+  onLogout?: () => void;
+
+  onRefresh?: () => void;
+  onDelete?: (id: string) => Promise<void> | void;
+  onRecreate?: (draft: RecreateDraft) => void;
 };
 
-export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio }: ProfileProps) {
-  const [email, setEmail] = useState("");
-  const [historyErr, setHistoryErr] = useState("");
-  const [loadingHistory, setLoadingHistory] = useState(true);
-
-  const [generations, setGenerations] = useState<Row[]>([]);
-  const [feedbacks, setFeedbacks] = useState<Row[]>([]);
-
-  const [credits, setCredits] = useState<number | null>(null);
-  const [expiresAt, setExpiresAt] = useState<string | null>(null);
+export default function Profile({
+  email = "",
+  credits = null,
+  expiresAt = null,
+  generations = [],
+  feedbacks = [],
+  loading = false,
+  error = null,
+  onBackToStudio,
+  onLogout,
+  onRefresh,
+  onDelete,
+  onRecreate,
+}: ProfileProps) {
   const [deletingIds, setDeletingIds] = useState<Record<string, boolean>>({});
   const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({});
   const [lightbox, setLightbox] = useState<{ url: string; isMotion: boolean } | null>(null);
 
-  // Filters (ONLY these)
+  // Filters
   const [motion, setMotion] = useState<"all" | "still" | "motion">("all");
-  const cycleMotion = () => {
-    setMotion((prev) => (prev === "all" ? "motion" : prev === "motion" ? "still" : "all"));
-  };
+  const cycleMotion = () => setMotion((prev) => (prev === "all" ? "motion" : prev === "motion" ? "still" : "all"));
   const motionLabel = motion === "all" ? "Show all" : motion === "motion" ? "Motion" : "Still";
 
   const [likedOnly, setLikedOnly] = useState(false);
@@ -367,34 +307,39 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
 
   const [expandedPromptIds, setExpandedPromptIds] = useState<Record<string, boolean>>({});
 
+  // Pagination (reduces DOM + speeds up load)
+  const [visibleCount, setVisibleCount] = useState(36);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Video refs (IntersectionObserver)
+  const videoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
+  const registerVideoEl = useCallback((id: string, el: HTMLVideoElement | null) => {
+    const m = videoElsRef.current;
+    if (el) m.set(id, el);
+    else m.delete(id);
+  }, []);
+
   const openLightbox = (url: string | null, isMotion: boolean) => {
     if (!url) return;
     setLightbox({ url, isMotion });
   };
   const closeLightbox = () => setLightbox(null);
 
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeLightbox();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [lightbox]);
+
   const deleteItem = async (id: string) => {
-    if (!apiBase) return;
     setDeleteErrors((prev) => ({ ...prev, [id]: "" }));
     setDeletingIds((prev) => ({ ...prev, [id]: true }));
-
     try {
-      const { data } = await supabase.auth.getSession();
-      const token = authCtx?.accessToken || data.session?.access_token || null;
-      const passId = (propPassId || ctxPassId || localStorage.getItem("minaPassId") || "").trim();
-
-      const headers: Record<string, string> = { Accept: "application/json" };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      if (passId) headers["X-Mina-Pass-Id"] = passId;
-
-      const res = await fetch(`${apiBase}/history/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-        headers,
-      });
-
-      if (!res.ok) throw new Error(`Delete failed (status ${res.status})`);
-
-      removeItemLocally(id);
+      if (!onDelete) throw new Error("Delete not available.");
+      await onDelete(id);
     } catch (e: any) {
       setDeleteErrors((prev) => ({ ...prev, [id]: e?.message || "Delete failed" }));
     } finally {
@@ -405,187 +350,6 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
       });
     }
   };
-
-  const authCtx = useAuthContext();
-  const ctxPassId = usePassId();
-
-  const apiBase = useMemo(() => resolveApiBase(apiBaseUrl), [apiBaseUrl]);
-
-  const removeItemLocally = useCallback(
-    (id: string) => {
-      setGenerations((prev) => prev.filter((g, idx) => pick(g, ["mg_id", "id"], `row_${idx}`) !== id));
-      setFeedbacks((prev) => prev.filter((f, idx) => pick(f, ["mg_id", "id"], `row_${idx}`) !== id));
-      setExpandedPromptIds((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-    },
-    [setGenerations, setFeedbacks, setExpandedPromptIds]
-  );
-
-  useEffect(() => {
-    if (authCtx?.session?.user?.email) {
-      setEmail(String(authCtx.session.user.email));
-      return;
-    }
-
-    supabase.auth.getSession().then(({ data }) => {
-      const em = data.session?.user?.email || "";
-      setEmail(em ? String(em) : "");
-    });
-  }, [authCtx?.session]);
-
-  // =========================================
-  // Video refs (used by IntersectionObserver)
-  // =========================================
-  const videoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
-
-  const registerVideoEl = useCallback((id: string, el: HTMLVideoElement | null) => {
-    const m = videoElsRef.current;
-    if (el) m.set(id, el);
-    else m.delete(id);
-  }, []);
-
-  async function fetchHistory() {
-    setHistoryErr("");
-    setLoadingHistory(true);
-    try {
-      if (!apiBase) {
-        setHistoryErr("Missing VITE_MINA_API_BASE_URL (or VITE_API_BASE_URL).");
-        return;
-      }
-
-      const { data } = await supabase.auth.getSession();
-      const token = authCtx?.accessToken || data.session?.access_token || null;
-
-      const passId = (propPassId || ctxPassId || localStorage.getItem("minaPassId") || "").trim();
-
-      // ---- FAST PATH: session cache (show instantly) ----
-      const ck = cacheKey(apiBase, passId);
-      const cached = ck ? readCache(ck) : null;
-
-      const applyJson = (j: any) => {
-        setGenerations(Array.isArray(j?.generations) ? j.generations : []);
-        setFeedbacks(Array.isArray(j?.feedbacks) ? j.feedbacks : []);
-
-        const creditsObj = j?.credits ?? null;
-        const bal = creditsObj?.balance;
-        setCredits(Number.isFinite(Number(bal)) ? Number(bal) : null);
-
-        const exp = creditsObj?.expiresAt ?? null;
-        setExpiresAt(exp ? String(exp) : null);
-      };
-
-      if (cached?.data) {
-        applyJson(cached.data);
-
-        const fresh = Date.now() - cached.ts < PROFILE_CACHE_TTL_MS;
-        if (fresh) {
-          // Skip refetch completely if fresh
-          setLoadingHistory(false);
-          return;
-        }
-        // If stale: keep showing cached while we revalidate below
-      }
-
-      const headers: Record<string, string> = { Accept: "application/json" };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      if (passId) headers["X-Mina-Pass-Id"] = passId;
-
-      const hitHistory = async (url: string) => {
-        const res = await fetch(url, { method: "GET", headers });
-        const text = await res.text();
-        return { res, text } as const;
-      };
-
-      const attempts: string[] = [];
-      if (passId) attempts.push(`${apiBase}/history/pass/${encodeURIComponent(passId)}`);
-      attempts.push(`${apiBase}/history`);
-
-      let resp: Response | null = null;
-      let text = "";
-      let json: any = null;
-      let success = false;
-      let creditsFromAny: any = null;
-
-      for (const url of attempts) {
-        const attempt = await hitHistory(url);
-        resp = attempt.res;
-        text = attempt.text;
-
-        try {
-          json = text ? JSON.parse(text) : null;
-        } catch {
-          json = null;
-        }
-
-        if (json?.credits) creditsFromAny = json.credits;
-        const hasGenerations = Array.isArray(json?.generations);
-        const hasFeedbacks = Array.isArray(json?.feedbacks);
-        if (resp.ok && (hasGenerations || hasFeedbacks)) {
-          success = true;
-          break;
-        }
-      }
-
-      if (!resp) {
-        setHistoryErr("History failed: empty response");
-        return;
-      }
-
-      if (!success) {
-        setHistoryErr(
-          json?.message ||
-            json?.error ||
-            `History failed (${resp.status}): ${text?.slice(0, 220) || "Unknown error"}`
-        );
-        setGenerations([]);
-        setFeedbacks([]);
-        setCredits(null);
-        setExpiresAt(null);
-        return;
-      }
-
-      setGenerations(Array.isArray(json.generations) ? json.generations : []);
-      setFeedbacks(Array.isArray(json.feedbacks) ? json.feedbacks : []);
-      {
-        const passIdForCache = (propPassId || ctxPassId || localStorage.getItem("minaPassId") || "").trim();
-        const ck2 = cacheKey(apiBase, passIdForCache);
-        if (ck2) writeCache(ck2, json);
-      }
-
-      const creditsObj = json?.credits ?? creditsFromAny;
-      const bal = creditsObj?.balance;
-      setCredits(Number.isFinite(Number(bal)) ? Number(bal) : null);
-
-      const exp = creditsObj?.expiresAt ?? null;
-      setExpiresAt(exp ? String(exp) : null);
-    } catch (e: any) {
-      setHistoryErr(e?.message || String(e));
-      setGenerations([]);
-      setFeedbacks([]);
-      setCredits(null);
-      setExpiresAt(null);
-    } finally {
-      setLoadingHistory(false);
-    }
-  }
-
-  useEffect(() => {
-    void fetchHistory();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBase, propPassId, ctxPassId, authCtx?.accessToken]);
-
-  useEffect(() => {
-    if (!lightbox) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeLightbox();
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [lightbox]);
 
   // Likes set
   const likedUrlSet = useMemo(() => {
@@ -606,31 +370,30 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
     let base = baseRows
       .map(({ row: g, source }, idx) => {
         const id = pick(g, ["mg_id", "id"], `row_${idx}`);
-        const createdAt = pick(g, ["mg_event_at", "mg_created_at", "createdAt"], "") || "";
+        const createdAt =
+          pick(g, ["mg_event_at", "mg_created_at", "createdAt", "created_at"], "") || "";
 
         const payload = (g as any)?.mg_payload ?? (g as any)?.payload ?? null;
         const meta = (g as any)?.mg_meta ?? (g as any)?.meta ?? null;
-        const gptMeta = (g as any)?.gpt ?? null;
 
-        const fallbackPrompt =
+        const prompt =
           pick(g, ["mg_user_prompt", "userPrompt", "promptUser", "prompt_raw", "promptOriginal"], "") ||
-          pick(payload, ["userPrompt", "user_prompt", "userMessage", "prompt"], "") ||
-          pick(gptMeta, ["userMessage", "input"], "") ||
+          pick(payload, ["userPrompt", "user_prompt", "userMessage", "brief", "prompt"], "") ||
           pick(g, ["mg_prompt", "prompt"], "") ||
           "";
-
-        // We'll compute isMotion first (URL-based), then pull MMA vars summary
 
         const likeUrl = source === "feedback" ? findLikeUrl(g) : "";
         const isLikeOnly = source === "feedback" && !!likeUrl;
         if (isLikeOnly) return null;
 
-        const out = pick(g, ["mg_output_url", "outputUrl"], "").trim();
-        const img = pick(g, ["mg_image_url", "imageUrl"], "").trim();
-        const vid = pick(g, ["mg_video_url", "videoUrl"], "").trim();
+        const out = pick(g, ["mg_output_url", "outputUrl", "output_url"], "").trim();
+        const img = pick(g, ["mg_image_url", "imageUrl", "image_url"], "").trim();
+        const vid = pick(g, ["mg_video_url", "videoUrl", "video_url"], "").trim();
+
         const aspectRaw =
           pick(g, ["mg_aspect_ratio", "aspect_ratio", "aspectRatio"], "") ||
-          pick(meta, ["aspectRatio", "aspect_ratio"], "");
+          pick(meta, ["aspectRatio", "aspect_ratio"], "") ||
+          pick(payload, ["aspect_ratio", "aspectRatio"], "");
 
         const contentType = pick(g, ["mg_content_type", "contentType"], "").toLowerCase();
         const kindHint = String(pick(g, ["mg_result_type", "resultType", "mg_type", "type"], "")).toLowerCase();
@@ -642,12 +405,8 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
 
         const videoUrl = vid || (isVideoUrl(out) ? out : looksVideoMeta && !looksImage ? out : "");
         const imageUrl = img || (!videoUrl ? out : "");
-
         const url = (videoUrl || imageUrl || out).trim();
         const isMotion = Boolean(videoUrl);
-
-        const summary = summarizeInputs(g, isMotion, "");
-        const prompt = summary.userBrief || fallbackPrompt;
 
         const aspectRatio =
           normalizeAspectRatio(aspectRaw) ||
@@ -661,26 +420,47 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
 
         const liked = url ? likedUrlSet.has(normalizeMediaUrl(url)) || !!likeUrl : false;
 
+        const inputs = extractInputsForDisplay(g);
+
+        const canRecreate = source === "generation" && !!onRecreate && !!inputs.brief;
+
+        const draft: RecreateDraft | null = canRecreate
+          ? {
+              mode: isMotion ? "motion" : "still",
+              brief: inputs.brief,
+              settings: {
+                aspect_ratio: inputs.aspectRatio || undefined,
+                minaVisionEnabled: inputs.minaVisionEnabled,
+                stylePresetKeys: inputs.stylePresetKeys.length ? inputs.stylePresetKeys : undefined,
+              },
+              assets: {
+                productImageUrl: inputs.productImageUrl || undefined,
+                logoImageUrl: inputs.logoImageUrl || undefined,
+                styleImageUrls: inputs.styleImageUrls.length ? inputs.styleImageUrls : undefined,
+              },
+            }
+          : null;
+
         return {
           id,
           createdAt,
-          prompt,
-          userBrief: prompt,
-          metaLine: summary.metaLine,
-          minaPrompt: summary.minaPrompt,
-          rawRow: g,
+          prompt: inputs.brief || prompt,
           url,
           liked,
           isMotion,
           aspectRatio,
           source,
           sourceRank: source === "generation" ? 2 : 1,
+          inputs,
+          canRecreate,
+          draft,
         };
       })
       .filter((x): x is NonNullable<typeof x> => Boolean(x && x.url));
 
     base.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
 
+    // Merge duplicates by URL
     const merged = new Map<string, typeof base[number]>();
     for (const it of base) {
       const key = normalizeMediaUrl(it.url);
@@ -692,6 +472,7 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
 
       const preferred = existing.sourceRank >= it.sourceRank ? existing : it;
       const other = preferred === existing ? it : existing;
+
       const next = { ...preferred };
       if (other.liked && !next.liked) next.liked = true;
       if (!next.aspectRatio && other.aspectRatio) next.aspectRatio = other.aspectRatio;
@@ -718,13 +499,33 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
 
     const activeCount = out.filter((it) => !it.dimmed).length;
     return { items: out, activeCount };
-  }, [generations, feedbacks, likedUrlSet, motion, likedOnly, activeAspectFilter]);
+  }, [generations, feedbacks, likedUrlSet, motion, likedOnly, activeAspectFilter, onRecreate]);
 
-  // =============================================================
-  // Grid video autoplay (IntersectionObserver)
-  // - Plays ONLY when visible
-  // - To avoid heavy CPU, plays only the MOST visible video
-  // =============================================================
+  // Reset paging when list changes
+  useEffect(() => {
+    setVisibleCount(36);
+  }, [items.length]);
+
+  // Infinite load
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0].isIntersecting) return;
+        setVisibleCount((c) => Math.min(items.length, c + 24));
+      },
+      { rootMargin: "1400px 0px 1400px 0px" }
+    );
+
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [items.length]);
+
+  const visibleItems = useMemo(() => items.slice(0, visibleCount), [items, visibleCount]);
+
+  // Grid video autoplay (plays ONLY most-visible)
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("IntersectionObserver" in window)) return;
@@ -754,9 +555,7 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
       els.forEach((v) => {
         const shouldPlay = best === v;
         try {
-          // Autoplay-safe for mobile/Safari
           v.muted = true;
-
           if (shouldPlay) {
             if (v.paused) v.play().catch(() => {});
           } else {
@@ -771,7 +570,6 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
         for (const e of entries) {
           const v = e.target as HTMLVideoElement;
           const ratio = e.intersectionRatio || 0;
-
           if (e.isIntersecting && ratio >= 0.35) visible.set(v, ratio);
           else visible.delete(v);
         }
@@ -784,6 +582,7 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
       }
     );
 
+    // Observe currently registered videos
     els.forEach((v) => observer.observe(v));
 
     const onVis = () => {
@@ -797,20 +596,14 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
       observer.disconnect();
       pauseAll();
     };
-  }, [items]);
+  }, [visibleItems.length]);
 
-  const onTogglePrompt = (id: string) => {
-    setExpandedPromptIds((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const logout = () => {
-    supabase.auth.signOut().catch(() => {});
-    window.location.reload();
-  };
+  const onTogglePrompt = (id: string) => setExpandedPromptIds((prev) => ({ ...prev, [id]: !prev[id] }));
 
   return (
     <>
-      <TopLoadingBar active={loadingHistory} />
+      <TopLoadingBar active={loading} />
+
       {lightbox ? (
         <div className="profile-lightbox" role="dialog" aria-modal="true" onClick={closeLightbox}>
           <div className="profile-lightbox-media">
@@ -837,6 +630,16 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
                   Back to studio
                 </a>
               )}
+
+              {onRefresh ? (
+                <>
+                  <span className="profile-topsep">|</span>
+                  <button className="profile-toplink" type="button" onClick={onRefresh}>
+                    Refresh
+                  </button>
+                </>
+              ) : null}
+
               <span className="profile-topsep">|</span>
               <a
                 className="profile-toplink"
@@ -866,7 +669,7 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
             </div>
 
             <div className="profile-kv">
-              <button className="profile-logout-meta" onClick={logout} type="button">
+              <button className="profile-logout-meta" onClick={onLogout} type="button">
                 Logout
               </button>
             </div>
@@ -876,9 +679,9 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
             <div>
               <div className="profile-archive-title">Archive</div>
               <div className="profile-archive-sub">
-                {historyErr ? (
-                  <span className="profile-error">{historyErr}</span>
-                ) : loadingHistory ? (
+                {error ? (
+                  <span className="profile-error">{error}</span>
+                ) : loading ? (
                   "Loading stills and shots…"
                 ) : items.length ? (
                   `${activeCount} creation${activeCount === 1 ? "" : "s"}`
@@ -917,11 +720,13 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
         </div>
 
         <div className="profile-grid">
-          {items.map((it) => {
+          {visibleItems.map((it) => {
             const expanded = Boolean(expandedPromptIds[it.id]);
-            const showViewMore = (it.prompt || "").length > 90;
+            const showViewMore = (it.prompt || "").length > 90 || it.canRecreate; // allow "more" even if short (to reveal inputs)
             const deleting = Boolean(deletingIds[it.id]);
             const deleteErr = deleteErrors[it.id];
+
+            const inputs = it.inputs || null;
 
             return (
               <div key={it.id} className={`profile-card ${it.sizeClass} ${it.dimmed ? "is-dim" : ""}`}>
@@ -935,20 +740,23 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
                     Download
                   </button>
 
-                  {it.liked ? <span className="profile-card-liked">Liked</span> : null}
+                  <div className="profile-card-top-right">
+                    {it.liked ? <span className="profile-card-liked">Liked</span> : null}
 
-                  {/* Plain minus delete (top-right) */}
-                  <button
-                    className="profile-card-show"
-                    type="button"
-                    style={{ marginLeft: "auto", fontWeight: 800 }}
-                    onClick={() => deleteItem(it.id)}
-                    disabled={Boolean(deletingIds[it.id])}
-                    title="Delete"
-                  >
-                    −
-                  </button>
+                    <button
+                      className="profile-card-delete"
+                      type="button"
+                      onClick={() => deleteItem(it.id)}
+                      disabled={deleting || !onDelete}
+                      title="Delete"
+                      aria-label="Delete"
+                    >
+                      −
+                    </button>
+                  </div>
                 </div>
+
+                {deleteErr ? <div className="profile-error profile-card-deleteerr">{deleteErr}</div> : null}
 
                 <div
                   className="profile-card-media"
@@ -978,63 +786,129 @@ export default function Profile({ passId: propPassId, apiBaseUrl, onBackToStudio
                 </div>
 
                 <div className="profile-card-promptline">
-                  {/* What the USER typed (preferred), not the Mina prompt */}
                   <div className={`profile-card-prompt ${expanded ? "expanded" : ""}`}>
-                    {it.userBrief || it.prompt || ""}
-                  </div>
+                    {it.prompt || ""}
 
-                  {/* Small meta line: refs/styles/ratio */}
-                  {it.metaLine ? (
-                    <div style={{ marginTop: 6, fontSize: 11, opacity: 0.55 }}>
-                      {it.metaLine}
-                    </div>
-                  ) : null}
+                    {/* Expanded “inputs used” */}
+                    {expanded && inputs ? (
+                      <div className="profile-card-details">
+                        <div className="profile-card-detailrow">
+                          <span className="k">Created</span>
+                          <span className="v">{it.createdAt ? fmtDate(it.createdAt) : "—"}</span>
+                        </div>
+
+                        {inputs.aspectRatio ? (
+                          <div className="profile-card-detailrow">
+                            <span className="k">Aspect</span>
+                            <span className="v">{inputs.aspectRatio}</span>
+                          </div>
+                        ) : null}
+
+                        {inputs.tone ? (
+                          <div className="profile-card-detailrow">
+                            <span className="k">Tone</span>
+                            <span className="v">{inputs.tone}</span>
+                          </div>
+                        ) : null}
+
+                        {inputs.platform ? (
+                          <div className="profile-card-detailrow">
+                            <span className="k">Platform</span>
+                            <span className="v">{inputs.platform}</span>
+                          </div>
+                        ) : null}
+
+                        {typeof inputs.minaVisionEnabled === "boolean" ? (
+                          <div className="profile-card-detailrow">
+                            <span className="k">Vision</span>
+                            <span className="v">{inputs.minaVisionEnabled ? "On" : "Off"}</span>
+                          </div>
+                        ) : null}
+
+                        {inputs.stylePresetKeys?.length ? (
+                          <div className="profile-card-detailrow">
+                            <span className="k">Styles</span>
+                            <span className="v">{inputs.stylePresetKeys.join(", ")}</span>
+                          </div>
+                        ) : null}
+
+                        {inputs.productImageUrl ? (
+                          <div className="profile-card-detailrow">
+                            <span className="k">Product</span>
+                            <span className="v">
+                              <button
+                                className="profile-card-mini"
+                                type="button"
+                                onClick={() => openLightbox(inputs.productImageUrl, false)}
+                              >
+                                view
+                              </button>
+                            </span>
+                          </div>
+                        ) : null}
+
+                        {inputs.logoImageUrl ? (
+                          <div className="profile-card-detailrow">
+                            <span className="k">Logo</span>
+                            <span className="v">
+                              <button
+                                className="profile-card-mini"
+                                type="button"
+                                onClick={() => openLightbox(inputs.logoImageUrl, false)}
+                              >
+                                view
+                              </button>
+                            </span>
+                          </div>
+                        ) : null}
+
+                        {inputs.styleImageUrls?.length ? (
+                          <div className="profile-card-detailrow">
+                            <span className="k">Inspo</span>
+                            <span className="v">
+                              <button
+                                className="profile-card-mini"
+                                type="button"
+                                onClick={() => openLightbox(inputs.styleImageUrls[0], false)}
+                              >
+                                view
+                              </button>
+                              {inputs.styleImageUrls.length > 1 ? (
+                                <span className="profile-card-miniNote">+{inputs.styleImageUrls.length - 1}</span>
+                              ) : null}
+                            </span>
+                          </div>
+                        ) : null}
+
+                        {it.canRecreate && it.draft ? (
+                          <div className="profile-card-actions">
+                            <button
+                              type="button"
+                              className="profile-card-recreate"
+                              onClick={() => {
+                                onRecreate?.(it.draft!);
+                                onBackToStudio?.();
+                              }}
+                            >
+                              Re-create
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
 
                   {showViewMore ? (
                     <button className="profile-card-viewmore" type="button" onClick={() => onTogglePrompt(it.id)}>
                       {expanded ? "less" : "more"}
                     </button>
                   ) : null}
-
-                  {/* Expanded: show Mina prompt + Re-create */}
-                  {expanded ? (
-                    <div style={{ marginTop: 8, fontSize: 11, opacity: 0.65, lineHeight: 1.3 }}>
-                      {it.minaPrompt ? (
-                        <div style={{ marginBottom: 8 }}>
-                          <span style={{ fontWeight: 800 }}>Mina prompt:</span> {it.minaPrompt}
-                        </div>
-                      ) : null}
-
-                      <button
-                        className="profile-card-viewmore"
-                        type="button"
-                        onClick={() => {
-                          try {
-                            const draft = buildRecreateDraft((it as any).rawRow, it.isMotion);
-                            localStorage.setItem(RECREATE_DRAFT_KEY, JSON.stringify(draft));
-                          } catch {}
-
-                          // go back and let Studio read the draft
-                          if (onBackToStudio) onBackToStudio();
-                          else window.location.href = "/studio";
-                        }}
-                      >
-                        Re-create
-                      </button>
-                    </div>
-                  ) : null}
-
-                  {/* Delete error (if any) */}
-                  {deleteErr ? (
-                    <div style={{ marginTop: 6, fontSize: 11, opacity: 0.55 }}>
-                      {deleteErr}
-                    </div>
-                  ) : null}
                 </div>
               </div>
             );
           })}
-          <div className="profile-grid-sentinel" />
+
+          <div ref={sentinelRef} className="profile-grid-sentinel" />
         </div>
       </div>
     </>
