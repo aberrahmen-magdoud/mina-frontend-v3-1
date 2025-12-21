@@ -1669,19 +1669,42 @@ const fetchHistory = async () => {
     const gens = history?.generations || [];
     const feedbacks = history?.feedbacks || [];
 
-    // Normalize links into stable R2 (but never drop items if that fails)
-    const updated = await Promise.all(
-      gens.map(async (g) => {
-        const original = g.outputUrl;
-        try {
-          const r2 = await storeRemoteToR2(original, "generations");
-          const stable = stripSignedQuery(r2);
-          return { ...g, outputUrl: stable || original };
-        } catch {
-          return { ...g, outputUrl: original };
-        }
-      })
-    );
+    // Fast normalization:
+    // - ALWAYS strip signed query (cheap, no network)
+    // - ONLY storeRemoteToR2 when it's a Replicate URL (slow)
+    const isVideoUrl = (url: string) => {
+      const base = (url || "").split("?")[0].split("#")[0].toLowerCase();
+      return base.endsWith(".mp4") || base.endsWith(".webm") || base.endsWith(".mov") || base.endsWith(".m4v");
+    };
+
+    const strippedGens = gens.map((g) => {
+      const original = g.outputUrl || "";
+      const stable = stripSignedQuery(original);
+      return stable && stable !== original ? { ...g, outputUrl: stable } : g;
+    });
+
+    const hasReplicate = strippedGens.some((g) => isReplicateUrl(g.outputUrl || ""));
+
+    const updated = hasReplicate
+      ? await Promise.all(
+          strippedGens.map(async (g) => {
+            const url = g.outputUrl || "";
+            if (!url) return g;
+
+            // ✅ only do the expensive store when needed
+            if (!isReplicateUrl(url)) return g;
+
+            try {
+              const kind = isVideoUrl(url) ? "motions" : "generations";
+              const r2 = await storeRemoteToR2(url, kind);
+              const stable = stripSignedQuery(r2);
+              return stable ? { ...g, outputUrl: stable } : g;
+            } catch {
+              return g;
+            }
+          })
+        )
+      : strippedGens;
 
     historyCacheRef.current[currentPassId] = { generations: updated, feedbacks };
     historyDirtyRef.current = false;
