@@ -1473,11 +1473,18 @@ const mmaCreateAndWait = async (
     const errJson = await res.json().catch(() => null);
     throw new Error(errJson?.message || `MMA create failed (${res.status})`);
   }
-  const created = (await res.json()) as MmaCreateResponse;
-  const generationId = created.generation_id;
+  const created = (await res.json().catch(() => ({}))) as any;
+
+  const generationId =
+    created.generation_id || created.generationId || created.id || null;
+
+  if (!generationId) throw new Error("MMA create returned no generation id.");
+
+  const relSse =
+    created.sse_url || created.sseUrl || `/mma/stream/${encodeURIComponent(String(generationId))}`;
 
   // stream
-  const sseUrl = `${API_BASE_URL}${created.sse_url}`;
+  const sseUrl = `${API_BASE_URL}${relSse}`;
   const scanLines: string[] = [];
   let status = created.status || "queued";
 
@@ -1541,7 +1548,7 @@ const mmaCreateAndWait = async (
 const mmaFetchResult = async (generationId: string) => {
   const res = await apiFetch(`/mma/generations/${encodeURIComponent(generationId)}`);
   if (!res.ok) throw new Error(`MMA fetch failed (${res.status})`);
-  return await res.json();
+  return await res.json().catch(() => ({}));
 };
 
 const handleCheckHealth = async () => {
@@ -1600,8 +1607,11 @@ const fetchCredits = async () => {
     const cachedBalance = cached?.balance ?? credits?.balance;
     let balance = cachedBalance;
 
-    if (json?.balance !== undefined && json?.balance !== null) {
-      const parsed = Number(json.balance);
+    const rawBalance =
+      json?.credits ?? json?.balance ?? json?.data?.credits ?? json?.data?.balance ?? null;
+
+    if (rawBalance !== null && rawBalance !== undefined) {
+      const parsed = Number(rawBalance);
       if (Number.isFinite(parsed)) balance = parsed;
     }
 
@@ -1675,15 +1685,23 @@ const ensureSession = async (): Promise<string | null> => {
         passId: currentPassId,
         platform: currentAspect.platformKey,
         title: sessionTitle,
+        meta: { timezone: "Asia/Dubai" },
       }),
     });
 
     if (!res.ok) return null;
-    const json = (await res.json()) as { ok: boolean; session?: { id: string; title?: string } };
-    if (json.ok && json.session?.id) {
-      setSessionId(json.session.id);
-      setSessionTitle(json.session.title || sessionTitle);
-      return json.session.id;
+    const json = (await res.json().catch(() => ({}))) as any;
+
+    const sid =
+      json?.sessionId ||
+      json?.session_id ||
+      json?.session?.id ||
+      json?.session?.sessionId ||
+      null;
+
+    if (sid) {
+      setSessionId(String(sid));
+      return String(sid);
     }
   } catch {
     // ignore
@@ -1904,27 +1922,52 @@ function normalizeNonExpiringUrl(url: string): string {
 }
 
 async function uploadFileToR2(panel: UploadPanelKey, file: File): Promise<string> {
-  const dataUrl = await fileToDataUrl(file);
+  const contentType = file.type || "application/octet-stream";
+  const fileName = file.name || `upload_${Date.now()}`;
+  const folder = "user_uploads"; // backend contract
 
   const res = await apiFetch("/api/r2/upload-signed", {
     method: "POST",
     body: JSON.stringify({
-      dataUrl,
-      kind: panel, // "product" | "logo" | "inspiration"
+      contentType,
+      fileName,
+      folder,
+
+      // keep backward compat (harmless if backend ignores)
+      kind: panel,
       passId: currentPassId,
     }),
   });
 
   const json = await res.json().catch(() => ({}));
   if (!res.ok || json?.ok === false) {
-    throw new Error(json?.message || json?.error || `Upload failed (${res.status})`);
+    throw new Error(json?.message || json?.error || `Upload-signed failed (${res.status})`);
   }
 
-  const rawUrl = pickUrlFromR2Response(json);
-  if (!rawUrl) throw new Error("Upload succeeded but no URL returned");
+  const uploadUrl =
+    json.uploadUrl || json.upload_url || json.signedUrl || json.signed_url || json.url || null;
 
-  const stable = normalizeNonExpiringUrl(rawUrl);
-  if (!stable.startsWith("http")) throw new Error("Upload returned invalid URL");
+  const publicUrl =
+    json.publicUrl || json.public_url || json.public || json.result?.publicUrl || json.data?.publicUrl || null;
+
+  if (!uploadUrl || !publicUrl) {
+    throw new Error("Upload-signed response missing uploadUrl/publicUrl");
+  }
+
+  // PUT bytes to the presigned URL
+  const putRes = await fetch(String(uploadUrl), {
+    method: "PUT",
+    headers: { "Content-Type": contentType },
+    body: file,
+  });
+
+  if (!putRes.ok) {
+    throw new Error(`R2 PUT failed (${putRes.status})`);
+  }
+
+  // Return permanent URL (strip signatures if any)
+  const stable = normalizeNonExpiringUrl(String(publicUrl));
+  if (!stable.startsWith("http")) throw new Error("Upload returned invalid publicUrl");
   return stable;
 }
 
@@ -1967,18 +2010,20 @@ async function storeRemoteToR2(url: string, kind: string): Promise<string> {
   const res = await apiFetch("/api/r2/store-remote-signed", {
     method: "POST",
     body: JSON.stringify({
+      sourceUrl: url,
+      folder: "user_uploads",
+
+      // keep backward compat
       url,
-      kind, // "generations" | "motions" | etc.
+      kind,
       passId: currentPassId,
     }),
   });
 
   const json = await res.json().catch(() => ({}));
 
-  // If backend fails, keep original (so user still sees something)
-  if (!res.ok || json?.ok === false) {
-    return url;
-  }
+  // If backend fails, keep original (UI still works)
+  if (!res.ok || json?.ok === false) return url;
 
   const rawUrl = pickUrlFromR2Response(json);
   if (!rawUrl) return url;
@@ -2056,7 +2101,13 @@ async function startStoreForUrlItem(panel: UploadPanelKey, id: string, url: stri
       );
 
       const result = await mmaFetchResult(generationId);
-      const url = result?.outputs?.seedream_image_url;
+      const rawUrl =
+        result?.outputs?.seedream_image_url ||
+        result?.outputs?.image_url ||
+        result?.imageUrl ||
+        result?.outputUrl ||
+        "";
+      const url = rawUrl ? await ensureAssetsUrl(rawUrl, "generations") : "";
       if (!url) throw new Error("MMA returned no image URL.");
 
       historyDirtyRef.current = true;
@@ -2164,7 +2215,12 @@ async function startStoreForUrlItem(panel: UploadPanelKey, id: string, url: stri
         throw new Error(String(msg));
       }
 
-      const rawUrl = final.outputs?.seedream_image_url || "";
+      const rawUrl =
+        final.outputs?.seedream_image_url ||
+        final.outputs?.image_url ||
+        (final as any)?.imageUrl ||
+        (final as any)?.outputUrl ||
+        "";
       if (!rawUrl) throw new Error("MMA returned no image URL.");
 
       const url = await ensureAssetsUrl(rawUrl, "generations");
@@ -2254,29 +2310,56 @@ const handleSuggestMotion = async () => {
     setMotionSuggestLoading(true);
     setMotionSuggestError(null);
 
-    const res = await apiFetch("/motion/suggest", {
-      method: "POST",
-      body: JSON.stringify({
-        passId: currentPassId,
-        referenceImageUrl: motionReferenceImageUrl,
-        tone,
-        platform: animateAspectOption.platformKey,
-        minaVisionEnabled,
-        stylePresetKey: primaryStyleKeyForApi,
-        stylePresetKeys: stylePresetKeysForApi,
-        motionStyles: motionStyleKeys,
-        aspectRatio: animateAspectOption.ratio,
-      }),
-    });
+    const movementStyle = (motionStyleKeys?.[0] || "cinematic_smooth") as any;
 
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => null);
-      const msg = errJson?.message || `Error ${res.status}: Failed to suggest motion.`;
-      throw new Error(msg);
+    const tryPaths = MMA_ENABLED
+      ? ["/mma/motion/suggest", "/motion/suggest"] // try MMA first; fallback keeps button working
+      : ["/motion/suggest"];
+
+    let res: Response | null = null;
+    let lastErr: any = null;
+
+    for (const p of tryPaths) {
+      try {
+        res = await apiFetch(p, {
+          method: "POST",
+          body: JSON.stringify({
+            // backend spec keys
+            inputStillUrl: motionReferenceImageUrl,
+            movementStyle,
+            userMotionBrief: motionDescription || "",
+            maxPromptComplexity: "simple_english",
+
+            // keep your existing keys too (harmless)
+            referenceImageUrl: motionReferenceImageUrl,
+            tone,
+            platform: animateAspectOption.platformKey,
+            minaVisionEnabled,
+            stylePresetKeys: stylePresetKeysForApi,
+            aspectRatio: animateAspectOption.ratio,
+          }),
+        });
+        if (res.ok) break;
+      } catch (e) {
+        lastErr = e;
+      }
     }
 
-    const data = (await res.json()) as MotionSuggestResponse;
-    if (data.suggestion) await applyMotionSuggestionText(data.suggestion);
+    if (!res || !res.ok) {
+      const errJson = res ? await res.json().catch(() => null) : null;
+      throw new Error(errJson?.message || lastErr?.message || "Failed to suggest motion.");
+    }
+
+    const data = (await res.json().catch(() => ({}))) as any;
+
+    // accept both response shapes
+    const suggestion =
+      data.motionPrompt ||
+      data.suggestion ||
+      data.prompt ||
+      "";
+
+    if (suggestion) await applyMotionSuggestionText(String(suggestion));
   } catch (err: any) {
     setMotionSuggestError(err?.message || "Unexpected error suggesting motion.");
   } finally {
@@ -2327,7 +2410,13 @@ const handleSuggestMotion = async () => {
       );
 
       const result = await mmaFetchResult(generationId);
-      const url = result?.outputs?.kling_video_url;
+      const rawUrl =
+        result?.outputs?.kling_video_url ||
+        result?.outputs?.video_url ||
+        result?.videoUrl ||
+        result?.outputUrl ||
+        "";
+      const url = rawUrl ? await ensureAssetsUrl(rawUrl, "motions") : "";
       if (!url) throw new Error("MMA returned no video URL.");
 
       historyDirtyRef.current = true;
@@ -2424,7 +2513,12 @@ const handleSuggestMotion = async () => {
       throw new Error(String(msg));
     }
 
-    const rawUrl = final.outputs?.kling_video_url || "";
+    const rawUrl =
+      final.outputs?.kling_video_url ||
+      final.outputs?.video_url ||
+      (final as any)?.videoUrl ||
+      (final as any)?.outputUrl ||
+      "";
     if (!rawUrl) throw new Error("MMA returned no video URL.");
 
     const url = await ensureAssetsUrl(rawUrl, "motions");
