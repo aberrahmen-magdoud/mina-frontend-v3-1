@@ -748,8 +748,15 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                     onClick={() => openPanel("style")}
                     onMouseEnter={() => openPanel("style")}
                   >
-                    {renderPillIcon(styleThumb, "+", true)}
-                    <span className="studio-pill-main">{styleLabel}</span>
+                    <span
+                      className={classNames(
+                        "studio-pill-inner",
+                        activePanel === "style" && "is-selected"
+                      )}
+                    >
+                      {renderPillIcon(styleThumb, "+", true)}
+                      <span className="studio-pill-main">{styleLabel}</span>
+                    </span>
                   </button>
 
                   {/* Ratio */}
@@ -904,11 +911,9 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                           >
                             {getDisplayUrl(it) ? (
                               <img src={getDisplayUrl(it)} alt="" />
-                            ) : (
-                              <span aria-hidden="true" style={{ fontSize: 11, opacity: 0.45 }}>
-                                Uploading…
-                              </span>
-                            )}
+                            ) : it.uploading ? (
+                              <span className="studio-thumb-spinner" aria-hidden="true" />
+                            ) : null}
                           </button>
                         ))}
 
@@ -947,11 +952,9 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                           >
                             {getDisplayUrl(it) ? (
                               <img src={getDisplayUrl(it)} alt="" />
-                            ) : (
-                              <span aria-hidden="true" style={{ fontSize: 11, opacity: 0.45 }}>
-                                Uploading…
-                              </span>
-                            )}
+                            ) : it.uploading ? (
+                              <span className="studio-thumb-spinner" aria-hidden="true" />
+                            ) : null}
                           </button>
                         ))}
 
@@ -1004,11 +1007,9 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                           >
                             {getDisplayUrl(it) ? (
                               <img src={getDisplayUrl(it)} alt="" />
-                            ) : (
-                              <span aria-hidden="true" style={{ fontSize: 11, opacity: 0.45 }}>
-                                Uploading…
-                              </span>
-                            )}
+                            ) : it.uploading ? (
+                              <span className="studio-thumb-spinner" aria-hidden="true" />
+                            ) : null}
                           </button>
                         ))}
 
@@ -1129,11 +1130,9 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                           >
                             {getDisplayUrl(it) ? (
                               <img src={getDisplayUrl(it)} alt="" />
-                            ) : (
-                              <span aria-hidden="true" style={{ fontSize: 11, opacity: 0.45 }}>
-                                Uploading…
-                              </span>
-                            )}
+                            ) : it.uploading ? (
+                              <span className="studio-thumb-spinner" aria-hidden="true" />
+                            ) : null}
                           </button>
                         ))}
 
