@@ -514,7 +514,7 @@ background-color 0s ease 0s,
 }
 
 .studio-style-card.active {
-  transform: scale(0.95);
+  transform: scale(0.85);
 }
 
 .studio-style-card:hover .studio-style-thumb,
