@@ -437,14 +437,25 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
   // - drop files => onFilesPicked(panel, files)
   // - drop url => onImageUrlPasted(url) (and we open the panel for UX)
   const extractDropUrl = (e: React.DragEvent) => {
-    const dt = e.dataTransfer;
-    const u =
-      dt.getData("text/uri-list") ||
-      dt.getData("text/plain") ||
-      "";
-    const url = (u || "").trim().split("\n")[0];
-    return /^https?:\/\//i.test(url) ? url : "";
-  };
+  const dt = e.dataTransfer;
+
+  const uri = (dt.getData("text/uri-list") || "").trim();
+  const plain = (dt.getData("text/plain") || "").trim();
+  const html = dt.getData("text/html") || "";
+
+  const fromHtml =
+    html.match(/src\s*=\s*["']([^"']+)["']/i)?.[1] ||
+    html.match(/https?:\/\/[^\s"'<>]+/i)?.[0] ||
+    "";
+
+  const candidates = [uri, plain, fromHtml].filter(Boolean).map((u) => u.split("\n")[0].trim());
+
+  for (const u of candidates) {
+    if (/^https?:\/\//i.test(u)) return u; // ✅ only http(s)
+  }
+  return "";
+};
+
 
   const handleDropOnPanel = (panel: UploadPanelKey) => (e: React.DragEvent) => {
   e.preventDefault();
@@ -502,17 +513,18 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
         ? primaryStyleCard?.label || "Style"
         : `${selectedStyleCards.length} styles`;
 
-  const motionStyleCards = MOTION_STYLES;
-const selectedMotionCards = motionStyleCards.filter((c) => motionStyleKeys.includes(c.key));
+    const motionStyleCards = MOTION_STYLES;
+    const selectedMotionCards = motionStyleCards.filter((c) => motionStyleKeys.includes(c.key));
+    
+    // none selected => no thumb => pill shows "+"
+    const motionStyleThumb = selectedMotionCards[0]?.thumb || "";
+    const motionStyleLabel =
+      selectedMotionCards.length === 0
+        ? "Movement styles"
+        : selectedMotionCards.length === 1
+          ? selectedMotionCards[0].label
+          : `${selectedMotionCards.length} styles`;
 
-// ✅ like still-style: none selected => no thumb => pill shows "+"
-const motionStyleThumb = selectedMotionCards[0]?.thumb || "";
-const motionStyleLabel =
-  selectedMotionCards.length === 0
-    ? "Movement styles"
-    : selectedMotionCards.length === 1
-      ? selectedMotionCards[0].label
-      : `${selectedMotionCards.length} styles`;
 
   const renderPillIcon = (
     src: string,
