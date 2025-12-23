@@ -1126,14 +1126,21 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                             onPointerUp={onThumbPointerUp}
                             onPointerCancel={onThumbPointerUp}
                             onClick={() => handleThumbClick("inspiration", it.id)}
+                            onDragStart={(e) => e.preventDefault()} // ✅ stops native drag overlay
                             title="Drag to reorder • Click to delete"
                           >
                             {getDisplayUrl(it) ? (
-                              <img src={getDisplayUrl(it)} alt="" draggable={false} />
+                              <img
+                                src={getDisplayUrl(it)}
+                                alt=""
+                                draggable={false} // ✅ IMPORTANT
+                                style={{ WebkitUserDrag: "none", userSelect: "none" }} // ✅ extra safety
+                              />
                             ) : it.uploading ? (
                               <span className="studio-thumb-spinner" aria-hidden="true" />
                             ) : null}
                           </button>
+
                         ))}
 
                         {uploads.inspiration.length < 4 && (
