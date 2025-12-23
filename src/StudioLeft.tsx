@@ -827,7 +827,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                             onMouseEnter={() => openPanel("product")}
                           >
                             {renderPillIcon(productThumb, "+", true)}
-                            <span className="studio-pill-main">Image</span>
+                            <span className="studio-pill-main">Frames</span>
                           </button>
 
                           {/* Mouvement style */}
