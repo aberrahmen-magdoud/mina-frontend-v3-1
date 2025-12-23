@@ -468,9 +468,17 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
     e.stopPropagation();
 
     // ✅ Ignore drags that originate from style thumbnails (prevents accidental style->upload)
-    const isStyleThumbDrag = !!e.dataTransfer?.getData("application/x-mina-style-thumb");
+    const dt = e.dataTransfer;
+    const types = Array.from(dt?.types ?? []);
+    
+    const isStyleThumbDrag =
+      types.includes("text/x-mina-style-thumb") ||
+      types.includes("application/x-mina-style-thumb") ||
+      dt?.getData("text/x-mina-style-thumb") === "1" ||
+      dt?.getData("application/x-mina-style-thumb") === "1";
+    
+    // ✅ Block style-thumbs from being added as uploads (prevents accidents)
     if (isStyleThumbDrag) return;
-
     // ✅ First: if the drag contains a URL, treat it as a URL drop (prevents blob/temp-file drags)
     const url = extractDropUrl(e);
     if (url) {
@@ -1058,11 +1066,15 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                           type="button"
                           draggable
                           onDragStart={(e) => {
+                            // ✅ marker (use BOTH types for cross-browser reliability)
+                            e.dataTransfer.setData("text/x-mina-style-thumb", "1");
                             e.dataTransfer.setData("application/x-mina-style-thumb", "1");
-                            e.dataTransfer.setData("text/uri-list", s.thumb);
-                            e.dataTransfer.setData("text/plain", s.thumb);
+                          
+                            e.dataTransfer.setData("text/uri-list", s.thumb /* or m.thumb */);
+                            e.dataTransfer.setData("text/plain", s.thumb /* or m.thumb */);
                             e.dataTransfer.effectAllowed = "copy";
                           }}
+
                           className={classNames(
                             "studio-style-card",
                             stylePresetKeys.includes(s.key) && "active"
@@ -1184,11 +1196,15 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                           type="button"
                           draggable
                           onDragStart={(e) => {
-                            e.dataTransfer.setData("application/x-mina-style-thumb", "1");
-                            e.dataTransfer.setData("text/uri-list", m.thumb);
-                            e.dataTransfer.setData("text/plain", m.thumb);
-                            e.dataTransfer.effectAllowed = "copy";
-                          }}
+                              // ✅ marker (use BOTH types for cross-browser reliability)
+                              e.dataTransfer.setData("text/x-mina-style-thumb", "1");
+                              e.dataTransfer.setData("application/x-mina-style-thumb", "1");
+                            
+                              e.dataTransfer.setData("text/uri-list", s.thumb /* or m.thumb */);
+                              e.dataTransfer.setData("text/plain", s.thumb /* or m.thumb */);
+                              e.dataTransfer.effectAllowed = "copy";
+                            }}
+
                           className={classNames(
                             "studio-style-card",
                             "studio-motion-style-card",
