@@ -157,14 +157,6 @@ transition:
 
 
 
-.studio-pill-inner {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transform-origin: center;
-  transition: transform 140ms ease;
-}
-
 
 .studio-pill-icon {
   min-width: 24px;
