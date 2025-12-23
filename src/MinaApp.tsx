@@ -2067,7 +2067,7 @@ async function startStoreForUrlItem(panel: UploadPanelKey, id: string, url: stri
 
   const handleGenerateStill = async () => {
     const trimmed = stillBrief.trim();
-    if (trimmed.length < 40) return;
+    if (trimmed.length < 20) return;
 
     if (!API_BASE_URL) {
       setStillError("Missing API base URL (VITE_MINA_API_BASE_URL).");
