@@ -761,4 +761,10 @@ margin-bottom: 6px;
     -webkit-overflow-scrolling: touch;
   }
 }
+/* Styles only: prevent drag ghost image + selection */
+.studio-style-thumb img,
+.studio-motion-style-thumb img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
 
