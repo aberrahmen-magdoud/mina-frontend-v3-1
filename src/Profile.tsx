@@ -362,31 +362,45 @@ export default function Profile({
   }, [feedbacks]);
 
   const { items, activeCount } = useMemo(() => {
-    const baseRows: Array<{ row: Row; source: "generation" | "feedback" }> = [
-      ...(generations || []).map((g) => ({ row: g, source: "generation" as const })),
-      ...(feedbacks || []).map((f) => ({ row: f, source: "feedback" as const })),
-    ];
+    const likedGenIdSet = new Set<string>();
+    for (const f of feedbacks) {
+      const fp: any = (f as any)?.mg_payload ?? (f as any)?.payload ?? {};
+      const rawLiked = fp?.liked ?? fp?.isLiked ?? fp?.like ?? (f as any)?.liked;
+      const isLiked = rawLiked === true || rawLiked === 1 || rawLiked === "true";
+      if (!isLiked) continue;
+
+      const gid = safeString(
+        (f as any)?.mg_generation_id ??
+          fp?.generationId ??
+          fp?.generation_id ??
+          fp?.generationID ??
+          fp?.generation ??
+          "",
+        ""
+      );
+      if (gid) likedGenIdSet.add(gid);
+    }
+
+    const baseRows: Array<{ row: Row; source: "generation" }> = generations.map((g) => ({
+      row: g,
+      source: "generation" as const,
+    }));
 
     let base = baseRows
       .map(({ row: g, source }, idx) => {
-        const id = pick(g, ["mg_id", "id"], `row_${idx}`);
-        const createdAt =
-          pick(g, ["mg_event_at", "mg_created_at", "createdAt", "created_at"], "") || "";
+        const generationId = safeString(
+          pick(g, ["mg_generation_id", "generation_id", "generationId", "id"]),
+          ""
+        );
 
-        const payload = (g as any)?.mg_payload ?? (g as any)?.payload ?? null;
-        const meta = (g as any)?.mg_meta ?? (g as any)?.meta ?? null;
+        const id = generationId || safeString(pick(g, ["mg_id", "id"]), `row_${idx}`);
 
-        const prompt =
-          pick(g, ["mg_user_prompt", "userPrompt", "promptUser", "prompt_raw", "promptOriginal"], "") ||
-          pick(payload, ["userPrompt", "user_prompt", "userMessage", "brief", "prompt"], "") ||
-          pick(g, ["mg_prompt", "prompt"], "") ||
-          "";
+        const createdAt = safeString(
+          pick(g, ["created_at", "mg_created_at", "ts", "timestamp"]),
+          ""
+        );
 
-        const likeUrl = source === "feedback" ? findLikeUrl(g) : "";
-        const isLikeOnly = source === "feedback" && !!likeUrl;
-        if (isLikeOnly) return null;
-
-        const out = pick(g, ["mg_output_url", "outputUrl", "output_url"], "").trim();
+const out = pick(g, ["mg_output_url", "outputUrl", "output_url"], "").trim();
         const img = pick(g, ["mg_image_url", "imageUrl", "image_url"], "").trim();
         const vid = pick(g, ["mg_video_url", "videoUrl", "video_url"], "").trim();
 
@@ -418,7 +432,7 @@ export default function Profile({
                 : ""
           );
 
-        const liked = url ? likedUrlSet.has(normalizeMediaUrl(url)) || !!likeUrl : false;
+        const liked = (generationId && likedGenIdSet.has(generationId)) || (url ? likedUrlSet.has(normalizeMediaUrl(url)) : false);
 
         const inputs = extractInputsForDisplay(g);
 
