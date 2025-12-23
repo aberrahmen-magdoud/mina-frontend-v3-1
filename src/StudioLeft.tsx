@@ -544,7 +544,7 @@ const motionStyleLabel =
         ? "uploading"
         : !imageCreditsOk
           ? "describe_more"
-          : briefLen < 40
+          : briefLen < 20
             ? "describe_more"
             : "ready";
 
