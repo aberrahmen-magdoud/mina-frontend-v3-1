@@ -2576,6 +2576,8 @@ const handleLikeCurrentStill = async () => {
       method: "POST",
       body: JSON.stringify({
         passId: currentPassId,
+        generationId: targetMedia.id,
+        generation_id: targetMedia.id,
         resultType,
         platform: currentAspect.platformKey,
         prompt: currentMotion?.prompt || currentStill?.prompt || lastStillPrompt || stillBrief || brief,
@@ -2608,6 +2610,8 @@ const handleSubmitFeedback = async () => {
       method: "POST",
       body: JSON.stringify({
         passId: currentPassId,
+        generationId: (currentMotion?.id || currentStill?.id || ""),
+        generation_id: (currentMotion?.id || currentStill?.id || ""),
         resultType: targetVideo ? "motion" : "image",
         platform: currentAspect.platformKey,
         prompt: lastStillPrompt || stillBrief || brief,
