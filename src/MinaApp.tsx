@@ -2482,6 +2482,23 @@ const handleSuggestMotion = async () => {
   // ========================================================================
   // Part 11 groups user feedback utilities: sending comments, toggling likes,
   // and building download links for generated assets.
+// Stable key for likes (so "Save it" persists across refreshes).
+// Prefer URL (stable), fall back to id.
+const normalizeLikeUrl = (url: string) => stripSignedQuery(String(url || "").trim());
+
+const getCurrentMediaKey = () => {
+  const motionUrl = currentMotion?.url ? normalizeLikeUrl(currentMotion.url) : "";
+  const stillUrl = currentStill?.url ? normalizeLikeUrl(currentStill.url) : "";
+
+  // Prefer whichever is currently displayed
+  const kind = currentMotion?.url ? "motion" : "still";
+  const url = kind === "motion" ? motionUrl : stillUrl;
+  const id = kind === "motion" ? (currentMotion?.id || "") : (currentStill?.id || "");
+
+  if (url) return `${kind}:url:${url}`;
+  if (id) return `${kind}:id:${id}`;
+  return "";
+};
 
 const guessDownloadExt = (url: string, fallbackExt: string) => {
   const lower = url.toLowerCase();
