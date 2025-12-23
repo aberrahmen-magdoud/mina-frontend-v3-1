@@ -395,7 +395,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
     (panel: UploadPanelKey, index: number) =>
     (e: React.PointerEvent<HTMLButtonElement>) => {
       if (e.button !== 0) return; // left click only
-      if ((uploads[panel]?.length || 0) < 2) return; // nothing to reorder
+      if ((uploads[panel]?.length || 0) < 2) return;
 
       suppressClickRef.current = false;
 
@@ -427,7 +427,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
     if (!st.active) {
       if (dist < DRAG_THRESHOLD_PX) return;
       st.active = true;
-      suppressClickRef.current = true; // prevent delete click after drag
+      suppressClickRef.current = true;
     }
 
     const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
@@ -454,7 +454,6 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
       e.currentTarget.releasePointerCapture(e.pointerId);
     } catch {}
 
-    // keep suppressClick true for the immediate click event, then reset
     if (st.active) {
       window.setTimeout(() => {
         suppressClickRef.current = false;
@@ -537,16 +536,6 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
   // Inline pointer-based reorder helpers
   const DRAG_THRESHOLD_PX = 6;
 
-  type ReorderState = {
-    panel: UploadPanelKey;
-    index: number;
-    startX: number;
-    startY: number;
-    pointerId: number;
-    active: boolean;
-  };
-
-  const reorderRef = useRef<ReorderState | null>(null);
   const suppressClickRef = useRef(false);
 
   const onThumbPointerDown = (panel: UploadPanelKey, index: number) =>
