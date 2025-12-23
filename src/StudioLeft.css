@@ -524,12 +524,12 @@ transition:
 }
 
 .studio-style-card.active {
-  transform: scale(0.9);
+  transform: scale(0.95);
 }
 
 .studio-style-card:hover .studio-style-thumb,
 .studio-style-card:focus-visible .studio-style-thumb {
-  outline: 1px solid #BAA37A;
+  outline: 0px solid #BAA37A;
   outline-offset: -1px;
 }
 
@@ -558,6 +558,8 @@ transition:
 
 .studio-style-label {
   margin-top: 6px;
+margin-bottom: 6px;
+
   font-size: 10px;
   font-weight: 600;
   letter-spacing: -0.02em;
