@@ -740,23 +740,22 @@ const motionStyleLabel =
                             </button>
 
 
-                  {/* Style */}
-                  <button
-                    type="button"
-                    className={classNames(
-                      "studio-pill",
-                      activePanel === "style" && "active",
-                      !styleThumb && "studio-pill--solo-plus"
-                    )}
-                    style={pillBaseStyle(3)}
-                    onClick={() => openPanel("style")}
-                    onMouseEnter={() => openPanel("style")}
-                  >
-                    
-                      {renderPillIcon(styleThumb, "+", true)}
-                      <span className="studio-pill-main">{styleLabel}</span>
-                    </span>
-                  </button>
+                 {/* Style */}
+                          <button
+                            type="button"
+                            className={classNames(
+                              "studio-pill",
+                              activePanel === "style" && "active",
+                              !styleThumb && "studio-pill--solo-plus"
+                            )}
+                            style={pillBaseStyle(3)}
+                            onClick={() => openPanel("style")}
+                            onMouseEnter={() => openPanel("style")}
+                          >
+                            {renderPillIcon(styleThumb, "+", true)}
+                            <span className="studio-pill-main">{styleLabel}</span>
+                          </button>
+
 
                   {/* Ratio */}
                   <button
