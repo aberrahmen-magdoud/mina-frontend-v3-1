@@ -1779,11 +1779,11 @@ const MinaApp: React.FC<MinaAppProps> = () => {
       const { generationId } = await mmaCreateAndWait(
         "/mma/still/create",
         mmaBody,
-        ({ status, scanLines }) => {
+       ({ scanLines }) => {
           const last = scanLines.slice(-1)[0] || "";
-          const overlay = `${String(status || "").toUpperCase()}\n${last}`.trim();
-          if (overlay) setMinaOverrideText(overlay);
+          if (last) setMinaOverrideText(last);
         }
+
       );
 
       const result = await mmaFetchResult(generationId);
@@ -1923,12 +1923,12 @@ const MinaApp: React.FC<MinaAppProps> = () => {
       const { generationId } = await mmaCreateAndWait(
         "/mma/video/animate",
         mmaBody,
-        ({ status, scanLines }) => {
+        ({ scanLines }) => {
           const last = scanLines.slice(-1)[0] || "";
-          const overlay = `${String(status || "").toUpperCase()}\n${last}`.trim();
-          if (overlay) setMinaOverrideText(overlay);
+          if (last) setMinaOverrideText(last);
         }
       );
+
 
       const final = await mmaFetchResult(generationId);
 
@@ -2018,15 +2018,15 @@ const MinaApp: React.FC<MinaAppProps> = () => {
         prompts: {},
       };
 
-      const { generationId } = await mmaCreateAndWait(
+     const { generationId } = await mmaCreateAndWait(
         "/mma/video/animate",
         mmaBody,
-        ({ status, scanLines }) => {
+        ({ scanLines }) => {
           const last = scanLines.slice(-1)[0] || "";
-          const overlay = `${String(status || "").toUpperCase()}\n${last}`.trim();
-          if (overlay) setMinaOverrideText(overlay);
+          if (last) setMinaOverrideText(last);
         }
       );
+
 
       const result = await mmaFetchResult(generationId);
 
@@ -2092,11 +2092,11 @@ const MinaApp: React.FC<MinaAppProps> = () => {
       try {
         const sid = await ensureSession();
 
-        const onProgress = ({ status, scanLines }: { status: string; scanLines: string[] }) => {
-          const last = scanLines.slice(-1)[0] || "";
-          const overlay = `${String(status || "").toUpperCase()}\n${last}`.trim();
-          if (overlay) setMinaOverrideText(overlay);
-        };
+       const onProgress = ({ scanLines }: { status: string; scanLines: string[] }) => {
+        const last = scanLines.slice(-1)[0] || "";
+        if (last) setMinaOverrideText(last);
+      };
+
 
         if (!isMotion) {
           const safeAspectRatio =
