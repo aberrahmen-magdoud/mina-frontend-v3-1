@@ -1127,7 +1127,6 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
 
     const inferFromUrl = (url: string, fallbackRatio?: number) => {
       const img = new Image();
-      img.crossOrigin = "anonymous";
       img.onload = () => {
         if (cancelled) return;
         const ratio = img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1;
@@ -1168,45 +1167,65 @@ const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
     };
   }, [animateImage?.remoteUrl, animateImage?.url, latestStill?.aspectRatio, latestStill?.url, currentAspect.ratio]);
 
-  useEffect(() => {
-    const url = currentMotion?.url || currentStill?.url;
-    if (!url) {
-      setIsRightMediaDark(false);
-      return undefined;
-    }
+  
+useEffect(() => {
+  const url = currentMotion?.url || currentStill?.url;
+  if (!url) {
+    setIsRightMediaDark(false);
+    return;
+  }
 
-    let cancelled = false;
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      if (cancelled) return;
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = 10;
-        canvas.height = 10;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        ctx.drawImage(img, 0, 0, 10, 10);
-        const data = ctx.getImageData(0, 0, 10, 10).data;
-        let total = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          total += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-        }
-        const avg = total / (data.length / 4 || 1);
-        setIsRightMediaDark(avg < 90);
-      } catch {
-        setIsRightMediaDark(false);
+  // Avoid CORS issues: we only sample pixels when the image is same-origin.
+  // Cross-origin images can still display fine, but browsers block canvas pixel access
+  // unless the remote server sends proper CORS headers.
+  const isSameOrigin = url.startsWith("/") || url.startsWith(window.location.origin);
+
+  if (!isSameOrigin) {
+    setIsRightMediaDark(false);
+    return;
+  }
+
+  let cancelled = false;
+  const img = new Image();
+
+  img.onload = () => {
+    if (cancelled) return;
+
+    try {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const w = 48;
+      const h = 48;
+      canvas.width = w;
+      canvas.height = h;
+
+      ctx.drawImage(img, 0, 0, w, h);
+
+      const data = ctx.getImageData(0, 0, w, h).data;
+      let sum = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        sum += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
       }
-    };
-    img.onerror = () => {
-      if (!cancelled) setIsRightMediaDark(false);
-    };
-    img.src = url;
+      const avg = sum / (data.length / 4);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [currentMotion?.url, currentStill?.url]);
+      setIsRightMediaDark(avg < 110);
+    } catch {
+      setIsRightMediaDark(false);
+    }
+  };
+
+  img.onerror = () => {
+    if (!cancelled) setIsRightMediaDark(false);
+  };
+
+  img.src = url;
+
+  return () => {
+    cancelled = true;
+  };
+}, [currentMotion?.url, currentStill?.url]);
 
   const motionTextTrimmed = motionDescription.trim();
   const canCreateMotion = !!motionReferenceImageUrl && motionTextTrimmed.length > 0 && !motionSuggestTyping;
@@ -2278,54 +2297,89 @@ const applyMotionSuggestionText = async (text: string) => {
   setMotionSuggestTyping(false);
 };
 
-const handleSuggestMotion = async () => {
-  if (!API_BASE_URL || !motionReferenceImageUrl || motionSuggestLoading || motionSuggestTyping) return;
-  if (!currentPassId) return;
 
-  setAnimateMode(true);
+const handleSuggestMotion = async () => {
+  const item = motionItems[motionIndex];
+  if (!item?.inputStillUrl) return;
+
+  setMotionSuggestError(null);
+  setMotionSuggestLoading(true);
+  setMotionSuggestTyping(true);
 
   try {
-    setMotionSuggestLoading(true);
-    setMotionSuggestError(null);
+    // MMA-only backend: use MMA pipeline for suggestions too
+    if (MMA_ENABLED) {
+      const body = {
+        intent: "type_for_me",
+        inputs: {
+          // what the user chose
+          start_image_url: item.inputStillUrl,
+          motion_user_brief: motionDescription || "",
+          selected_movement_style: motionSelectedStyleKey || "",
 
-    const movementStyle = (motionStyleKeys?.[0] || "cinematic_smooth") as any;
+          // flags to avoid credit charge + stop after suggestion
+          type_for_me: true,
+          suggest_only: true,
 
-    // ✅ Your backend MMA controller does NOT expose /mma/motion/suggest
-    const res = await apiFetch("/motion/suggest", {
+          // context
+          platform: "web",
+          session_id: sessionId || undefined,
+          title: "Motion suggestion",
+        },
+      };
+
+      const { generationId } = await mmaCreateAndWait(
+        "/mma/video/animate",
+        body,
+        (p) => {
+          // keep the "typing" indicator alive while backend works
+          if (p.status === "error") setMotionSuggestError(p.error || "MMA suggestion failed");
+        }
+      );
+
+      const final = await mmaFetchResult(generationId);
+      const suggestedPrompt =
+        String(final?.prompt || final?.mma_vars?.prompts?.sugg_prompt || "").trim();
+
+      if (!suggestedPrompt) {
+        throw new Error("No suggestion returned");
+      }
+
+      // smooth UX: simulate typing like the legacy endpoint
+      const out = await simulateTyping(suggestedPrompt, 12, 1200);
+      applyMotionSuggestionText(out);
+      return;
+    }
+
+    // Legacy backend (shouldn't happen if MMA_ENABLED is true)
+    const resp = await apiFetch("/motion/suggest", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        // Keep the exact keys your existing /motion/suggest expects
-        inputStillUrl: motionReferenceImageUrl,
-        movementStyle,
-        userMotionBrief: motionDescription || "",
-        maxPromptComplexity: "simple_english",
-
-        // helpful extra context (harmless if ignored)
-        passId: currentPassId,
-        platform: animateAspectOption.platformKey,
-        aspectRatio: animateAspectOption.ratio,
-        minaVisionEnabled,
-        stylePresetKeys: stylePresetKeysForApi,
+        inputStillUrl: item.inputStillUrl,
+        motionText: motionDescription,
+        movementStyle: motionSelectedStyleKey,
       }),
     });
 
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => null);
-      throw new Error(errJson?.message || "Failed to suggest motion.");
+    if (!resp.ok) {
+      const t = await resp.text().catch(() => "");
+      throw new Error(t || "Motion suggest failed");
     }
 
-    const data = (await res.json().catch(() => ({}))) as any;
-    const suggestion = data.motionPrompt || data.suggestion || data.prompt || "";
-    if (suggestion) await applyMotionSuggestionText(String(suggestion));
-  } catch (err: any) {
-    setMotionSuggestError(err?.message || "Unexpected error suggesting motion.");
-  } finally {
-    setMotionSuggestLoading(false);
-    setMotionSuggestTyping(false);
-  }
-};
+    const json = await resp.json();
+    const suggestedPrompt = String(json?.suggestedPrompt || "").trim();
+    if (!suggestedPrompt) throw new Error("No suggestion returned");
 
-  const handleGenerateMotion = async () => {
+    const out = await simulateTyping(suggestedPrompt, 12, 1200);
+    applyMotionSuggestionText(out);
+  } catch (e: any) {
+    setMotionSuggestError(e?.message || "Motion suggest failed");
+  } finally {
+    setMotionSuggestTyping(false);
+    setMotionSuggestLoading(false);
+  }
+};const handleGenerateMotion = async () => {
     if (!API_BASE_URL || !motionReferenceImageUrl || !motionTextTrimmed) return;
 
     if (!currentPassId) {
@@ -2576,8 +2630,6 @@ const handleLikeCurrentStill = async () => {
       method: "POST",
       body: JSON.stringify({
         passId: currentPassId,
-        generationId: targetMedia.id,
-        generation_id: targetMedia.id,
         resultType,
         platform: currentAspect.platformKey,
         prompt: currentMotion?.prompt || currentStill?.prompt || lastStillPrompt || stillBrief || brief,
@@ -2610,8 +2662,6 @@ const handleSubmitFeedback = async () => {
       method: "POST",
       body: JSON.stringify({
         passId: currentPassId,
-        generationId: (currentMotion?.id || currentStill?.id || ""),
-        generation_id: (currentMotion?.id || currentStill?.id || ""),
         resultType: targetVideo ? "motion" : "image",
         platform: currentAspect.platformKey,
         prompt: lastStillPrompt || stillBrief || brief,
