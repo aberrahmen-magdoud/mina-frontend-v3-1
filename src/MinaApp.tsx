@@ -3738,13 +3738,18 @@ const isCurrentLiked = currentMediaKey ? likedMap[currentMediaKey] : false;
   const renderStudioRight = () => {
     return (
       <StudioRight
-        currentStill={displayedStill}
-        currentMotion={displayedMotion}
-        stillItems={stillItems}
-        stillIndex={stillIndex}
-        setStillIndex={setStillIndex}
-        onTweak={onTweak}
-      />
+      currentStill={displayedStill}
+      currentMotion={displayedMotion}
+      stillItems={stillItems}
+      stillIndex={stillIndex}
+      setStillIndex={setStillIndex}
+      tweakText={feedbackText}
+      setTweakText={setFeedbackText}
+      onSendTweak={(text) => void onTweak(text)}
+      sending={feedbackSending}
+      error={feedbackError}
+    />
+
     );
   };
 
