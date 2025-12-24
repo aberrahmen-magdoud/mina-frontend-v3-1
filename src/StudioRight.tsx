@@ -13,7 +13,7 @@ type StudioRightProps = {
   stillIndex: number;
   setStillIndex: (i: number) => void;
 
-  // ✅ This textarea is the TWEAK input (you called it feedback before)
+  // TWEAK (was feedback)
   tweakText: string;
   setTweakText: (v: string) => void;
   onSendTweak: (text: string) => void;
@@ -83,6 +83,11 @@ export default function StudioRight(props: StudioRightProps) {
   const trimmed = (tweakText || "").trim();
   const canSend = !isEmpty && !!trimmed && !sending;
 
+  const sendNow = () => {
+    if (!canSend) return;
+    onSendTweak(trimmed);
+  };
+
   return (
     <div className="studio-right">
       <div className="studio-right-surface">
@@ -145,32 +150,22 @@ export default function StudioRight(props: StudioRightProps) {
         )}
       </div>
 
-      {/* ✅ TWEAK AREA (this is your “feedback” area) */}
+      {/* ✅ Restored EXACT old feedback bar layout + styling (now called tweak) */}
       {!isEmpty && (
-        <div className="studio-feedback">
-          <textarea
-            className="studio-feedback-textarea"
+        <div className="studio-feedback-bar">
+          <input
+            className="studio-feedback-input--compact"
             placeholder="Type your tweak… (ex: brighter, less text, tighter crop, more contrast)"
             value={tweakText}
             onChange={(e) => setTweakText(e.target.value)}
             disabled={!!sending}
-            rows={3}
             onKeyDown={(e) => {
-              // Ctrl+Enter (or Cmd+Enter) sends tweak
-              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-                e.preventDefault();
-                if (canSend) onSendTweak(trimmed);
-              }
+              if (e.key === "Enter" && canSend) sendNow();
             }}
           />
 
           <div className="studio-feedback-actions">
-            <button
-              type="button"
-              className="studio-feedbackbar-btn"
-              onClick={() => onSendTweak(trimmed)}
-              disabled={!canSend}
-            >
+            <button type="button" className="studio-action-btn" onClick={sendNow} disabled={!canSend}>
               {sending ? "Tweaking…" : "Tweak"}
             </button>
           </div>
