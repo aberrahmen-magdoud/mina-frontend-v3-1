@@ -278,7 +278,7 @@
 
 .studio-header-overlay {
   /* Light background (default): black text */
-  --cta-fg: #000;
+  --cta-fg: #080a00;
   --cta-bg: rgba(255, 255, 255, 0.0);
   --cta-border: rgba(0, 0, 0, 0.0);
   --cta-bg-hover: rgba(255, 255, 255, 0.0);
@@ -287,7 +287,7 @@
 
 .studio-header-overlay.is-dark {
   /* Dark background: white text */
-  --cta-fg: #fff;
+  --cta-fg: #FCFAF4;
   --cta-bg: rgba(0, 0, 0, 0.0);
   --cta-border: rgba(255, 255, 255, 0.0);
   --cta-bg-hover: rgba(0, 0, 0, 0.0);
