@@ -270,3 +270,43 @@
     flex-shrink: 0;
   }
 }
+/* =========================================
+   Header CTA buttons: auto-invert on dark media
+   Uses .studio-header-overlay.is-dark from MinaApp.tsx
+   Paste at END of your CSS to override safely.
+   ========================================= */
+
+.studio-header-overlay {
+  /* Light background (default): black text */
+  --cta-fg: #000;
+  --cta-bg: rgba(255, 255, 255, 0.78);
+  --cta-border: rgba(0, 0, 0, 0.18);
+  --cta-bg-hover: rgba(255, 255, 255, 0.92);
+  --cta-border-hover: rgba(0, 0, 0, 0.28);
+}
+
+.studio-header-overlay.is-dark {
+  /* Dark background: white text */
+  --cta-fg: #fff;
+  --cta-bg: rgba(0, 0, 0, 0.45);
+  --cta-border: rgba(255, 255, 255, 0.22);
+  --cta-bg-hover: rgba(0, 0, 0, 0.62);
+  --cta-border-hover: rgba(255, 255, 255, 0.34);
+}
+
+.studio-header-cta {
+  color: var(--cta-fg) !important;
+  background: var(--cta-bg) !important;
+  border: 1px solid var(--cta-border) !important;
+  transition: background 160ms ease, border-color 160ms ease, opacity 160ms ease;
+}
+
+.studio-header-cta:hover {
+  background: var(--cta-bg-hover) !important;
+  border-color: var(--cta-border-hover) !important;
+}
+
+.studio-header-cta:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
