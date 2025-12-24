@@ -173,10 +173,11 @@ function extractInputsForDisplay(row: Row) {
   const payload = (row as any)?.mg_payload ?? (row as any)?.payload ?? null;
   const meta = (row as any)?.mg_meta ?? (row as any)?.meta ?? null;
 
-  const brief =
-    pick(row, ["mg_user_prompt", "userPrompt", "promptUser", "prompt_raw", "promptOriginal"], "") ||
-    pick(payload, ["userPrompt", "user_prompt", "userMessage", "brief", "prompt"], "") ||
-    pick(row, ["mg_prompt", "prompt"], "");
+  // ✅ User brief only (never show generated/system prompt)
+      const brief =
+      pick(row, ["mg_user_prompt", "userPrompt", "promptUser", "prompt_raw", "promptOriginal", "user_message", "mg_user_message"], "") ||
+      pick(payload, ["userPrompt", "user_prompt", "userMessage", "brief", "user_message"], "");
+    
 
   const aspect =
     normalizeAspectRatio(
@@ -458,7 +459,7 @@ export default function Profile({
         return {
           id,
           createdAt,
-          prompt: inputs.brief || fallbackPrompt,
+          prompt: inputs.brief,
           url,
           liked,
           isMotion,
