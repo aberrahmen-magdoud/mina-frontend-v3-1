@@ -1,14 +1,6 @@
 // =============================================================
 // FILE: src/Profile.tsx
 // Mina — Profile (Render-only, data comes from MinaApp)
-// - Mina-style header (logo left, Back to Studio right, Logout far right)
-// - Meta row (email + matchas + expiry)
-// - Archive grid (paged render)
-// - Click item => open lightbox (no new tab)
-// - Prompt line + tiny "more"
-// - Expanded view shows "inputs used" + Re-create button (only when expanded)
-// - Filters (motion / liked / aspect) => non-matching dim
-// - Video autoplay via IntersectionObserver (plays only most-visible)
 // =============================================================
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -16,6 +8,13 @@ import "./Profile.css";
 import TopLoadingBar from "./components/TopLoadingBar";
 
 type Row = Record<string, any>;
+
+/** ✅ FIX: safeString was used but never defined */
+function safeString(v: any, fallback = ""): string {
+  if (v === null || v === undefined) return fallback;
+  const s = String(v);
+  return s === "undefined" || s === "null" ? fallback : s;
+}
 
 function pick(row: any, keys: string[], fallback = ""): string {
   for (const k of keys) {
@@ -307,11 +306,11 @@ export default function Profile({
 
   const [expandedPromptIds, setExpandedPromptIds] = useState<Record<string, boolean>>({});
 
-  // Pagination (reduces DOM + speeds up load)
+  // Pagination
   const [visibleCount, setVisibleCount] = useState(36);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  // Video refs (IntersectionObserver)
+  // Video refs
   const videoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const registerVideoEl = useCallback((id: string, el: HTMLVideoElement | null) => {
     const m = videoElsRef.current;
@@ -351,7 +350,7 @@ export default function Profile({
     }
   };
 
-  // Likes set
+  // Likes set (by URL)
   const likedUrlSet = useMemo(() => {
     const s = new Set<string>();
     for (const f of feedbacks) {
@@ -362,6 +361,7 @@ export default function Profile({
   }, [feedbacks]);
 
   const { items, activeCount } = useMemo(() => {
+    // liked generation ids from feedback payloads
     const likedGenIdSet = new Set<string>();
     for (const f of feedbacks) {
       const fp: any = (f as any)?.mg_payload ?? (f as any)?.payload ?? {};
@@ -377,7 +377,8 @@ export default function Profile({
           fp?.generation ??
           "",
         ""
-      );
+      ).trim();
+
       if (gid) likedGenIdSet.add(gid);
     }
 
@@ -388,21 +389,18 @@ export default function Profile({
 
     let base = baseRows
       .map(({ row: g, source }, idx) => {
-        const generationId = safeString(
-          pick(g, ["mg_generation_id", "generation_id", "generationId", "id"]),
-          ""
-        );
+        // ✅ FIX: these were referenced but not defined in your file
+        const payload: any = (g as any)?.mg_payload ?? (g as any)?.payload ?? null;
+        const meta: any = (g as any)?.mg_meta ?? (g as any)?.meta ?? null;
 
-        const id = generationId || safeString(pick(g, ["mg_id", "id"]), `row_${idx}`);
+        const generationId = safeString(pick(g, ["mg_generation_id", "generation_id", "generationId", "id"]), "").trim();
+        const id = generationId || safeString(pick(g, ["mg_id", "id"]), `row_${idx}`).trim();
 
-        const createdAt = safeString(
-          pick(g, ["created_at", "mg_created_at", "ts", "timestamp"]),
-          ""
-        );
+        const createdAt = safeString(pick(g, ["created_at", "mg_created_at", "ts", "timestamp"]), "").trim();
 
-const out = pick(g, ["mg_output_url", "outputUrl", "output_url"], "").trim();
-        const img = pick(g, ["mg_image_url", "imageUrl", "image_url"], "").trim();
-        const vid = pick(g, ["mg_video_url", "videoUrl", "video_url"], "").trim();
+        const outUrl = pick(g, ["mg_output_url", "outputUrl", "output_url"], "").trim();
+        const imgUrl = pick(g, ["mg_image_url", "imageUrl", "image_url"], "").trim();
+        const vidUrl = pick(g, ["mg_video_url", "videoUrl", "video_url"], "").trim();
 
         const aspectRaw =
           pick(g, ["mg_aspect_ratio", "aspect_ratio", "aspectRatio"], "") ||
@@ -412,14 +410,12 @@ const out = pick(g, ["mg_output_url", "outputUrl", "output_url"], "").trim();
         const contentType = pick(g, ["mg_content_type", "contentType"], "").toLowerCase();
         const kindHint = String(pick(g, ["mg_result_type", "resultType", "mg_type", "type"], "")).toLowerCase();
 
-        const looksVideoMeta =
-          contentType.includes("video") || kindHint.includes("motion") || kindHint.includes("video");
+        const looksVideoMeta = contentType.includes("video") || kindHint.includes("motion") || kindHint.includes("video");
+        const looksImage = isImageUrl(outUrl) || isImageUrl(imgUrl);
 
-        const looksImage = isImageUrl(out) || isImageUrl(img);
-
-        const videoUrl = vid || (isVideoUrl(out) ? out : looksVideoMeta && !looksImage ? out : "");
-        const imageUrl = img || (!videoUrl ? out : "");
-        const url = (videoUrl || imageUrl || out).trim();
+        const videoUrl = vidUrl || (isVideoUrl(outUrl) ? outUrl : looksVideoMeta && !looksImage ? outUrl : "");
+        const imageUrl = imgUrl || (!videoUrl ? outUrl : "");
+        const url = (videoUrl || imageUrl || outUrl).trim();
         const isMotion = Boolean(videoUrl);
 
         const aspectRatio =
@@ -432,7 +428,9 @@ const out = pick(g, ["mg_output_url", "outputUrl", "output_url"], "").trim();
                 : ""
           );
 
-        const liked = (generationId && likedGenIdSet.has(generationId)) || (url ? likedUrlSet.has(normalizeMediaUrl(url)) : false);
+        const liked =
+          (generationId && likedGenIdSet.has(generationId)) ||
+          (url ? likedUrlSet.has(normalizeMediaUrl(url)) : false);
 
         const inputs = extractInputsForDisplay(g);
 
@@ -455,10 +453,12 @@ const out = pick(g, ["mg_output_url", "outputUrl", "output_url"], "").trim();
             }
           : null;
 
+        const fallbackPrompt = safeString(pick(g, ["mg_prompt", "prompt", "mg_user_prompt", "userPrompt"]), "").trim();
+
         return {
           id,
           createdAt,
-          prompt: inputs.brief || prompt,
+          prompt: inputs.brief || fallbackPrompt,
           url,
           liked,
           isMotion,
@@ -596,7 +596,6 @@ const out = pick(g, ["mg_output_url", "outputUrl", "output_url"], "").trim();
       }
     );
 
-    // Observe currently registered videos
     els.forEach((v) => observer.observe(v));
 
     const onVis = () => {
@@ -736,7 +735,7 @@ const out = pick(g, ["mg_output_url", "outputUrl", "output_url"], "").trim();
         <div className="profile-grid">
           {visibleItems.map((it) => {
             const expanded = Boolean(expandedPromptIds[it.id]);
-            const showViewMore = (it.prompt || "").length > 90 || it.canRecreate; // allow "more" even if short (to reveal inputs)
+            const showViewMore = (it.prompt || "").length > 90 || it.canRecreate;
             const deleting = Boolean(deletingIds[it.id]);
             const deleteErr = deleteErrors[it.id];
 
@@ -803,7 +802,6 @@ const out = pick(g, ["mg_output_url", "outputUrl", "output_url"], "").trim();
                   <div className={`profile-card-prompt ${expanded ? "expanded" : ""}`}>
                     {it.prompt || ""}
 
-                    {/* Expanded “inputs used” */}
                     {expanded && inputs ? (
                       <div className="profile-card-details">
                         <div className="profile-card-detailrow">
