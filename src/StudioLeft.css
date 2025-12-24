@@ -788,3 +788,27 @@ margin-bottom: 6px;
   user-select: none;
 }
 
+/* ✅ Re-create button: no shadow, bold, clean, with margins */
+.profile-card-actions {
+  margin-top: 10px;
+}
+
+.profile-card-recreate {
+  margin: 10px 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+
+  font-weight: 700;
+  font-size: 13px;
+
+  text-decoration: underline;
+  cursor: pointer;
+
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.profile-card-recreate:active {
+  opacity: 0.6;
+}
