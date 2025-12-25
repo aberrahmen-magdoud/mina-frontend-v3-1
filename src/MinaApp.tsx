@@ -2626,11 +2626,17 @@ const styleHeroUrls = (stylePresetKeys || [])
   };
 
   const openPanel = (key: PanelKey) => {
-    if (!stageHasPills) return;
-    if (!key) return;
-    setActivePanel(key);
-    setUiStage((s) => (s < 2 ? 2 : s));
-  };
+  if (!key) return;
+
+  // ✅ arm UI immediately (so first click doesn’t feel like it only “wakes” the UI)
+  if (!hasEverTyped) setHasEverTyped(true);
+
+  setActivePanel(key);
+
+  // ✅ bump to stage 3 so buttons/areas become interactive immediately
+  setUiStage((s) => (s < 3 ? 3 : s));
+};
+
 
   const capForPanel = (panel: UploadPanelKey) => {
     if (panel === "inspiration") return 4;
@@ -2768,10 +2774,19 @@ const styleHeroUrls = (stylePresetKeys || [])
   };
 
   const triggerPick = (panel: UploadPanelKey) => {
-    if (panel === "product") productInputRef.current?.click();
-    if (panel === "logo") logoInputRef.current?.click();
-    if (panel === "inspiration") inspirationInputRef.current?.click();
-  };
+  // ✅ arm UI immediately, and ensure the right panel is active
+  if (!hasEverTyped) setHasEverTyped(true);
+  setActivePanel(panel);
+
+  // ✅ make UI interactive right away
+  setUiStage((s) => (s < 3 ? 3 : s));
+
+  // ✅ IMPORTANT: keep the input click DIRECT (no timeout), otherwise browsers may block it
+  if (panel === "product") productInputRef.current?.click();
+  if (panel === "logo") logoInputRef.current?.click();
+  if (panel === "inspiration") inspirationInputRef.current?.click();
+};
+
 
   // Whole-page drag/drop + paste
   useEffect(() => {
@@ -3343,7 +3358,7 @@ const styleHeroUrls = (stylePresetKeys || [])
                   type="button"
                   className="studio-header-cta"
                   onClick={handleToggleAnimateMode}
-                  disabled={stillGenerating || motionGenerating || pendingRequests > 0}
+                  disabled={stillGenerating || motionGenerating}
                 >
                   {animateMode ? "Create" : "Animate"}
                 </button>
