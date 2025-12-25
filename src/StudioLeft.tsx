@@ -1102,7 +1102,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
 
               <Collapse open={showPanels && activePanel === "inspiration"} delayMs={panelRevealDelayMs}>
                 <div className="studio-panel">
-                  <div className="studio-panel-title">Add inspiration</div>
+                  <div className="studio-panel-title">Add your inspirations</div>
 
                   <div className="studio-panel-row">
                     <div className="studio-thumbs studio-thumbs--inline" onDragOver={handleDragOver} onDrop={handleDropOnPanel("inspiration")}>
