@@ -3439,10 +3439,10 @@ const styleHeroUrls = (stylePresetKeys || [])
   feedbackSending;
 
   const HEADER_CTA_BLEND_STYLE: React.CSSProperties = {
-    color: "#EEEEE2",
-    background: "transparent",
-    mixBlendMode: "difference" as any,
-  };
+  color: "var(--mina-paper)" as any,
+  background: "transparent",
+  mixBlendMode: "difference" as any,
+};
 
   const appUi = (
     <div className="mina-studio-root">
