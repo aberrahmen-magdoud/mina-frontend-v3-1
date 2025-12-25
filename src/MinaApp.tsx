@@ -3519,8 +3519,7 @@ const styleHeroUrls = (stylePresetKeys || [])
               </>
             )}
           </div>
-
-
+        </div>
 
         {activeTab === "studio" ? (
           <div className={classNames("studio-body", "studio-body--two-col")}>
@@ -3652,15 +3651,16 @@ const styleHeroUrls = (stylePresetKeys || [])
     </div>
   );
 
-  return (
+    return (
     <>
       <TopLoadingBar active={topBarActive} />
       {appUi}
-     </div>
-    </>  );
+    </>
+  );
 };
 
 export default MinaApp;
+
 // ============================================================================
 // [PART 4 END] Component
 // ============================================================================
