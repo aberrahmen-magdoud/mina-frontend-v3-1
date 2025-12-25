@@ -475,6 +475,9 @@ const MinaApp: React.FC<MinaAppProps> = () => {
   // Studio: brief + modes
   // =====================
   const [brief, setBrief] = useState("");
+  // ✅ UI STAGE: only allow stage=0 before the user has ever typed
+const [hasEverTyped, setHasEverTyped] = useState(false);
+
   const [stillBrief, setStillBrief] = useState("");
   const [tone] = useState("still-life");
   const [, setPlatform] = useState("tiktok");
