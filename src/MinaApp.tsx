@@ -414,6 +414,42 @@ function saveCustomStyles(styles: CustomStylePreset[]) {
 // ============================================================================
 // [PART 3 END]
 // ============================================================================
+// ============================================================================
+// Background preload (makes style selection feel instant)
+// ============================================================================
+const __preloadCache = new Set<string>();
+
+function preloadImage(url: string) {
+  const u = String(url || "").trim();
+  if (!u || !isHttpUrl(u)) return;
+  if (__preloadCache.has(u)) return;
+  __preloadCache.add(u);
+
+  const img = new Image();
+  // hint: decode async, don't block click
+  (img as any).decoding = "async";
+  img.src = u;
+}
+
+function scheduleIdle(cb: () => void, timeoutMs = 800) {
+  if (typeof window === "undefined") return -1 as any;
+
+  const ric = (window as any).requestIdleCallback;
+  if (typeof ric === "function") return ric(cb, { timeout: timeoutMs });
+
+  return window.setTimeout(cb, Math.min(800, timeoutMs));
+}
+
+function cancelIdle(handle: any) {
+  if (typeof window === "undefined") return;
+
+  const cic = (window as any).cancelIdleCallback;
+  if (typeof cic === "function") {
+    try { cic(handle); } catch {}
+    return;
+  }
+  try { window.clearTimeout(handle); } catch {}
+}
 
 // ============================================================================
 // [PART 4 START] Component
@@ -779,6 +815,55 @@ const [hasEverTyped, setHasEverTyped] = useState(false);
   const showPanels = uiStage >= 1;
 const showControls = uiStage >= 3 || hasEverTyped;
   const showPills = stageHasPills && !typingUiHidden;
+  // Preload ALL style thumbs/heroes lazily (after UI is idle)
+  useEffect(() => {
+    const h = scheduleIdle(() => {
+      const urls: string[] = [];
+
+      (computedStylePresets as any[])?.forEach((p) => {
+        if (typeof p?.thumb === "string") urls.push(p.thumb);
+        if (Array.isArray(p?.hero)) urls.push(...p.hero);
+      });
+
+      (customStyles || []).forEach((s) => {
+        if (typeof s?.thumbUrl === "string") urls.push(s.thumbUrl);
+        if (Array.isArray(s?.heroUrls)) urls.push(...s.heroUrls);
+      });
+
+      Array.from(new Set(urls.filter((u) => typeof u === "string" && isHttpUrl(u))))
+        .slice(0, 60) // safety cap
+        .forEach(preloadImage);
+    }, 900);
+
+    return () => cancelIdle(h);
+  }, [computedStylePresets, customStyles]);
+
+  // When user selects a style, preload THAT style heroes (still async / non-blocking)
+  useEffect(() => {
+    const h = scheduleIdle(() => {
+      const urls: string[] = [];
+
+      (stylePresetKeys || []).forEach((k) => {
+        const preset = (computedStylePresets as any[])?.find((p) => String(p.key) === String(k));
+        if (preset) {
+          if (Array.isArray(preset.hero)) urls.push(...preset.hero);
+          if (typeof preset.thumb === "string") urls.push(preset.thumb);
+        }
+
+        const cs = (customStyles || []).find((s) => String(s.key) === String(k));
+        if (cs) {
+          if (Array.isArray(cs.heroUrls)) urls.push(...cs.heroUrls);
+          if (typeof cs.thumbUrl === "string") urls.push(cs.thumbUrl);
+        }
+      });
+
+      Array.from(new Set(urls.filter((u) => typeof u === "string" && isHttpUrl(u))))
+        .slice(0, 12)
+        .forEach(preloadImage);
+    }, 200);
+
+    return () => cancelIdle(h);
+  }, [stylePresetKeys, computedStylePresets, customStyles]);
 
   const animationTimingVars = useMemo<React.CSSProperties>(
     () => ({
