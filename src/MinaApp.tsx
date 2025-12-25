@@ -424,9 +424,19 @@ type CustomStyle = {
   id: string;
   key: string;
   label: string;
+
+  // Used by the UI list thumbnail (now a real https URL)
   thumbUrl: string;
+
+  // ✅ Treat like preset.hero: we store Hero + 2 others (all https URLs)
+  heroUrls: string[];
+
+  // Optional: keep all uploaded refs (up to 10) for future upgrades
+  allUrls?: string[];
+
   createdAt: string;
 };
+
 
 const MinaApp: React.FC<MinaAppProps> = () => {
   // =====================
@@ -1776,18 +1786,31 @@ const MinaApp: React.FC<MinaAppProps> = () => {
       const logoItem = uploads.logo[0];
       const logoUrl = logoItem?.remoteUrl || logoItem?.url || "";
 
-        // ✅ include selected style preset hero urls + user inspiration uploads
-      const styleHeroUrls = (stylePresetKeys || [])
-        .flatMap((k) => {
-          const preset = (computedStylePresets as any[])?.find((p) => String(p.key) === String(k));
-          const hero = preset?.hero;
+        // ✅ include selected style preset hero urls + custom style heroUrls + user inspiration uploads
+const styleHeroUrls = (stylePresetKeys || [])
+  .flatMap((k) => {
+    // 1) predefined / published presets
+    const preset = (computedStylePresets as any[])?.find((p) => String(p.key) === String(k));
+    if (preset) {
+      const hero = preset?.hero;
+      if (Array.isArray(hero)) return hero.filter((u: any) => typeof u === "string" && isHttpUrl(u));
+      if (typeof hero === "string" && hero.trim() && isHttpUrl(hero.trim())) return [hero.trim()];
+      if (typeof preset?.thumb === "string" && preset.thumb.trim() && isHttpUrl(preset.thumb.trim()))
+        return [preset.thumb.trim()];
+    }
 
-          if (Array.isArray(hero)) return hero;
-          if (typeof hero === "string" && hero.trim()) return [hero.trim()];
-          if (typeof preset?.thumb === "string" && preset.thumb.trim()) return [preset.thumb.trim()];
-          return [];
-        })
-        .filter((u) => isHttpUrl(u));
+    // 2) custom styles (your “Your style”)
+    const cs = (customStyles || []).find((s) => String(s.key) === String(k));
+    if (cs) {
+      const arr = Array.isArray((cs as any).heroUrls) ? (cs as any).heroUrls : [];
+      const fallback = typeof cs.thumbUrl === "string" ? [cs.thumbUrl] : [];
+      return [...arr, ...fallback].filter((u) => typeof u === "string" && isHttpUrl(u)).slice(0, 3);
+    }
+
+    return [];
+  })
+  .filter((u) => isHttpUrl(u));
+
 
       const userInspirationUrls = (uploads.inspiration || [])
         .map((u) => u.remoteUrl || u.url)
@@ -2973,39 +2996,92 @@ const MinaApp: React.FC<MinaAppProps> = () => {
   };
 
   const handleTrainCustomStyle = async () => {
-    if (!customStyleImages.length || !customStyleHeroId) return;
+  if (!customStyleImages.length || !customStyleHeroId) return;
 
+  try {
+    setCustomStyleTraining(true);
+    setCustomStyleError(null);
+
+    if (!API_BASE_URL) throw new Error("Missing API base URL.");
+    if (!currentPassId) throw new Error("Missing Pass ID.");
+
+    // 1) pick hero + two others (from the 10 uploads)
+    const hero = customStyleImages.find((x) => x.id === customStyleHeroId);
+    if (!hero?.file) throw new Error("Pick a hero image.");
+
+    const others = customStyleImages
+      .filter((x) => x.id !== customStyleHeroId)
+      .slice(0, 2);
+
+    const trio = [hero, ...others];
+
+    // 2) upload ALL selected images to R2 (optional, but matches “upload 10 photos”)
+    //    Then store Hero+2 as heroUrls (like a real preset hero table)
+    const allFiles = customStyleImages.map((x) => x.file).filter(Boolean).slice(0, 10);
+
+    // ✅ Use the same proven uploader (it already returns stable https public URL)
+    // We upload as "inspiration" kind just to reuse the existing signed route safely.
+    const uploadedAll = await Promise.all(
+      allFiles.map(async (file) => {
+        const url = await uploadFileToR2("inspiration", file);
+        if (!isHttpUrl(url)) throw new Error("Style upload returned invalid URL.");
+        return url;
+      })
+    );
+
+    // upload hero+2 in order (to guarantee we can pick exact 3)
+    // (We re-upload these 3 only if they weren’t in uploadedAll order; simplest is upload again)
+    const uploadedTrio = await Promise.all(
+      trio.map(async (x) => {
+        const url = await uploadFileToR2("inspiration", x.file);
+        if (!isHttpUrl(url)) throw new Error("Style upload returned invalid URL.");
+        return url;
+      })
+    );
+
+    const heroUrls = uploadedTrio.slice(0, 3);
+
+    const newKey = `custom-${Date.now()}`;
+    const newStyle: CustomStyle = {
+      id: newKey,
+      key: newKey,
+      label: `Style ${customStyles.length + 1}`,
+      thumbUrl: heroUrls[0], // hero
+      heroUrls,              // hero + 2
+      allUrls: uploadedAll,  // optional
+      createdAt: new Date().toISOString(),
+    };
+
+    // 3) save + auto-select it
+    setCustomStyles((prev) => [newStyle, ...prev]);
+    setStylePresetKeys([newKey]); // ✅ with Patch 1, it’s single-select anyway
+
+    // 4) clean up local blob previews to avoid memory leaks
     try {
-      setCustomStyleTraining(true);
-      setCustomStyleError(null);
-
-      const hero = customStyleImages.find((x) => x.id === customStyleHeroId);
-      if (!hero?.file) throw new Error("Pick a hero image.");
-
-      const thumbUrl = await fileToDataUrl(hero.file);
-
-      const newKey = `custom-${Date.now()}`;
-      const newStyle: CustomStyle = {
-        id: newKey,
-        key: newKey,
-        label: `Style ${customStyles.length + 1}`,
-        thumbUrl,
-        createdAt: new Date().toISOString(),
-      };
-
-      setCustomStyles((prev) => [newStyle, ...prev]);
-      setStylePresetKeys((prev) => {
-        const next = prev.filter((k) => k !== newKey);
-        return [newKey, ...next];
+      customStyleImages.forEach((x) => {
+        if (x?.url && x.url.startsWith("blob:")) URL.revokeObjectURL(x.url);
       });
-
-      setCustomStylePanelOpen(false);
-    } catch (err: any) {
-      setCustomStyleError(err?.message || "Unable to create style right now.");
-    } finally {
-      setCustomStyleTraining(false);
+    } catch {
+      // ignore
     }
-  };
+
+    setCustomStyleImages([]);
+    setCustomStyleHeroId(null);
+    setCustomStyleHeroThumb((prevThumb) => {
+      try {
+        if (prevThumb && prevThumb.startsWith("blob:")) URL.revokeObjectURL(prevThumb);
+      } catch {}
+      return null;
+    });
+
+    setCustomStylePanelOpen(false);
+  } catch (err: any) {
+    setCustomStyleError(err?.message || "Unable to create style right now.");
+  } finally {
+    setCustomStyleTraining(false);
+  }
+};
+
 
   const handleRenameCustomPreset = (key: string) => {
     const preset = customPresets.find((p) => p.key === key);
