@@ -288,3 +288,91 @@
 .studio-header-cta:hover { opacity: 0.92 !important; }
 .studio-header-cta:active { opacity: 0.72 !important; transform: translateY(1px) !important; }
 .studio-header-cta:disabled { opacity: 0.35 !important; cursor: default !important; transform: none !important; }
+
+/* ============================================================
+   Matcha quantity modal (text-only buttons, minimal)
+   ============================================================ */
+.mina-qty-modal {
+  width: min(420px, calc(100vw - 28px));
+}
+
+.mina-qty-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mina-qty-sub {
+  font-weight: 700;
+}
+
+.mina-qty-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.mina-qty-btn {
+  background: transparent;
+  border: 1px solid rgba(8, 10, 0, 0.14);
+  border-radius: 999px;
+  width: 42px;
+  height: 42px;
+  font-weight: 800;
+  color: inherit;
+  cursor: pointer;
+}
+
+.mina-qty-value {
+  min-width: 54px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.mina-qty-quick {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.mina-qty-chip {
+  background: transparent;
+  border: 1px solid rgba(8, 10, 0, 0.14);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 800;
+  color: inherit;
+  cursor: pointer;
+}
+
+.mina-qty-chip.active {
+  border-color: rgba(8, 10, 0, 0.55);
+}
+
+.mina-qty-help {
+  text-align: center;
+  font-size: 13px;
+  opacity: 0.78;
+  line-height: 1.35;
+}
+
+.mina-qty-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mina-qty-cta {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-weight: 900;
+  text-decoration: underline;
+  cursor: pointer;
+  color: inherit;
+}
+
