@@ -507,8 +507,12 @@ const MinaApp: React.FC<MinaAppProps> = () => {
   // Studio: brief + modes
   // =====================
   const [brief, setBrief] = useState("");
-  // ✅ UI STAGE: only allow stage=0 before the user has ever typed
-const [hasEverTyped, setHasEverTyped] = useState(false);
+  // ✅ Mobile: show everything from the start (skip stage 0)
+  const isMobileInit =
+    typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches;
+
+  // ✅ UI STAGE: only allow stage=0 before the user has ever typed (desktop only)
+  const [hasEverTyped, setHasEverTyped] = useState<boolean>(isMobileInit);
 
   const [stillBrief, setStillBrief] = useState("");
   const [tone] = useState("still-life");
@@ -569,11 +573,11 @@ const [hasEverTyped, setHasEverTyped] = useState(false);
   });
   const [likeSubmitting, setLikeSubmitting] = useState(false);
 
-  // Panels
-  const [activePanel, setActivePanel] = useState<PanelKey>(null);
+  // Panels: open Product by default on mobile
+  const [activePanel, setActivePanel] = useState<PanelKey>(isMobileInit ? "product" : null);
 
-  // UI stages
-  const [uiStage, setUiStage] = useState<0 | 1 | 2 | 3>(0);
+  // UI stage: start visible on mobile
+  const [uiStage, setUiStage] = useState<0 | 1 | 2 | 3>(isMobileInit ? 1 : 0);
   const stageT2Ref = useRef<number | null>(null);
   const stageT3Ref = useRef<number | null>(null);
 
@@ -1048,51 +1052,53 @@ const showControls = uiStage >= 3 || hasEverTyped;
   // ========================================================================
 
   // ========================================================================
-// UI Stage reveal (✅ stage 0 ONLY before first typing)
-// ========================================================================
-useEffect(() => {
-  // clear any pending timers first (safe)
-  if (stageT2Ref.current !== null) window.clearTimeout(stageT2Ref.current);
-  if (stageT3Ref.current !== null) window.clearTimeout(stageT3Ref.current);
-  stageT2Ref.current = null;
-  stageT3Ref.current = null;
+  // UI Stage reveal (✅ stage 0 ONLY before first typing)
+  // ========================================================================
+  useEffect(() => {
+    // clear any pending timers first (safe)
+    if (stageT2Ref.current !== null) window.clearTimeout(stageT2Ref.current);
+    if (stageT3Ref.current !== null) window.clearTimeout(stageT3Ref.current);
+    stageT2Ref.current = null;
+    stageT3Ref.current = null;
 
-  // If empty brief:
-  // - before first typing -> stage 0 (hide)
-  // - after first typing  -> stage 1 (keep UI visible)
-  if (briefLength <= 0) {
-    const nextStage: 0 | 1 = hasEverTyped ? 1 : 0;
+    const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches;
 
-    setUiStage(nextStage);
+    // If empty brief:
+    // - before first typing -> stage 0 (hide)
+    // - after first typing  -> stage 1 (keep UI visible)
+    if (briefLength <= 0) {
+      const nextStage: 0 | 1 = (hasEverTyped || isMobile) ? 1 : 0;
 
-    if (hasEverTyped) {
-      // keep panels ready (don’t collapse everything)
-      setActivePanel((prev) => prev ?? "product");
-    } else {
-      // first time ever: fully reset
-      setActivePanel(null);
+      setUiStage(nextStage);
+
+      if (hasEverTyped || isMobile) {
+        // keep panels ready (don’t collapse everything)
+        setActivePanel((prev) => prev ?? "product");
+      } else {
+        // first time ever: fully reset
+        setActivePanel(null);
+      }
+
+      setGlobalDragging(false);
+      dragDepthRef.current = 0;
+      return;
     }
 
-    setGlobalDragging(false);
-    dragDepthRef.current = 0;
-    return;
-  }
+    // Non-empty brief: ensure stage at least 1
+    if (uiStage < 1) {
+      setUiStage(1);
+      setActivePanel((prev) => prev ?? "product");
+    }
 
-  // Non-empty brief: ensure stage at least 1
-  if (uiStage < 1) {
-    setUiStage(1);
-    setActivePanel((prev) => prev ?? "product");
-  }
+    // Schedule reveal to stage 2 then 3 every time user has text
+    stageT2Ref.current = window.setTimeout(() => {
+      setUiStage((s) => (s < 2 ? 2 : s));
+    }, PANEL_REVEAL_DELAY_MS);
 
-  // Schedule reveal to stage 2 then 3 every time user has text
-  stageT2Ref.current = window.setTimeout(() => {
-    setUiStage((s) => (s < 2 ? 2 : s));
-  }, PANEL_REVEAL_DELAY_MS);
-
-  stageT3Ref.current = window.setTimeout(() => {
-    setUiStage((s) => (s < 3 ? 3 : s));
-  }, CONTROLS_REVEAL_DELAY_MS);
-}, [briefLength, uiStage, hasEverTyped]);
+    stageT3Ref.current = window.setTimeout(() => {
+      setUiStage((s) => (s < 3 ? 3 : s));
+    }, CONTROLS_REVEAL_DELAY_MS);
+  }, [briefLength, uiStage, hasEverTyped]);
 
 
   // ========================================================================
