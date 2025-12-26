@@ -40,14 +40,10 @@ const API_BASE_URL = (() => {
       (import.meta as any).env?.VITE_BACKEND_URL
   );
 
-  // ✅ Render-only: prefer env var, otherwise hard-fallback to Render API
+  // Render-only: prefer env var, otherwise hard-fallback to Render API
   return envBase || "https://mina-editorial-ai-api.onrender.com";
 })();
 
-
-  // SSR/dev final fallback
-  return "https://mina-editorial-ai-api.onrender.com";
-})();
 
 const LIKE_STORAGE_KEY = "minaLikedMap";
 const RECREATE_DRAFT_KEY = "mina_recreate_draft_v1";
