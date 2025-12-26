@@ -577,7 +577,7 @@ const MinaApp: React.FC<MinaAppProps> = () => {
   const [activePanel, setActivePanel] = useState<PanelKey>(isMobileInit ? "product" : null);
 
   // UI stage: start visible on mobile
-  const [uiStage, setUiStage] = useState<0 | 1 | 2 | 3>(isMobileInit ? 1 : 0);
+  const [uiStage, setUiStage] = useState<0 | 1 | 2 | 3>(isMobileInit ? 3 : 0);
   const stageT2Ref = useRef<number | null>(null);
   const stageT3Ref = useRef<number | null>(null);
 
@@ -1067,7 +1067,7 @@ const showControls = uiStage >= 3 || hasEverTyped;
     // - before first typing -> stage 0 (hide)
     // - after first typing  -> stage 1 (keep UI visible)
     if (briefLength <= 0) {
-      const nextStage: 0 | 1 = (hasEverTyped || isMobile) ? 1 : 0;
+    const nextStage: 0 | 1 | 2 | 3 = (hasEverTyped || isMobile) ? 3 : 0;
 
       setUiStage(nextStage);
 
