@@ -47,7 +47,7 @@ const MatchaQtyModal: React.FC<Props> = ({
   onConfirm,
 
   // ✅ top title only
-  title = "Get more Matcha",
+  title = "Airpots of Matcha Lattes",
 
   subtitle = "Mina uses matchas to create and animate your stills.",
   rulesLine = `One still = 1 Matcha , One animation = 5 Matchas , 10 “Type for me” = 1 Matcha.`,
