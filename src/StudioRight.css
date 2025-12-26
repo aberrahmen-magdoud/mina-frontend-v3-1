@@ -51,6 +51,12 @@
   padding: 0;
   margin: 0;
   background: transparent;
+
+  /* ✅ swipe/drag support without killing vertical scroll */
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .studio-output-click:not(:disabled):hover,
@@ -96,7 +102,11 @@
 
   display: flex;
   justify-content: center;
+  align-items: center;
   gap: 8px;
+
+  z-index: 30;        /* ✅ ensure above media */
+  pointer-events: auto;
 }
 
 .studio-dot {
@@ -216,8 +226,12 @@
   }
 
   .studio-dots-row {
-    position: static;
-    padding: 12px 0 4px;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 10px;
+    padding: 0;
+    z-index: 30;
   }
 
   /* keep same bar feel on mobile too */
@@ -273,46 +287,4 @@
     text-align: center;
     white-space: normal;
   }
-}
-
-/* Needed so the dots can overlay on mobile */
-.studio-right-surface {
-  position: relative;
-}
-
-/* Allow horizontal swipe/drag without breaking vertical scroll */
-.studio-output-click {
-  touch-action: pan-y;
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* Default: keep dots visible */
-.studio-dots-row {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 0;
-}
-
-/* Mobile: overlay dots on top of media so they don't get pushed off-screen */
-@media (max-width: 640px) {
-  .studio-dots-row {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: 10px;
-    z-index: 30;
-    padding: 6px 10px;
-    border-radius: 999px;
-    pointer-events: auto;
-  }
-}
-
-/* Optional: make video dot distinguishable (keeps your existing dot styles if any) */
-.studio-dot.is-video {
-  outline: 1px solid currentColor;
-  outline-offset: 2px;
 }
