@@ -754,3 +754,23 @@
 .profile-card-media img {
   cursor: pointer;
 }
+/* ================================
+   Media hover zoom (image + video)
+   gentle, no layout shift
+   ================================ */
+
+.profile-card-media {
+  overflow: hidden; /* important: keeps zoom inside card */
+}
+
+.profile-card-media img,
+.profile-card-media video {
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+/* zoom on hover */
+.profile-card:hover .profile-card-media img,
+.profile-card:hover .profile-card-media video {
+  transform: scale(1.04);
+}
