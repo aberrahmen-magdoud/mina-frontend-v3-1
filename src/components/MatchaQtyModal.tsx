@@ -149,7 +149,7 @@ const MatchaQtyModal: React.FC<Props> = ({
       >
         {/* ✅ Title ONLY here */}
         <div className="mina-matcha-topbar">
-          <div className="mina-matcha-topbar-left">{title}</div>
+          <div className="mina-matcha-topbar-left">Airpot of Matcha Lattes</div>
           <button type="button" className="mina-modal-close mina-matcha-close" onClick={onClose}>
             Close
           </button>
