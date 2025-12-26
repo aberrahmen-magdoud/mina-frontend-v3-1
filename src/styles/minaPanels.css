@@ -319,7 +319,7 @@
 }
 
 .mina-matcha-topbar-left {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   opacity: 0.95;
   letter-spacing: -0.01em;
@@ -341,7 +341,7 @@
 }
 
 .mina-matcha-title {
-  font-size: 56px; /* keep big title like example */
+  font-size: 16px; /* keep big title like example */
   line-height: 1.02;
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -350,14 +350,14 @@
 
 .mina-matcha-subtitle {
   margin-top: 16px;
-  font-size: 22px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
 .mina-matcha-rules {
   margin-top: 10px;
-  font-size: 14px;
+  font-size: 10px;
   font-weight: 600;
   opacity: 0.65;
 }
@@ -386,13 +386,13 @@
 }
 
 .mina-matcha-label {
-  font-size: 26px;
+  font-size: 12px;
   line-height: 1;
   margin-bottom: 12px;
 }
 
 .mina-matcha-price {
-  font-size: 18px;
+  font-size: 12px;
   line-height: 1;
   margin-top: 12px;
 }
@@ -481,7 +481,7 @@
   border-radius: 0 !important;
 
   font: inherit;
-  font-size: 16px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: -0.01em;
 
@@ -494,7 +494,7 @@
 .mina-matcha-transparency-toggle:active { opacity: 0.22; }
 
 .mina-matcha-transparency-details {
-  font-size: 16px;
+  font-size: 12px;
   font-weight: 600;
   opacity: 0.28;
   letter-spacing: -0.01em;
@@ -508,7 +508,7 @@
   border-radius: 0 !important;
 
   font: inherit;
-  font-size: 64px;
+  font-size: 16px;
   line-height: 1;
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -528,10 +528,10 @@
     width: min(980px, calc(100vw - 18px));
   }
 
-  .mina-matcha-title { font-size: 42px; }
-  .mina-matcha-label { font-size: 18px; }
-  .mina-matcha-price { font-size: 13px; }
-  .mina-matcha-purchase { font-size: 44px; }
+  .mina-matcha-title { font-size: 12px; }
+  .mina-matcha-label { font-size: 12px; }
+  .mina-matcha-price { font-size: 12px; }
+  .mina-matcha-purchase { font-size: 16px; }
 
   .mina-matcha-node { padding: 9px; }
   .mina-matcha-node .mina-matcha-dot { width: 12px; height: 12px; }
