@@ -774,3 +774,4 @@
 .profile-card:hover .profile-card-media video {
   transform: scale(1.04);
 }
+.profile-card-recreate { display: none !important; }
