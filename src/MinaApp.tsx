@@ -3664,6 +3664,7 @@ const headerOverlayClass =
             expiresAt={credits?.meta?.expiresAt ?? null}
             generations={historyGenerations as any}
             feedbacks={historyFeedbacks as any}
+            matchaUrl={MATCHA_URL}
             loading={historyLoading || creditsLoading}
             error={historyError}
             onRefresh={() => {
