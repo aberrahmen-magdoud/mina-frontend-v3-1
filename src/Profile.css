@@ -706,3 +706,38 @@
   max-height: none !important;
   margin: 0 !important;
 }
+/* --- PATCH: Re-create / Animate look like Download (no underline, no padding bleed) --- */
+.profile-card-details .profile-card-recreate,
+.profile-card-details .profile-card-animate {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  text-decoration: none !important;
+
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: rgba(8, 10, 0, 0.85) !important;
+
+  cursor: pointer;
+}
+
+.profile-card-details .profile-card-recreate:hover,
+.profile-card-details .profile-card-animate:hover {
+  opacity: 0.9;
+}
+
+.profile-card-details .profile-card-recreate:active,
+.profile-card-details .profile-card-animate:active {
+  opacity: 0.6;
+}
+
+/* Align both buttons nicely */
+.profile-card-details .profile-card-detailrow {
+  align-items: baseline;
+}
+
+/* Kill the duplicate row (from your HTML: <div class="profile-card-actions">...) */
+.profile-card-actions {
+  display: none !important;
+}
