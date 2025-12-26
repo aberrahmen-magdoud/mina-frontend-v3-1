@@ -520,9 +520,9 @@
   border-radius: 0 !important;
 
   font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: +0.01em;
 
   cursor: pointer;
   opacity: 0.85;
@@ -533,7 +533,7 @@
 .mina-matcha-transparency-toggle:active { opacity: 0.85; }
 
 .mina-matcha-transparency-details {
-  font-size: 13px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: -0.01em;
   opacity: 0.55;
