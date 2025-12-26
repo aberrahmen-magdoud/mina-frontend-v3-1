@@ -655,3 +655,54 @@
   display: none !important;
 }
 
+/* =============================================================
+   Profile fixes (append-only)
+   1) Kill any "fade/gradient" overlay when expanded
+   2) Make Re-create / Animate match Download (not underlined)
+   3) Prevent "delete moves card up" (no layout shift during fade)
+   ============================================================= */
+
+
+/* 2) Actions layout: Re-create left, Animate right */
+.profile-card-actions {
+  justify-content: space-between !important;
+  align-items: baseline;
+  gap: 12px;
+}
+
+/* Re-create + Animate should look like Download (text button, no underline) */
+.profile-card-recreate,
+.profile-card-animate {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: rgba(8, 10, 0, 0.85) !important;
+
+  text-decoration: none !important;
+  cursor: pointer;
+}
+
+.profile-card-recreate:hover,
+.profile-card-animate:hover {
+  opacity: 0.9;
+}
+
+.profile-card-recreate:active,
+.profile-card-animate:active {
+  opacity: 0.6;
+}
+/* Base state */
+.profile-card {
+  transition: opacity 220ms ease-out;
+}
+/* 3) When deleting, fade only (don’t collapse height / move grid) */
+.profile-card.is-removing {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+}
