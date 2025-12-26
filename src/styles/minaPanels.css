@@ -327,8 +327,6 @@
 
 .mina-matcha-close {
   border-radius: 0 !important;
-  text-decoration: underline;
-  text-underline-offset: 2px;
   opacity: 0.85;
   padding: 6px 8px !important;
 }
