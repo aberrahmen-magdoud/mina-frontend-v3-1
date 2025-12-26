@@ -564,4 +564,8 @@
 
 .mina-matcha-purchase:hover { opacity: 1; }
 .mina-matcha-purchase:active { opacity: 1; }
+.mina-matcha-modal button,
+.mina-matcha-modal .mina-matcha-close {
+  text-decoration: none !important;
+}
 
