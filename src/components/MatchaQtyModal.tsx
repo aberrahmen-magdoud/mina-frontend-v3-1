@@ -13,9 +13,10 @@ type Props = {
   onClose: () => void;
   onConfirm: (qty: number) => void;
 
-  // Copy
-  topLabel?: string;
+  // Title shown in top bar ONLY
   title?: string;
+
+  // Body text
   subtitle?: string;
   rulesLine?: string;
 
@@ -24,7 +25,7 @@ type Props = {
   basePrice?: number; // 15
   currencySymbol?: string;
 
-  // Default selection (2x MINA-50 = 100)
+  // Default selection (2x MINA-50)
   defaultUnitsOnOpen?: number;
 
   // Price transparency
@@ -45,16 +46,17 @@ const MatchaQtyModal: React.FC<Props> = ({
   onClose,
   onConfirm,
 
-  topLabel = "Get more Matcha",
+  // ✅ top title only
   title = "Get more Matcha",
+
   subtitle = "Mina uses matchas to create and animate your stills.",
-  rulesLine = `One still = 1 Matcha ,  One animation = 5 Matchas ,  10 “Type for me” = 1 Matcha.`,
+  rulesLine = `One still = 1 Matcha , One animation = 5 Matchas , 10 “Type for me” = 1 Matcha.`,
 
   baseCredits = 50,
   basePrice = 15,
   currencySymbol = "£",
 
-  // ✅ default to 2× MINA-50 (100 credits)
+  // ✅ default to 2× MINA-50
   defaultUnitsOnOpen = 2,
 
   transparencyTitle = "Price Transparency",
@@ -64,7 +66,7 @@ const MatchaQtyModal: React.FC<Props> = ({
   const barRef = useRef<HTMLDivElement | null>(null);
   const [showTransparency, setShowTransparency] = useState(false);
 
-  // ✅ ONLY these 4 packs (max 500 credits)
+  // ✅ ONLY 50 / 100 / 200 / 500 (max 500)
   const packList: Pack[] = useMemo(
     () => [
       { units: 1 },  // 50
@@ -82,25 +84,21 @@ const MatchaQtyModal: React.FC<Props> = ({
   const onScale = packList.some((p) => p.units === safeQtyRaw);
   const safeQty = onScale ? safeQtyRaw : defaultUnitsOnOpen;
 
-  const activeIndex = Math.max(
-    0,
-    packList.findIndex((p) => p.units === safeQty)
-  );
-
+  const activeIndex = Math.max(0, packList.findIndex((p) => p.units === safeQty));
   const fillPct = (activeIndex / (packList.length - 1)) * 100;
 
-  // ✅ On open: default to 2× MINA-50 (unless user already has other valid selection)
+  const creditsFor = (units: number) => units * baseCredits;
+  const priceFor = (units: number) => units * basePrice;
+
+  // ✅ On open: default to 2× MINA-50 unless user already has a valid selection
   useEffect(() => {
     if (!open) return;
     const now = clampInt(qty, minUnits, maxUnits);
     const nowOnScale = packList.some((p) => p.units === now);
-
     const desired = clampInt(defaultUnitsOnOpen, minUnits, maxUnits);
     const desiredOnScale = packList.some((p) => p.units === desired) ? desired : 2;
 
-    if (now === 1 || !nowOnScale) {
-      setQty(desiredOnScale);
-    }
+    if (now === 1 || !nowOnScale) setQty(desiredOnScale);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -127,9 +125,6 @@ const MatchaQtyModal: React.FC<Props> = ({
 
   if (!open) return null;
 
-  const creditsFor = (units: number) => units * baseCredits;
-  const priceFor = (units: number) => units * basePrice;
-
   // ✅ Click anywhere on bar -> snap to nearest node
   const onBarClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const el = barRef.current;
@@ -152,32 +147,39 @@ const MatchaQtyModal: React.FC<Props> = ({
         ref={panelRef}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* ✅ Title ONLY here */}
         <div className="mina-matcha-topbar">
-          <div className="mina-matcha-topbar-left">{topLabel}</div>
+          <div className="mina-matcha-topbar-left">{title}</div>
           <button type="button" className="mina-modal-close mina-matcha-close" onClick={onClose}>
             Close
           </button>
         </div>
 
         <div className="mina-matcha-body">
-          <div className="mina-matcha-title">{title}</div>
+          {/* ✅ NO title in body anymore */}
           <div className="mina-matcha-subtitle">{subtitle}</div>
           <div className="mina-matcha-rules">{rulesLine}</div>
 
           <div className="mina-matcha-scale">
-            {/* labels (NOT clickable) */}
-            <div className="mina-matcha-label-row" aria-hidden="true">
+            {/* labels (absolute positioned to match nodes) */}
+            <div className="mina-matcha-scale-top" aria-hidden="true">
               {packList.map((p, i) => {
                 const on = i <= activeIndex;
+                const pct = (i / (packList.length - 1)) * 100;
+                const edge = i === 0 ? "is-first" : i === packList.length - 1 ? "is-last" : "";
                 return (
-                  <div key={p.units} className={`mina-matcha-label ${on ? "is-on" : ""}`}>
+                  <div
+                    key={p.units}
+                    className={`mina-matcha-scale-item mina-matcha-label ${on ? "is-on" : "is-off"} ${edge}`}
+                    style={{ left: `${pct}%` }}
+                  >
                     {creditsFor(p.units)}
                   </div>
                 );
               })}
             </div>
 
-            {/* bar */}
+            {/* bar + nodes */}
             <div
               className="mina-matcha-bar"
               ref={barRef}
@@ -208,12 +210,18 @@ const MatchaQtyModal: React.FC<Props> = ({
               })}
             </div>
 
-            {/* prices (NOT clickable) */}
-            <div className="mina-matcha-price-row" aria-hidden="true">
+            {/* prices (absolute positioned to match nodes) */}
+            <div className="mina-matcha-scale-bottom" aria-hidden="true">
               {packList.map((p, i) => {
                 const on = i <= activeIndex;
+                const pct = (i / (packList.length - 1)) * 100;
+                const edge = i === 0 ? "is-first" : i === packList.length - 1 ? "is-last" : "";
                 return (
-                  <div key={p.units} className={`mina-matcha-price ${on ? "is-on" : ""}`}>
+                  <div
+                    key={p.units}
+                    className={`mina-matcha-scale-item mina-matcha-price ${on ? "is-on" : "is-off"} ${edge}`}
+                    style={{ left: `${pct}%` }}
+                  >
                     {currencySymbol}
                     {priceFor(p.units).toLocaleString()}
                   </div>
