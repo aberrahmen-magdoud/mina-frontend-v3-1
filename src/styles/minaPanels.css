@@ -87,7 +87,7 @@
 
   cursor: pointer;
   opacity: 0.75;
-  border-radius: 12px;
+  border-radius: 0px;
 }
 
 .mina-modal-close:hover { opacity: 0.95; background: var(--mina-soft); }
@@ -134,8 +134,6 @@
   font-weight: 800;
 
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
   opacity: 0.9;
 }
 
