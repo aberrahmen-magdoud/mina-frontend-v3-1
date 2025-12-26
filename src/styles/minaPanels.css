@@ -315,7 +315,7 @@
   display: flex;
   align-items: center;            /* better vertical alignment */
   justify-content: space-between;
-  padding: 4px 10px 2px;
+  padding: 10px 0px;
 }
 
 .mina-matcha-topbar-left {
