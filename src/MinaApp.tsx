@@ -513,7 +513,14 @@ const [hasEverTyped, setHasEverTyped] = useState(false);
   const [stillBrief, setStillBrief] = useState("");
   const [tone] = useState("still-life");
   const [, setPlatform] = useState("tiktok");
-  const [aspectIndex, setAspectIndex] = useState(2);
+  const [aspectIndex, setAspectIndex] = useState(() => {
+  // ✅ Mobile default ratio = 9:16
+  if (typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches) {
+    return 0; // ASPECT_OPTIONS[0] = 9:16
+  }
+  return 2; // desktop default stays 2:3
+});
+
 
   const [animateAspectKey, setAnimateAspectKey] = useState<AspectKey>(ASPECT_OPTIONS[aspectIndex].key);
   const [animateMode, setAnimateMode] = useState(false);
