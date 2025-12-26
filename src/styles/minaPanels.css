@@ -536,3 +536,59 @@
   .mina-matcha-node { padding: 9px; }
   .mina-matcha-node .mina-matcha-dot { width: 12px; height: 12px; }
 }
+/* ===== Matcha bar: NO transparency, grey+black only ===== */
+
+/* Track (full bar) */
+.mina-matcha-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 13px;
+  height: 2px;
+  background: #BDBDBD; /* solid grey */
+}
+
+/* Fill (left-to-selected) */
+.mina-matcha-fill {
+  position: absolute;
+  left: 0;
+  top: 13px;
+  height: 2px;
+  width: var(--fillPct, 0%);
+  background: #080a00; /* solid black */
+}
+
+/* Node click area stays same — but ensure dots sit above line */
+.mina-matcha-node {
+  position: absolute;
+  top: 13px;
+  transform: translate(-50%, -50%);
+  border: 0;
+  background: transparent;
+  padding: 10px;
+  cursor: pointer;
+  border-radius: 0 !important;
+  z-index: 3; /* above track/fill */
+}
+
+/* Dot: SOLID + masks the line behind (no line through circle) */
+.mina-matcha-node .mina-matcha-dot {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+
+  background: #BDBDBD; /* solid grey (inactive) */
+
+  /* This "ring" uses the modal background to hide the line behind */
+  box-shadow: 0 0 0 6px var(--mina-paper);
+
+  /* keep dot above the line */
+  position: relative;
+  z-index: 4;
+}
+
+/* Dots up to selected = black */
+.mina-matcha-node.is-on .mina-matcha-dot {
+  background: #080a00; /* solid black */
+}
