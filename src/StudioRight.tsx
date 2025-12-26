@@ -70,6 +70,9 @@ export default function StudioRight(props: StudioRightProps) {
     startY: 0,
     pointerId: null as number | null,
   });
+  // Trackpad horizontal swipe comes as wheel deltaX, not pointer move.
+  const wheelRef = useRef({ acc: 0, lastT: 0 });
+  const WHEEL_TRIGGER = 60; // how much horizontal wheel to trigger nav
 
   const SWIPE_PX = 44;        // min horizontal move to count as swipe
   const SWIPE_SLOPE = 1.2;    // require horizontal dominance vs vertical
@@ -176,6 +179,36 @@ export default function StudioRight(props: StudioRightProps) {
     st.pointerId = null;
   };
 
+  const onWheel: React.WheelEventHandler<HTMLButtonElement> = (e) => {
+    if (!hasStills) return;
+
+    const dx = e.deltaX;
+    const dy = e.deltaY;
+
+    // Require mostly-horizontal gesture
+    if (Math.abs(dx) < 8) return;
+    if (Math.abs(dx) < Math.abs(dy) * 1.1) return;
+
+    // Accumulate deltas so we don't trigger too easily
+    const now = performance.now();
+    const dt = now - wheelRef.current.lastT;
+    wheelRef.current.lastT = now;
+
+    if (dt > 120) wheelRef.current.acc = 0;
+    wheelRef.current.acc += dx;
+
+    if (Math.abs(wheelRef.current.acc) < WHEEL_TRIGGER) return;
+
+    e.preventDefault();
+    suppressClickRef.current = true;
+
+    // NOTE: if direction feels inverted on your Mac, swap goNext/goPrev.
+    if (wheelRef.current.acc > 0) goNext();
+    else goPrev();
+
+    wheelRef.current.acc = 0;
+  };
+
   const trimmed = (tweakText || "").trim();
 
   // ✅ credit gate (default = allowed)
@@ -205,6 +238,7 @@ export default function StudioRight(props: StudioRightProps) {
               onPointerMove={onPointerMove}
               onPointerUp={onPointerEnd}
               onPointerCancel={onPointerEnd}
+              onWheel={onWheel}
               aria-label="Toggle zoom / Navigate / Swipe"
             >
               <div className={`studio-output-frame ${containMode ? "is-contain" : ""}`}>
