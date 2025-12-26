@@ -3,13 +3,13 @@
 // Mina — Profile (Render-only, data comes from MinaApp)
 // Patch: show real user prompt, confirm delete + fade out, better download,
 // remove refresh, still: Re-create (left) + Animate (right), text-only buttons
+// + MatchaQtyModal popup for "Get more Matchas"
 // =============================================================
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./Profile.css";
 import TopLoadingBar from "./components/TopLoadingBar";
 import MatchaQtyModal from "./components/MatchaQtyModal";
-
 
 type Row = Record<string, any>;
 
@@ -107,7 +107,6 @@ async function downloadMedia(url: string, id?: string | null) {
     a.click();
     document.body.removeChild(a);
 
-    // cleanup
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
     return;
   } catch {
@@ -209,7 +208,6 @@ type RecreateDraft = {
 function looksLikeSystemPrompt(s: string) {
   const t = (s || "").trim();
   if (!t) return false;
-  // Heuristics: long + instruction-y
   if (t.length > 350) return true;
   const low = t.toLowerCase();
   if (low.includes("you are") && (low.includes("assistant") || low.includes("system"))) return true;
@@ -239,7 +237,9 @@ function extractInputsForDisplay(row: Row) {
     pick(payload?.settings, ["brief"], ""),
     pick(meta, ["userPrompt", "user_prompt", "userMessage", "brief"], ""),
     pick(vars, ["brief", "user_prompt", "userPrompt", "prompt", "userMessage"], ""),
-  ].map((s) => String(s || "").trim()).filter(Boolean);
+  ]
+    .map((s) => String(s || "").trim())
+    .filter(Boolean);
 
   // Fallback prompt (only if it doesn't look like a system prompt)
   const rawFallback = safeString(pick(row, ["mg_prompt", "prompt"], ""), "").trim();
@@ -281,19 +281,19 @@ function extractInputsForDisplay(row: Row) {
   const stylePresetKeys: string[] = Array.isArray(stylePresetKeysRaw)
     ? stylePresetKeysRaw.map(String).filter(Boolean)
     : stylePresetKeyRaw
-      ? [String(stylePresetKeyRaw)]
-      : [];
+    ? [String(stylePresetKeyRaw)]
+    : [];
 
   const minaVisionEnabled =
     typeof meta?.minaVisionEnabled === "boolean"
       ? meta.minaVisionEnabled
       : typeof payload?.settings?.minaVisionEnabled === "boolean"
-        ? payload.settings.minaVisionEnabled
-        : typeof payload?.inputs?.minaVisionEnabled === "boolean"
-          ? payload.inputs.minaVisionEnabled
-          : typeof vars?.minaVisionEnabled === "boolean"
-            ? vars.minaVisionEnabled
-            : undefined;
+      ? payload.settings.minaVisionEnabled
+      : typeof payload?.inputs?.minaVisionEnabled === "boolean"
+      ? payload.inputs.minaVisionEnabled
+      : typeof vars?.minaVisionEnabled === "boolean"
+      ? vars.minaVisionEnabled
+      : undefined;
 
   const productImageUrl =
     meta?.productImageUrl ||
@@ -327,7 +327,9 @@ function extractInputsForDisplay(row: Row) {
     : [];
 
   const tone = String(meta?.tone || payload?.inputs?.tone || payload?.tone || vars?.tone || "").trim();
-  const platform = String(meta?.platform || payload?.inputs?.platform || payload?.platform || vars?.platform || "").trim();
+  const platform = String(
+    meta?.platform || payload?.inputs?.platform || payload?.platform || vars?.platform || ""
+  ).trim();
 
   return {
     brief,
@@ -355,6 +357,8 @@ type ProfileProps = {
 
   onBackToStudio?: () => void;
   onLogout?: () => void;
+
+  // ✅ used for popup checkout url
   matchaUrl?: string;
 
   // keep prop for compatibility, but UI no longer shows Refresh
@@ -378,7 +382,6 @@ export default function Profile({
   onRecreate,
   matchaUrl = "https://www.faltastudio.com/cart/43328351928403:1",
 }: ProfileProps) {
-
   const [deletingIds, setDeletingIds] = useState<Record<string, boolean>>({});
   const [removingIds, setRemovingIds] = useState<Record<string, boolean>>({});
   const [removedIds, setRemovedIds] = useState<Record<string, boolean>>({});
@@ -388,7 +391,8 @@ export default function Profile({
 
   // Filters
   const [motion, setMotion] = useState<"all" | "still" | "motion">("all");
-  const cycleMotion = () => setMotion((prev) => (prev === "all" ? "motion" : prev === "motion" ? "still" : "all"));
+  const cycleMotion = () =>
+    setMotion((prev) => (prev === "all" ? "motion" : prev === "motion" ? "still" : "all"));
   const motionLabel = motion === "all" ? "Show all" : motion === "motion" ? "Motion" : "Still";
 
   const [likedOnly, setLikedOnly] = useState(false);
@@ -416,8 +420,9 @@ export default function Profile({
     setLightbox({ url, isMotion });
   };
   const closeLightbox = () => setLightbox(null);
+
   // ============================================================
-  // Matcha quantity popup (same as StudioLeft)
+  // ✅ Matcha quantity popup (same behavior as StudioLeft)
   // ============================================================
   const [matchaQtyOpen, setMatchaQtyOpen] = useState(false);
   const [matchaQty, setMatchaQty] = useState(1);
@@ -444,7 +449,7 @@ export default function Profile({
         return u.toString();
       }
 
-      // 3) fallback: add quantity param (may or may not be used)
+      // 3) fallback: add quantity param
       u.searchParams.set("quantity", String(q));
       return u.toString();
     } catch {
@@ -567,7 +572,10 @@ export default function Profile({
         const payload: any = tryParseJson<any>(payloadRaw) ?? payloadRaw ?? null;
         const meta: any = tryParseJson<any>(metaRaw) ?? metaRaw ?? null;
 
-        const generationId = safeString(pick(g, ["mg_generation_id", "generation_id", "generationId", "id"]), "").trim();
+        const generationId = safeString(
+          pick(g, ["mg_generation_id", "generation_id", "generationId", "id"]),
+          ""
+        ).trim();
         const id = generationId || safeString(pick(g, ["mg_id", "id"]), `row_${idx}`).trim();
 
         // local optimistic deletes
@@ -588,7 +596,8 @@ export default function Profile({
         const contentType = pick(g, ["mg_content_type", "contentType"], "").toLowerCase();
         const kindHint = String(pick(g, ["mg_result_type", "resultType", "mg_type", "type"], "")).toLowerCase();
 
-        const looksVideoMeta = contentType.includes("video") || kindHint.includes("motion") || kindHint.includes("video");
+        const looksVideoMeta =
+          contentType.includes("video") || kindHint.includes("motion") || kindHint.includes("video");
         const looksImage = isImageUrl(outUrl) || isImageUrl(imgUrl);
 
         const videoUrl = vidUrl || (isVideoUrl(outUrl) ? outUrl : looksVideoMeta && !looksImage ? outUrl : "");
@@ -602,8 +611,8 @@ export default function Profile({
             typeof payload?.aspect_ratio === "string"
               ? payload.aspect_ratio
               : typeof payload?.aspectRatio === "string"
-                ? payload.aspectRatio
-                : ""
+              ? payload.aspectRatio
+              : ""
           );
 
         const liked =
@@ -692,16 +701,7 @@ export default function Profile({
 
     const activeCount = out.filter((it) => !it.dimmed).length;
     return { items: out, activeCount };
-  }, [
-    generations,
-    feedbacks,
-    likedUrlSet,
-    motion,
-    likedOnly,
-    activeAspectFilter,
-    onRecreate,
-    removedIds,
-  ]);
+  }, [generations, feedbacks, likedUrlSet, motion, likedOnly, activeAspectFilter, onRecreate, removedIds]);
 
   // Reset paging when list changes
   useEffect(() => {
@@ -799,12 +799,13 @@ export default function Profile({
     };
   }, [visibleItems.length]);
 
-  const onTogglePrompt = (id: string) =>
-    setExpandedPromptIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  const onTogglePrompt = (id: string) => setExpandedPromptIds((prev) => ({ ...prev, [id]: !prev[id] }));
 
   return (
     <>
       <TopLoadingBar active={loading} />
+
+      {/* ✅ Popup for buying Matchas */}
       <MatchaQtyModal
         open={matchaQtyOpen}
         qty={matchaQty}
@@ -844,6 +845,8 @@ export default function Profile({
               )}
 
               <span className="profile-topsep">|</span>
+
+              {/* ✅ opens popup (not direct link) */}
               <button className="profile-toplink" type="button" onClick={openMatchaQty}>
                 Get more Matchas
               </button>
