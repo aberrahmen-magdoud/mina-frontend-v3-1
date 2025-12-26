@@ -916,11 +916,11 @@ export default function Profile({
                 </div>
 
                 <div className="profile-card-promptline">
-                  <div className={`profile-card-prompt ${expanded ? "expanded" : ""}`}>
-                    {it.prompt || "—"}
-
-                    {expanded && inputs ? (
-                      <div className="profile-card-details">
+                <div className={`profile-card-prompt ${expanded ? "expanded" : ""}`}>
+                  {it.prompt || "—"}
+              
+                  {expanded && inputs ? (
+                    <div className="profile-card-details">
                       {it.canRecreate && it.draft ? (
                         <div className="profile-card-detailrow">
                           <span className="k">
@@ -935,7 +935,7 @@ export default function Profile({
                               Re-create
                             </button>
                           </span>
-                      
+              
                           <span className="v">
                             {canAnimate ? (
                               <button
@@ -962,71 +962,86 @@ export default function Profile({
                           </span>
                         </div>
                       ) : null}
-
-
-                        {inputs.aspectRatio ? (
-                          <div className="profile-card-detailrow">
-                            <span className="k">Aspect</span>
-                            <span className="v">{inputs.aspectRatio}</span>
-                          </div>
-                        ) : null}
-
-                        {typeof inputs.minaVisionEnabled === "boolean" ? (
-                          <div className="profile-card-detailrow">
-                            <span className="k">Vision</span>
-                            <span className="v">{inputs.minaVisionEnabled ? "On" : "Off"}</span>
-                          </div>
-                        ) : null}
-
-                        {inputs.stylePresetKeys?.length ? (
-                          <div className="profile-card-detailrow">
-                            <span className="k">Styles</span>
-                            <span className="v">{inputs.stylePresetKeys.join(", ")}</span>
-                          </div>
-                        ) : null}
-
-                        {inputs.productImageUrl ? (
-                          <div className="profile-card-detailrow">
-                            <span className="k">Product</span>
-                            <span className="v">
-                              <button className="profile-card-mini" type="button" onClick={() => openLightbox(inputs.productImageUrl, false)}>
-                                view
-                              </button>
-                            </span>
-                          </div>
-                        ) : null}
-
-                        {inputs.logoImageUrl ? (
-                          <div className="profile-card-detailrow">
-                            <span className="k">Logo</span>
-                            <span className="v">
-                              <button className="profile-card-mini" type="button" onClick={() => openLightbox(inputs.logoImageUrl, false)}>
-                                view
-                              </button>
-                            </span>
-                          </div>
-                        ) : null}
-
-                        {inputs.styleImageUrls?.length ? (
-                          <div className="profile-card-detailrow">
-                            <span className="k">Inspo</span>
-                            <span className="v">
-                              <button className="profile-card-mini" type="button" onClick={() => openLightbox(inputs.styleImageUrls[0], false)}>
-                                view
-                              </button>
-                              {inputs.styleImageUrls.length > 1 ? <span className="profile-card-miniNote">+{inputs.styleImageUrls.length - 1}</span> : null}
-                            </span>
-                          </div>
-                        ) : null}
-
-                  </div>
-
-                  {showViewMore ? (
-                    <button className="profile-card-viewmore" type="button" onClick={() => onTogglePrompt(it.id)}>
-                      {expanded ? "less" : " more"}
-                    </button>
+              
+                      {inputs.aspectRatio ? (
+                        <div className="profile-card-detailrow">
+                          <span className="k">Aspect</span>
+                          <span className="v">{inputs.aspectRatio}</span>
+                        </div>
+                      ) : null}
+              
+                      {typeof inputs.minaVisionEnabled === "boolean" ? (
+                        <div className="profile-card-detailrow">
+                          <span className="k">Vision</span>
+                          <span className="v">{inputs.minaVisionEnabled ? "On" : "Off"}</span>
+                        </div>
+                      ) : null}
+              
+                      {inputs.stylePresetKeys?.length ? (
+                        <div className="profile-card-detailrow">
+                          <span className="k">Styles</span>
+                          <span className="v">{inputs.stylePresetKeys.join(", ")}</span>
+                        </div>
+                      ) : null}
+              
+                      {inputs.productImageUrl ? (
+                        <div className="profile-card-detailrow">
+                          <span className="k">Product</span>
+                          <span className="v">
+                            <button
+                              className="profile-card-mini"
+                              type="button"
+                              onClick={() => openLightbox(inputs.productImageUrl, false)}
+                            >
+                              view
+                            </button>
+                          </span>
+                        </div>
+                      ) : null}
+              
+                      {inputs.logoImageUrl ? (
+                        <div className="profile-card-detailrow">
+                          <span className="k">Logo</span>
+                          <span className="v">
+                            <button
+                              className="profile-card-mini"
+                              type="button"
+                              onClick={() => openLightbox(inputs.logoImageUrl, false)}
+                            >
+                              view
+                            </button>
+                          </span>
+                        </div>
+                      ) : null}
+              
+                      {inputs.styleImageUrls?.length ? (
+                        <div className="profile-card-detailrow">
+                          <span className="k">Inspo</span>
+                          <span className="v">
+                            <button
+                              className="profile-card-mini"
+                              type="button"
+                              onClick={() => openLightbox(inputs.styleImageUrls[0], false)}
+                            >
+                              view
+                            </button>
+                            {inputs.styleImageUrls.length > 1 ? (
+                              <span className="profile-card-miniNote">+{inputs.styleImageUrls.length - 1}</span>
+                            ) : null}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
+              
+                {showViewMore ? (
+                  <button className="profile-card-viewmore" type="button" onClick={() => onTogglePrompt(it.id)}>
+                    {expanded ? "less" : "more"}
+                  </button>
+                ) : null}
+              </div>
+
               </div>
             );
           })}
