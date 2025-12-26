@@ -290,155 +290,173 @@
 .studio-header-cta:disabled { opacity: 0.35 !important; cursor: default !important; transform: none !important; }
 
 /* ============================================================
-   Matcha purchase modal (match your inspiration)
+   Matcha modal (EXACT behavior you asked)
+   - NO rounded corners
+   - ONE progress bar
+   - Big circles as nodes
+   - Fill line grows to selected node
+   - Labels are NOT clickable
    ============================================================ */
 
-.mina-matcha-modal {
+.mina-modal.mina-matcha-modal {
   width: min(1100px, calc(100vw - 28px));
-  max-height: min(760px, 86vh);
+  max-height: min(780px, 86vh);
   overflow: hidden;
+
+  /* NO round radius ever */
+  border-radius: 0 !important;
+
+  background: var(--mina-paper);
+  color: var(--mina-ink);
 }
 
-/* Top bar: small label left + Close right */
+/* topbar */
 .mina-matcha-topbar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 18px 22px 8px;
+  padding: 18px 22px 6px;
 }
 
 .mina-matcha-topbar-left {
   font-size: 13px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
+  font-weight: 700;
   opacity: 0.95;
+  letter-spacing: -0.01em;
 }
 
 .mina-matcha-close {
-  opacity: 0.9;
+  border-radius: 0 !important;
   text-decoration: underline;
   text-underline-offset: 2px;
+  opacity: 0.85;
+  padding: 6px 8px !important;
 }
 
-/* Body typography */
+.mina-matcha-close:hover { opacity: 1; background: transparent !important; }
+
+/* body typography (smaller, like your studio vibe) */
 .mina-matcha-body {
   padding: 10px 22px 18px;
 }
 
 .mina-matcha-title {
-  font-size: 56px;
+  font-size: 56px; /* keep big title like example */
   line-height: 1.02;
-  letter-spacing: -0.04em;
-  font-weight: 950;
+  font-weight: 700;
+  letter-spacing: -0.03em;
   margin-top: 2px;
 }
 
 .mina-matcha-subtitle {
-  margin-top: 18px;
+  margin-top: 16px;
   font-size: 22px;
-  font-weight: 850;
-  letter-spacing: -0.015em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .mina-matcha-rules {
   margin-top: 10px;
   font-size: 14px;
+  font-weight: 600;
   opacity: 0.65;
-  font-weight: 650;
-  letter-spacing: -0.01em;
 }
 
-/* Scale */
+/* SCALE */
 .mina-matcha-scale {
   margin-top: 34px;
-  padding: 18px 0 6px;
 }
 
-/* This wrapper lets us draw the line behind dots */
-.mina-matcha-points {
-  position: relative;
+/* label rows must NEVER block clicks */
+.mina-matcha-label-row,
+.mina-matcha-price-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 0 2px;
+  gap: 12px;
+  pointer-events: none; /* ✅ numbers NOT clickable + won't block bar/nodes */
+  user-select: none;
 }
 
-/* The line behind dots */
-.mina-matcha-line {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 78px; /* tuned to sit through dot centers */
-  height: 2px;
-  background: rgba(8, 10, 0, 0.22);
+.mina-matcha-label,
+.mina-matcha-price {
+  min-width: 0;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  opacity: 0.28; /* default grey like inspiration */
 }
 
-/* Each point as a column */
-.mina-matcha-point {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  cursor: pointer;
-  text-align: left;
-  color: var(--mina-ink);
-  min-width: 78px;
-
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 18px;
-}
-
-.mina-matcha-credits {
-  font-size: 28px;
-  font-weight: 950;
-  letter-spacing: -0.02em;
+.mina-matcha-label {
+  font-size: 26px;
   line-height: 1;
-  height: 28px; /* keep dot line aligned */
-}
-
-.mina-matcha-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  background: rgba(8, 10, 0, 0.28);
-  position: relative;
-  z-index: 2; /* above the line */
+  margin-bottom: 12px;
 }
 
 .mina-matcha-price {
   font-size: 18px;
-  font-weight: 900;
-  letter-spacing: -0.01em;
   line-height: 1;
-  height: 18px;
+  margin-top: 12px;
 }
 
-/* Active: black */
-.mina-matcha-point.is-active .mina-matcha-dot {
-  background: rgba(8, 10, 0, 0.98);
-}
-
-.mina-matcha-point.is-active .mina-matcha-credits,
-.mina-matcha-point.is-active .mina-matcha-price {
+/* on (up to selected) = black */
+.mina-matcha-label.is-on,
+.mina-matcha-price.is-on {
   opacity: 1;
 }
 
-/* Inactive: greyed */
-.mina-matcha-point.is-dim .mina-matcha-credits,
-.mina-matcha-point.is-dim .mina-matcha-price,
-.mina-matcha-point.is-dim .mina-matcha-dot {
-  opacity: 0.28;
+/* bar */
+.mina-matcha-bar {
+  position: relative;
+  height: 28px; /* gives room to click */
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
-/* Disabled */
-.mina-matcha-point.is-disabled {
-  opacity: 0.18 !important;
-  cursor: default !important;
+/* base track */
+.mina-matcha-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 13px; /* center line */
+  height: 2px;
+  background: rgba(8, 10, 0, 0.22);
 }
 
-/* Footer */
+/* fill track */
+.mina-matcha-fill {
+  position: absolute;
+  left: 0;
+  top: 13px;
+  height: 2px;
+  width: var(--fillPct, 0%);
+  background: rgba(8, 10, 0, 0.95);
+}
+
+/* nodes */
+.mina-matcha-node {
+  position: absolute;
+  top: 13px;
+  transform: translate(-50%, -50%);
+  border: 0;
+  background: transparent;
+  padding: 10px; /* large click target */
+  cursor: pointer;
+  border-radius: 0 !important;
+}
+
+.mina-matcha-node .mina-matcha-dot {
+  display: block;
+  width: 14px; /* big circles */
+  height: 14px;
+  border-radius: 999px; /* circle only */
+  background: rgba(8, 10, 0, 0.28);
+}
+
+/* nodes up to selected are black */
+.mina-matcha-node.is-on .mina-matcha-dot {
+  background: rgba(8, 10, 0, 0.95);
+}
+
+/* footer */
 .mina-matcha-footer {
   display: flex;
   justify-content: space-between;
@@ -453,44 +471,47 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-width: 58%;
+  max-width: 60%;
 }
 
 .mina-matcha-transparency-toggle {
   border: 0;
   background: transparent;
   padding: 0;
+  border-radius: 0 !important;
 
   font: inherit;
   font-size: 16px;
-  font-weight: 850;
+  font-weight: 700;
   letter-spacing: -0.01em;
 
   cursor: pointer;
-  opacity: 0.35; /* like your inspiration */
+  opacity: 0.28; /* faint like inspiration */
+  text-align: left;
 }
 
-.mina-matcha-transparency-toggle:hover { opacity: 0.5; }
-.mina-matcha-transparency-toggle:active { opacity: 0.25; }
+.mina-matcha-transparency-toggle:hover { opacity: 0.45; }
+.mina-matcha-transparency-toggle:active { opacity: 0.22; }
 
 .mina-matcha-transparency-details {
   font-size: 16px;
+  font-weight: 600;
   opacity: 0.28;
-  font-weight: 750;
   letter-spacing: -0.01em;
 }
 
-/* Purchase huge & underlined */
+/* Purchase is the only BIG thing */
 .mina-matcha-purchase {
   border: 0;
   background: transparent;
   padding: 0;
+  border-radius: 0 !important;
 
   font: inherit;
   font-size: 64px;
   line-height: 1;
-  font-weight: 980;
-  letter-spacing: -0.04em;
+  font-weight: 700;
+  letter-spacing: -0.03em;
 
   cursor: pointer;
   text-decoration: underline;
@@ -501,30 +522,17 @@
 .mina-matcha-purchase:hover { opacity: 1; }
 .mina-matcha-purchase:active { opacity: 0.65; }
 
-/* Responsive */
+/* responsive */
 @media (max-width: 900px) {
-  .mina-matcha-modal {
+  .mina-modal.mina-matcha-modal {
     width: min(980px, calc(100vw - 18px));
   }
-  .mina-matcha-title {
-    font-size: 42px;
-  }
-  .mina-matcha-purchase {
-    font-size: 44px;
-  }
-  .mina-matcha-line {
-    top: 74px;
-  }
-  .mina-matcha-point {
-    min-width: 62px;
-  }
-  .mina-matcha-credits {
-    font-size: 22px;
-    height: 22px;
-  }
-  .mina-matcha-price {
-    font-size: 14px;
-    height: 14px;
-  }
-}
 
+  .mina-matcha-title { font-size: 42px; }
+  .mina-matcha-label { font-size: 18px; }
+  .mina-matcha-price { font-size: 13px; }
+  .mina-matcha-purchase { font-size: 44px; }
+
+  .mina-matcha-node { padding: 9px; }
+  .mina-matcha-node .mina-matcha-dot { width: 12px; height: 12px; }
+}
