@@ -359,6 +359,7 @@
 /* SCALE */
 .mina-matcha-scale {
   margin-top: 28px;
+  padding: 0px 20px;
 }
 
 /* absolute label/price rows that align exactly with nodes */
