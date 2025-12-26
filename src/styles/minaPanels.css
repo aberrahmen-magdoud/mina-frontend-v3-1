@@ -496,7 +496,7 @@
   justify-content: space-between;
   gap: 16px;
 
-  padding: 18px 22px;
+  padding: 0px 22px;
   border-top: 0 !important;      /* ✅ remove separator line */
 }
 
