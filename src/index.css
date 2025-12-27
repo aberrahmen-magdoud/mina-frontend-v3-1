@@ -1432,7 +1432,7 @@ padding-left: 56px;
 /* Auto invert the right header text based on what's behind it */
 .studio-header-right {
   mix-blend-mode: difference;
-  color: #fff; /* on light bg -> becomes dark, on dark bg -> becomes light */
+  color: #000; /* on light bg -> becomes dark, on dark bg -> becomes light */
 }
 
 /* Buttons inherit the blended color (so they adapt automatically) */
