@@ -817,3 +817,8 @@ margin-bottom: 6px;
 .profile-card-recreate:active {
   opacity: 0.6;
 }
+/* Only the niche/main toggle pill */
+.studio-pill--niche-toggle {
+  padding-left: 8px; /* increase as you like */
+}
+
