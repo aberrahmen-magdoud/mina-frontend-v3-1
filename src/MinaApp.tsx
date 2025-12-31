@@ -574,7 +574,7 @@ const MinaApp: React.FC<MinaAppProps> = () => {
     try {
       const v =
         (typeof window !== "undefined" && window.localStorage.getItem(STILL_LANE_LS_KEY)) || "";
-      return v === "main" || v === "niche" ? v : "main";
+      return v === "main" || v === "niche" ? v : "niche";
     } catch {
       return "niche";
     }
