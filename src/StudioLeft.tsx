@@ -58,8 +58,6 @@ export type AspectOptionLike = {
 
 export type MotionStyleKey = "melt" | "drop" | "expand" | "satisfying" | "slow_motion" | "fix_camera" | "loop";
 
-type StyleMode = "main" | "niche";
-
 type StudioLeftProps = {
   globalDragging: boolean;
   typingHidden: boolean;
@@ -106,8 +104,6 @@ type StudioLeftProps = {
 
   stylePresetKeys: string[];
   setStylePresetKeys: (k: string[]) => void;
-  styleMode: StyleMode;
-  setStyleMode: (m: StyleMode) => void;
 
   stylePresets: readonly StylePreset[];
   customStyles: CustomStyle[];
@@ -330,8 +326,6 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
 
     stylePresetKeys,
     setStylePresetKeys,
-    styleMode,
-    setStyleMode,
     stylePresets,
     customStyles,
     getStyleLabel,
