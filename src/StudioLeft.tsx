@@ -387,26 +387,19 @@ useEffect(() => {
   // - single click = select
   // - double click (custom only) = ask to delete with bold YES/NO
   const [deleteConfirm, setDeleteConfirm] = useState<{ key: string; label: string } | null>(null);
- // ✅ Main vs Niche model toggle (text-only pill)
+  // ✅ Main vs Niche model toggle (text-only pill) — LOCAL ONLY for now
   type ModelFlavor = "main" | "niche";
-  
+
   // ✅ default is NICHE (as requested)
-  const [localModelFlavor, setLocalModelFlavor] = useState<ModelFlavor>("niche");
-  
-  // controlled (if parent passes it) or local fallback
-  const modelFlavor: ModelFlavor = (modelFlavorProp as ModelFlavor | undefined) ?? localModelFlavor;
-  
-  const setModelFlavor = (next: ModelFlavor) => {
-    onModelFlavorChange?.(next);
-    if (modelFlavorProp === undefined) setLocalModelFlavor(next);
-  };
-  
+  const [modelFlavor, setModelFlavor] = useState<ModelFlavor>("niche");
+
   // ✅ cycle like Profile: niche -> main -> niche -> ...
-  const cycleModelFlavor = () => setModelFlavor(modelFlavor === "niche" ? "main" : "niche");
-  
-  // label shows CURRENT state (not the next one)
+  const cycleModelFlavor = () => setModelFlavor((prev) => (prev === "niche" ? "main" : "niche"));
+
+  // label shows CURRENT state
   const modelFlavorLabel = modelFlavor === "niche" ? "Niche" : "Main";
   const nicheIsActive = modelFlavor === "niche";
+
 
   // ============================================================
   // Matcha quantity popup (opens Shopify with chosen quantity)
