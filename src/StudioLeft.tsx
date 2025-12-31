@@ -387,10 +387,26 @@ useEffect(() => {
   // - single click = select
   // - double click (custom only) = ask to delete with bold YES/NO
   const [deleteConfirm, setDeleteConfirm] = useState<{ key: string; label: string } | null>(null);
-  // ✅ Main vs Niche (local only for now)
-    type ModelFlavor = "main" | "niche";
-    const [modelFlavor, setModelFlavor] = useState<ModelFlavor>("niche");
-    const nicheIsActive = modelFlavor === "niche";
+ // ✅ Main vs Niche model toggle (text-only pill)
+  type ModelFlavor = "main" | "niche";
+  
+  // ✅ default is NICHE (as requested)
+  const [localModelFlavor, setLocalModelFlavor] = useState<ModelFlavor>("niche");
+  
+  // controlled (if parent passes it) or local fallback
+  const modelFlavor: ModelFlavor = (modelFlavorProp as ModelFlavor | undefined) ?? localModelFlavor;
+  
+  const setModelFlavor = (next: ModelFlavor) => {
+    onModelFlavorChange?.(next);
+    if (modelFlavorProp === undefined) setLocalModelFlavor(next);
+  };
+  
+  // ✅ cycle like Profile: niche -> main -> niche -> ...
+  const cycleModelFlavor = () => setModelFlavor(modelFlavor === "niche" ? "main" : "niche");
+  
+  // label shows CURRENT state (not the next one)
+  const modelFlavorLabel = modelFlavor === "niche" ? "Niche" : "Main";
+  const nicheIsActive = modelFlavor === "niche";
 
   // ============================================================
   // Matcha quantity popup (opens Shopify with chosen quantity)
@@ -1023,16 +1039,17 @@ useEffect(() => {
                     <span className="studio-pill-main">{currentAspect.label}</span>
                     <span className="studio-pill-sub">{currentAspect.subtitle}</span>
                   </button>
-                  {/* Niche (text-only toggle) */}
-                  <button
-                    type="button"
-                    className={classNames("studio-pill", "studio-pill--textonly", nicheIsActive && "active")}
-                    style={pillBaseStyle(5)}
-                    onClick={() => setModelFlavor(nicheIsActive ? "main" : "niche")}
-                    title={nicheIsActive ? "Niche selected (click to switch to Main)" : "Main selected (click to switch to Niche)"}
-                  >
-                    <span className="studio-pill-main"> Niche</span>
-                  </button>
+                  {/* Niche / Main (text-only toggle) */}
+                    <button
+                      type="button"
+                      className={classNames("studio-pill", "studio-pill--niche-toggle", nicheIsActive && "active")}
+                      style={pillBaseStyle(5)}
+                      onClick={cycleModelFlavor}
+                      title="Toggle model"
+                    >
+                      <span className="studio-pill-main">{modelFlavorLabel}</span>
+                    </button>
+
 
                 </>
               ) : (
