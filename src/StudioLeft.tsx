@@ -723,7 +723,7 @@ useEffect(() => {
   const styleThumb = primaryStyleCard?.thumb || "";
   const styleLabel =
     selectedStyleCards.length === 0
-      ? "Editorial styles"
+      ? "Moodboard"
       : selectedStyleCards.length === 1
       ? primaryStyleCard?.label || "Style"
       : `${selectedStyleCards.length} styles`;
