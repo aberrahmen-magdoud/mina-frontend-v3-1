@@ -30,14 +30,6 @@ const normalizeBase = (raw?: string | null) => {
 
 const MATCHA_URL = "https://www.faltastudio.com/cart/43328351928403:1";
 
-// Still engine lane:
-// - "main"  => Seedream (default)
-// - "niche" => Nano Banana (only if backend has MMA_NANOBANANA_VERSION set)
-const STILL_LANE: "main" | "niche" =
-  typeof window !== "undefined" && window.localStorage.getItem("mina_still_lane") === "niche"
-    ? "niche"
-    : "main";
-
 // Prefer an env override, then fall back to same-origin /api so production
 // builds avoid CORS errors when the backend is reverse-proxied.
 const API_BASE_URL = (() => {
@@ -214,6 +206,9 @@ type UploadItem = {
 type UploadPanelKey = "product" | "logo" | "inspiration";
 
 type AspectKey = "9-16" | "3-4" | "2-3" | "1-1";
+
+type StillLane = "main" | "niche";
+const STILL_LANE_LS_KEY = "mina_still_lane_v1";
 
 type AspectOption = {
   key: AspectKey;
@@ -569,6 +564,34 @@ const MinaApp: React.FC<MinaAppProps> = () => {
 
   const [stillBrief, setStillBrief] = useState("");
   const [tone] = useState("still-life");
+
+  // =====================================================================
+  // Still engine lane (Seedream "main" vs Nano Banana "niche")
+  // - default: niche
+  // - persisted in localStorage
+  // =====================================================================
+  const [stillLane, setStillLane] = useState<StillLane>(() => {
+    try {
+      const v =
+        (typeof window !== "undefined" && window.localStorage.getItem(STILL_LANE_LS_KEY)) || "";
+      return v === "main" || v === "niche" ? v : "niche";
+    } catch {
+      return "niche";
+    }
+  });
+
+  const toggleStillLane = useCallback(() => {
+    setStillLane((prev) => (prev === "niche" ? "main" : "niche"));
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(STILL_LANE_LS_KEY, stillLane);
+    } catch {
+      // ignore
+    }
+  }, [stillLane]);
+
   const [, setPlatform] = useState("tiktok");
   const [aspectIndex, setAspectIndex] = useState(() => {
   // ✅ Mobile default ratio = 9:16
@@ -2146,7 +2169,8 @@ const styleHeroUrls = (stylePresetKeys || [])
           stylePresetKeys: stylePresetKeysForApi,
           stylePresetKey: primaryStyleKeyForApi,
           minaVisionEnabled,
-          still_lane: STILL_LANE,
+          still_lane: stillLane,
+          lane: stillLane,
         },
         settings: {},
         history: {
@@ -2534,7 +2558,8 @@ const styleHeroUrls = (stylePresetKeys || [])
               stylePresetKey: primaryStyleKeyForApi,
 
               minaVisionEnabled,
-              still_lane: STILL_LANE,
+              still_lane: stillLane,
+              lane: stillLane,
             },
             settings: {},
             history: { sessionId: sid || sessionId || null, sessionTitle: sessionTitle || null },
@@ -3848,6 +3873,9 @@ const headerOverlayClass =
               matchaUrl={MATCHA_URL}
               minaMessage={minaMessage}
               minaTalking={minaTalking}
+              stillLane={stillLane}
+              onToggleStillLane={toggleStillLane}
+              stillLaneDisabled={minaBusy}
               onGoProfile={() => goTab("profile")}
             />
             {renderStudioRight()}
