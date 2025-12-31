@@ -387,20 +387,6 @@ useEffect(() => {
   // - single click = select
   // - double click (custom only) = ask to delete with bold YES/NO
   const [deleteConfirm, setDeleteConfirm] = useState<{ key: string; label: string } | null>(null);
-  // ✅ Main vs Niche model toggle (text-only pill) — LOCAL ONLY for now
-  type ModelFlavor = "main" | "niche";
-
-  // ✅ default is NICHE (as requested)
-  const [modelFlavor, setModelFlavor] = useState<ModelFlavor>("niche");
-
-  // ✅ cycle like Profile: niche -> main -> niche -> ...
-  const cycleModelFlavor = () => setModelFlavor((prev) => (prev === "niche" ? "main" : "niche"));
-
-  // label shows CURRENT state
-  const modelFlavorLabel = modelFlavor === "niche" ? "Niche" : "Main";
-  const nicheIsActive = modelFlavor === "niche";
-
-
   // ============================================================
   // Matcha quantity popup (opens Shopify with chosen quantity)
   // ============================================================
@@ -1032,18 +1018,6 @@ useEffect(() => {
                     <span className="studio-pill-main">{currentAspect.label}</span>
                     <span className="studio-pill-sub">{currentAspect.subtitle}</span>
                   </button>
-                  {/* Niche / Main (text-only toggle) */}
-                    <button
-                      type="button"
-                      className={classNames("studio-pill", "studio-pill--niche-toggle", nicheIsActive && "active")}
-                      style={pillBaseStyle(5)}
-                      onClick={cycleModelFlavor}
-                      title="Toggle model"
-                    >
-                      <span className="studio-pill-main">{modelFlavorLabel}</span>
-                    </button>
-
-
                 </>
               ) : (
                 <>
