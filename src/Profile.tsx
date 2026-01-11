@@ -210,7 +210,7 @@ function looksLikeSystemPrompt(s: string) {
   return false;
 }
 
-function extractInputsForDisplay(row: Row) {
+function extractInputsForDisplay(row: Row, isMotionHint?: boolean) {
   const payloadRaw = (row as any)?.mg_payload ?? (row as any)?.payload ?? null;
   const metaRaw = (row as any)?.mg_meta ?? (row as any)?.meta ?? null;
   const varsRaw =
@@ -224,34 +224,55 @@ function extractInputsForDisplay(row: Row) {
   const meta = tryParseJson<any>(metaRaw) ?? metaRaw ?? null;
   const vars = tryParseJson<any>(varsRaw) ?? varsRaw ?? null;
 
-  // ✅ mg_mma_vars is structured like: { meta, assets, inputs, history, prompts, ... }
+  // mg_mma_vars is structured like: { meta, assets, inputs, history, prompts, ... }
   const varsAssets = vars && typeof vars === "object" ? (vars as any).assets : null;
   const varsInputs = vars && typeof vars === "object" ? (vars as any).inputs : null;
   const varsHistory = vars && typeof vars === "object" ? (vars as any).history : null;
   const varsMeta = vars && typeof vars === "object" ? (vars as any).meta : null;
-  const varsPrompts = vars && typeof vars === "object" ? (vars as any).prompts : null;
 
-  const briefCandidates: string[] = [
-    pick(row, ["mg_user_prompt", "mg_user_message", "userPrompt", "user_prompt", "promptUser", "brief", "mg_brief"], ""),
-    pick(payload, ["userPrompt", "user_prompt", "userMessage", "user_message", "brief"], ""),
-    pick(payload?.inputs, ["userPrompt", "user_prompt", "userMessage", "brief"], ""),
-    pick(payload?.settings, ["brief"], ""),
-    pick(meta, ["userPrompt", "user_prompt", "userMessage", "brief"], ""),
+  // ------------------------------------------------------------
+  // ✅ USER BRIEF ONLY (NO generated prompt fallbacks)
+  // - Motion items should prefer motion/tweak-motion brief fields
+  // - Still items should prefer create/tweak brief fields
+  // ------------------------------------------------------------
+  const motionBriefCandidates: string[] = [
+    // Animate (user typed)
+    pick(varsInputs, ["motion_user_brief", "motionUserBrief", "animate_brief", "animateBrief"], ""),
 
-    // ✅ from mg_mma_vars.inputs / prompts (your real data)
-    pick(varsInputs, ["brief", "userBrief", "user_brief", "motion_user_brief"], ""),
-    pick(varsPrompts, ["motion_prompt", "clean_prompt"], ""),
+    // Tweak Animate (user typed)
+    pick(varsInputs, ["tweak_motion_user_brief", "tweakMotionUserBrief", "tweak_animate_brief", "tweakAnimateBrief"], ""),
 
-    // legacy/flat fallbacks
-    pick(vars, ["brief", "user_prompt", "userPrompt", "prompt", "userMessage"], ""),
-  ]
+    // Common payload locations
+    pick(payload?.inputs, ["motion_user_brief", "tweak_motion_user_brief", "animate_brief"], ""),
+    pick(payload, ["motion_user_brief", "tweak_motion_user_brief", "animate_brief"], ""),
+
+    // Legacy user message fields (still user-entered)
+    pick(row, ["mg_user_prompt", "mg_user_message", "mg_brief"], ""),
+    pick(meta, ["userPrompt", "user_prompt", "brief", "userBrief", "user_brief"], ""),
+  ];
+
+  const stillBriefCandidates: string[] = [
+    // Create (user typed)
+    pick(varsInputs, ["brief", "userBrief", "user_brief", "create_brief", "createBrief"], ""),
+
+    // Tweak Create (user typed)
+    pick(varsInputs, ["tweak_brief", "tweakUserBrief", "tweakBrief", "edit_brief", "editBrief"], ""),
+
+    // Common payload locations
+    pick(payload?.inputs, ["brief", "userBrief", "user_brief", "tweak_brief"], ""),
+    pick(payload, ["brief", "userBrief", "user_brief", "tweak_brief"], ""),
+
+    // Legacy user message fields (still user-entered)
+    pick(row, ["mg_user_prompt", "mg_user_message", "mg_brief"], ""),
+    pick(meta, ["userPrompt", "user_prompt", "brief", "userBrief", "user_brief"], ""),
+  ];
+
+  const ordered = (isMotionHint ? motionBriefCandidates.concat(stillBriefCandidates) : stillBriefCandidates.concat(motionBriefCandidates))
     .map((s) => String(s || "").trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((s) => !looksLikeSystemPrompt(s));
 
-  const rawFallback = safeString(pick(row, ["mg_prompt", "prompt"], ""), "").trim();
-  const fallbackPrompt = rawFallback && !looksLikeSystemPrompt(rawFallback) ? rawFallback : "";
-
-  const brief = (briefCandidates[0] || fallbackPrompt || "").trim();
+  const brief = (ordered[0] || "").trim();
 
   const aspect =
     normalizeAspectRatio(
@@ -308,7 +329,6 @@ function extractInputsForDisplay(row: Row) {
       ? varsHistory.visionIntelligence
       : undefined;
 
-  // ✅ assets (product/logo/style) – use vars.assets FIRST (your real storage)
   const productImageUrl =
     varsAssets?.product_image_url ||
     varsAssets?.productImageUrl ||
@@ -354,7 +374,6 @@ function extractInputsForDisplay(row: Row) {
     ? styleImageUrls.map(String).filter((u) => u.startsWith("http"))
     : [];
 
-  // ✅ motion start/end images (useful when re-creating a VIDEO generation)
   const startImageUrl =
     String(
       varsAssets?.start_image_url ||
@@ -376,6 +395,7 @@ function extractInputsForDisplay(row: Row) {
   const tone = String(
     meta?.tone || payload?.inputs?.tone || payload?.tone || varsInputs?.tone || varsMeta?.tone || vars?.tone || ""
   ).trim();
+
   const platform = String(
     meta?.platform ||
       payload?.inputs?.platform ||
@@ -400,6 +420,7 @@ function extractInputsForDisplay(row: Row) {
     platform,
   };
 }
+
 
 type ProfileProps = {
   email?: string;
@@ -661,7 +682,7 @@ export default function Profile({
 
         const liked = (generationId && likedGenIdSet.has(generationId)) || (url ? likedUrlSet.has(normalizeMediaUrl(url)) : false);
 
-        const inputs = extractInputsForDisplay(g);
+        const inputs = extractInputsForDisplay(g, isMotion);
         const prompt = (inputs.brief || "").trim();
 
         const canRecreate = source === "generation" && !!onRecreate && !!prompt;
