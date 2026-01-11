@@ -365,26 +365,44 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
 
     onGoProfile,
   } = props;
-  // ✅ Mobile default ratio = 9:16 (keeps cycling one step per render until it hits 9:16)
-const mobileAspectTriesRef = useRef(0);
 
-useEffect(() => {
-  const isMobile = window.matchMedia("(max-width: 900px)").matches;
-  if (!isMobile) return;
+      // ✅ Mobile default ratio = 9:16 (auto-cycles once on first mobile load)
+  const mobileAspectTriesRef = useRef(0);
+  const mobileAspectDoneRef = useRef(false);
 
-  const ratio = (currentAspect?.ratio || "").trim();
+  const aspectToken = useMemo(() => {
+    // Some builds don't provide currentAspect.ratio; fall back to key/label.
+    return String(currentAspect?.ratio || currentAspect?.key || currentAspect?.label || "").trim();
+  }, [currentAspect?.ratio, currentAspect?.key, currentAspect?.label]);
 
-  // IMPORTANT: if your app stores it as "916" instead of "9:16", change the check below.
-  const TARGET = "9:16";
+  useEffect(() => {
+    const isMobile = window.matchMedia("(max-width: 900px)").matches;
+    if (!isMobile) return;
+    if (mobileAspectDoneRef.current) return;
 
-  if (ratio === TARGET) return;
+    const raw = aspectToken;
+    const norm = raw.replace(/\s+/g, "").toLowerCase();
+    const digits = norm.replace(/[^0-9]/g, ""); // "9:16" -> "916"
 
-  // safety: don't loop forever if TARGET isn't in the cycle
-  if (mobileAspectTriesRef.current >= 12) return;
-  mobileAspectTriesRef.current += 1;
+    const isTarget = norm === "9:16" || norm === "9/16" || digits === "916";
 
-  onCycleAspect?.();
-}, [currentAspect?.ratio, onCycleAspect]);
+    if (isTarget) {
+      mobileAspectDoneRef.current = true;
+      return;
+    }
+
+    // safety: don't loop forever if 9:16 isn't in the cycle
+    if (mobileAspectTriesRef.current >= 20) {
+      mobileAspectDoneRef.current = true;
+      return;
+    }
+
+    mobileAspectTriesRef.current += 1;
+
+    const t = window.setTimeout(() => onCycleAspect?.(), 0);
+    return () => window.clearTimeout(t);
+  }, [aspectToken, onCycleAspect]);
+
 
   const imageCreditsOk = imageCreditsOkProp ?? true;
   const hasMotionImage = !!motionHasImageProp;
