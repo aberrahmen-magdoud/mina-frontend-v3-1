@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # mina-frontend
 # Mina — Editorial AI Studio
 
@@ -298,3 +299,6 @@ Move sessions/generations/feedback/credits into Postgres tables like:
 ## License
 
 Internal Falta Studio project.
+=======
+# mina-frontend-v3-1
+>>>>>>> 3cdfa04364adeaa5053a49f451831a17eaaf4bfa
