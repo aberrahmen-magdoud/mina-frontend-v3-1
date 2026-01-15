@@ -360,6 +360,37 @@ function extractFirstHttpUrl(text: string) {
   return m ? m[0] : null;
 }
 
+function humanizeMmaError(err: any): string {
+  const raw = String(err?.message || err || "").trim();
+  if (!raw) return "Something went wrong. Please try again.";
+
+  const s = raw.toLowerCase();
+
+  if (
+    s.includes("no url") ||
+    s.includes("mma_no_url") ||
+    s.includes("seedream_no_url") ||
+    s.includes("nanobanana_no_url")
+  ) {
+    return "It generated, but we couldn’t retrieve the file. Please tap Create again (or try again in a few seconds).";
+  }
+
+  if (s.includes("timeout")) return "This is taking longer than usual. Please try again.";
+  if (s.includes("credit")) return "You don’t have enough matchas to do that.";
+  if (s.includes("failed to fetch") || s.includes("network"))
+    return "Connection issue. Please check your internet and try again.";
+
+  const cleaned = raw
+    .replace(/replicate/gi, "the generator")
+    .replace(/seedream/gi, "the generator")
+    .replace(/nanobanana/gi, "the generator")
+    .replace(/kling/gi, "the generator");
+
+  if (/[A-Z_]{6,}/.test(raw)) return "Something went wrong. Please try again.";
+
+  return cleaned;
+}
+
 function aspectRatioToNumber(ratio: string) {
   const [w, h] = ratio.split(":").map((n) => Number(n) || 0);
   if (!h || !w) return 1;
@@ -2570,7 +2601,7 @@ const styleHeroUrls = (stylePresetKeys || [])
       setActiveMediaKind("still");
       setLastStillPrompt(item.prompt);
     } catch (err: any) {
-      setStillError(err?.message || "Unexpected error generating still.");
+      setStillError(humanizeMmaError(err));
     } finally {
       setStillGenerating(false);
     }
@@ -2826,7 +2857,7 @@ const styleHeroUrls = (stylePresetKeys || [])
 
       setActiveMediaKind("motion");
     } catch (err: any) {
-      setMotionError(err?.message || "Unexpected error generating motion.");
+      setMotionError(humanizeMmaError(err));
     } finally {
       setMotionGenerating(false);
     }
@@ -3026,7 +3057,7 @@ const styleHeroUrls = (stylePresetKeys || [])
 
         setFeedbackText("");
       } catch (err: any) {
-        setFeedbackError(err?.message || "Tweak failed.");
+        setFeedbackError(humanizeMmaError(err));
       } finally {
         setFeedbackSending(false);
       }
