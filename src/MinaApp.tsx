@@ -2545,7 +2545,7 @@ const styleHeroUrls = (stylePresetKeys || [])
         "";
 
       const url = rawUrl ? await ensureAssetsUrl(rawUrl, "generations") : "";
-      if (!url) throw new Error("MMA returned no image URL.");
+      if (!url) throw new Error("That was too complicated, try simpler task.");
 
       historyDirtyRef.current = true;
       creditsDirtyRef.current = true;
