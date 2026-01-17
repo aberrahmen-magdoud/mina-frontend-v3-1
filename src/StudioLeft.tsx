@@ -1441,7 +1441,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
             <>
               <Collapse open={showPanels && (effectivePanel === "product" || activePanel === null)} delayMs={panelRevealDelayMs}>
                 <div className="studio-panel">
-                  <div className="studio-panel-title">Add your scene or composition</div>
+                  <div className="studio-panel-title">Add scene or inspiration</div>
 
                   <div className="studio-panel-row">
                     <div className="studio-thumbs studio-thumbs--inline" onDragOver={handleDragOver} onDrop={handleDropOnPanel("product")}>
@@ -1480,7 +1480,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
 
               <Collapse open={showPanels && activePanel === "logo"} delayMs={panelRevealDelayMs}>
                 <div className="studio-panel">
-                  <div className="studio-panel-title">Add your logo, label, icon, text, packaging or Design.</div>
+                  <div className="studio-panel-title">Add logo, label, icon, text, packaging or design</div>
 
                   <div className="studio-panel-row">
                     <div className="studio-thumbs studio-thumbs--inline" onDragOver={handleDragOver} onDrop={handleDropOnPanel("logo")}>
