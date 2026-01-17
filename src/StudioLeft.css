@@ -831,6 +831,11 @@ margin-bottom: 6px;
   box-shadow: none;
 }
 
+/* Hide Moodboard UI (custom styles + "Your style" add tile) */
+.studio-style-card.add {
+  display: none !important;
+}
+
 .profile-card-recreate:active {
   opacity: 0.6;
 }
