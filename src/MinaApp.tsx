@@ -1037,17 +1037,26 @@ const showControls = uiStage >= 3 || hasEverTyped;
   [adminConfig.ai?.personality?.filler]
 );
 
-
-  const imageCost = credits?.meta?.imageCost ?? adminConfig.pricing?.imageCost ?? 1;
-  const motionCost = credits?.meta?.motionCost ?? adminConfig.pricing?.motionCost ?? 10;
+  // ==========================
+  // FIXED matcha rules (your exact ask)
+  // - Animate/motion: need >= 10
+  // - Still niche:    need >= 2
+  // - Still main:     need >= 1
+  // ==========================
+  const imageCost = stillLane === "niche" ? 2 : 1;
+  const motionCost = 10;
 
   const creditBalance = credits?.balance;
-  const imageCreditsOk = creditBalance === null || creditBalance === undefined ? true : creditBalance >= imageCost;
-  const motionCreditsOk = creditBalance === null || creditBalance === undefined ? true : creditBalance >= motionCost;
+  const hasCreditNumber = typeof creditBalance === "number" && Number.isFinite(creditBalance);
+
+  const imageCreditsOk = hasCreditNumber ? creditBalance >= imageCost : true;
+  const motionCreditsOk = hasCreditNumber ? creditBalance >= motionCost : true;
+
   const motionBlockReason = motionCreditsOk ? null : "Get more matchas to animate.";
+
   // ✅ Tweak uses the same pricing rules as the media type you're tweaking
   const tweakCreditsOk =
-  activeMediaKind === "motion" ? motionCreditsOk : activeMediaKind === "still" ? imageCreditsOk : true;
+    activeMediaKind === "motion" ? motionCreditsOk : activeMediaKind === "still" ? imageCreditsOk : true;
 
   const tweakBlockReason = tweakCreditsOk ? null : "Get more matchas to tweak.";
 
