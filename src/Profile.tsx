@@ -1115,10 +1115,14 @@ export default function Profile({
     };
   }, [visibleItems.length]);
 
-  const onTogglePrompt = (id: string) => setExpandedPromptIds((prev) => ({ ...prev, [id]: !prev[id] }));
-  const openPrompt = useCallback((id: string) => {
-    setExpandedPromptIds((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
-  }, []);
+  // ✅ Only one expanded at a time
+const onTogglePrompt = (id: string) =>
+  setExpandedPromptIds((prev) => (prev[id] ? {} : { [id]: true }));
+
+const openPrompt = useCallback((id: string) => {
+  setExpandedPromptIds((prev) => (prev[id] && Object.keys(prev).length === 1 ? prev : { [id]: true }));
+}, []);
+
 
   return (
     <>
