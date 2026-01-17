@@ -1116,6 +1116,9 @@ export default function Profile({
   }, [visibleItems.length]);
 
   const onTogglePrompt = (id: string) => setExpandedPromptIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  const openPrompt = useCallback((id: string) => {
+    setExpandedPromptIds((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
+  }, []);
 
   return (
     <>
@@ -1277,8 +1280,8 @@ export default function Profile({
 
             const inputs = it.inputs || null;
             const sceneImageUrl = canonicalAssetUrl(it.url);
-            const canScene =
-              !!onRecreate && !it.isMotion && isImageUrl(sceneImageUrl) && !!inputs?.productImageUrl;
+            const canScene = !!onRecreate && !it.isMotion && isImageUrl(sceneImageUrl);
+
 
             const canAnimate = !!it.draft && !it.isMotion && isImageUrl(sceneImageUrl);
             const canAnimateBtn = !!onRecreate && canAnimate && !!it.draft;
@@ -1288,11 +1291,20 @@ export default function Profile({
 
             return (
               <div
-                key={it.id}
-                className={`profile-card ${it.sizeClass} ${removing ? "is-removing" : ""} ${
-                  ghostIds[it.id] ? "is-ghost" : ""
-                }`}
-              >
+                  key={it.id}
+                  className={`profile-card ${it.sizeClass} ${removing ? "is-removing" : ""} ${
+                    ghostIds[it.id] ? "is-ghost" : ""
+                  }`}
+                  onPointerEnter={(e) => {
+                    // desktop hover only (ignore touch)
+                    // @ts-ignore
+                    const pt = e?.pointerType;
+                    if (pt && pt !== "mouse") return;
+                
+                    if (showViewMore) openPrompt(it.id);
+                  }}
+                >
+
                 <div className="profile-card-top">
                   <button
                     className="profile-card-show"
@@ -1419,27 +1431,32 @@ export default function Profile({
                                   onClick={(e) => {
                                     e.stopPropagation();
 
+                                    const sceneUrl = canonicalAssetUrl(sceneImageUrl);
+
                                     const draft: RecreateDraft = {
                                       mode: "still",
                                       brief: SCENE_PROMPT,
                                       settings: {
+                                        // keep ratio/vision/presets if you want (safe)
                                         aspect_ratio: inputs?.aspectRatio || undefined,
                                         minaVisionEnabled: inputs?.minaVisionEnabled,
-                                        stylePresetKeys: inputs?.stylePresetKeys?.length
-                                          ? inputs.stylePresetKeys
-                                          : undefined,
+                                        stylePresetKeys: inputs?.stylePresetKeys?.length ? inputs.stylePresetKeys : undefined,
                                       },
                                       assets: {
-                                        productImageUrl: inputs?.productImageUrl || undefined,
-                                        logoImageUrl: inputs?.logoImageUrl || undefined,
-                                        // ✅ ONLY the generated image becomes the inspiration
-                                        styleImageUrls: [canonicalAssetUrl(sceneImageUrl)],
-                                      },
+                                          // ✅ Scene image goes into the "product/scene" slot
+                                          productImageUrl: sceneUrl || undefined,
+                                        
+                                          // ✅ Keep the logo if it existed on that creation
+                                          logoImageUrl: inputs?.logoImageUrl ? canonicalAssetUrl(inputs.logoImageUrl) : undefined,
+                                        
+                                          // ✅ Do NOT carry inspiration/moodboard (so it doesn't behave like recreate)
+                                          styleImageUrls: undefined,
+                                        },
                                     };
-
+                                    
                                     onRecreate?.(draft);
                                     onBackToStudio?.();
-                                  }}
+
                                 >
                                   Scene
                                 </button>
