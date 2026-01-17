@@ -1361,14 +1361,6 @@ const openPrompt = useCallback((id: string) => {
                     className={`profile-card ${it.sizeClass} ${removing ? "is-removing" : ""} ${
                       ghostIds[it.id] ? "is-ghost" : ""
                     }`}
-                    onPointerEnter={(e) => {
-                      // desktop hover only (ignore touch)
-                      // @ts-ignore
-                      const pt = e?.pointerType;
-                      if (pt && pt !== "mouse") return;
-
-                      if (showViewMore) openPrompt(it.id);
-                    }}
                   >
                     <div className="profile-card-top">
                       <button
