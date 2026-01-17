@@ -84,6 +84,18 @@ function canonicalAssetUrl(url: string) {
   return s;
 }
 
+function getScrollParent(node: HTMLElement | null): HTMLElement | null {
+  let el: HTMLElement | null = node?.parentElement || null;
+  while (el) {
+    const style = window.getComputedStyle(el);
+    const oy = style.overflowY;
+    const isScrollable = oy === "auto" || oy === "scroll" || oy === "overlay";
+    if (isScrollable && el.scrollHeight > el.clientHeight + 10) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
 function fmtDate(iso: string | null) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -594,13 +606,15 @@ export default function Profile({
   const cycleMotion = () => setMotion((prev) => (prev === "all" ? "motion" : prev === "motion" ? "still" : "all"));
   const motionLabel = motion === "all" ? "Show all" : motion === "motion" ? "Motion" : "Still";
 
-  const [likedOnly, setLikedOnly] = useState(false);
   const [aspectFilterStep, setAspectFilterStep] = useState(0);
   const activeAspectFilter = aspectFilterStep === 0 ? null : ASPECT_OPTIONS[aspectFilterStep - 1];
   const cycleAspectFilter = () => setAspectFilterStep((prev) => (prev + 1) % (ASPECT_OPTIONS.length + 1));
   const aspectFilterLabel = activeAspectFilter ? activeAspectFilter.label : "Ratio";
 
   const [expandedPromptIds, setExpandedPromptIds] = useState<Record<string, boolean>>({});
+
+  const SCENE_PROMPT =
+    "Replace my product in the scene, keep my scene setup the same, composition tone, aesthetic, highlights and vibe style.";
 
   // Pagination
   const [visibleCount, setVisibleCount] = useState(36);
@@ -986,9 +1000,8 @@ export default function Profile({
     // ✅ ACTUAL FILTERING (not just dimming)
     const filtered = deduped.filter((it) => {
       const matchesMotion = motion === "all" ? true : motion === "motion" ? it.isMotion : !it.isMotion;
-      const matchesLiked = !likedOnly || it.liked;
       const matchesAspect = !activeAspectFilter || it.aspectRatio === activeAspectFilter.ratio;
-      return matchesMotion && matchesLiked && matchesAspect;
+      return matchesMotion && matchesAspect;
     });
 
     const out = filtered.map((it, idx) => {
@@ -1000,7 +1013,7 @@ export default function Profile({
     });
 
     return { items: out, activeCount: out.length };
-  }, [generations, feedbacks, likedUrlSet, motion, likedOnly, activeAspectFilter, onRecreate, removedIds]);
+  }, [generations, feedbacks, likedUrlSet, motion, activeAspectFilter, onRecreate, removedIds]);
 
   // Reset paging when list changes
   useEffect(() => {
@@ -1012,12 +1025,19 @@ export default function Profile({
     const el = sentinelRef.current;
     if (!el) return;
 
+    const root = getScrollParent(el);
+
     const obs = new IntersectionObserver(
       (entries) => {
-        if (!entries[0].isIntersecting) return;
+        const entry = entries[0];
+        if (!entry || !entry.isIntersecting) return;
         setVisibleCount((c) => Math.min(items.length, c + 24));
       },
-      { rootMargin: "1400px 0px 1400px 0px" }
+      {
+        root,
+        rootMargin: root ? "900px 0px 900px 0px" : "1400px 0px 1400px 0px",
+        threshold: 0.01,
+      }
     );
 
     obs.observe(el);
@@ -1236,14 +1256,6 @@ export default function Profile({
 
               <button
                 type="button"
-                className={`profile-filter-pill ${likedOnly ? "active" : ""}`}
-                onClick={() => setLikedOnly((v) => !v)}
-              >
-                Liked
-              </button>
-
-              <button
-                type="button"
                 className={`profile-filter-pill ${activeAspectFilter ? "active" : ""}`}
                 onClick={cycleAspectFilter}
               >
@@ -1264,7 +1276,15 @@ export default function Profile({
             const confirming = Boolean(confirmDeleteIds[it.id]);
 
             const inputs = it.inputs || null;
-            const canAnimate = !!it.draft && !it.isMotion && isImageUrl(it.url);
+            const sceneImageUrl = canonicalAssetUrl(it.url);
+            const canScene =
+              !!onRecreate && !it.isMotion && isImageUrl(sceneImageUrl) && !!inputs?.productImageUrl;
+
+            const canAnimate = !!it.draft && !it.isMotion && isImageUrl(sceneImageUrl);
+            const canAnimateBtn = !!onRecreate && canAnimate && !!it.draft;
+
+            const canRecreateBtn = !!onRecreate && !!it.draft && it.canRecreate;
+            const showActionsRow = !!inputs && (canScene || canAnimateBtn || canRecreateBtn);
 
             return (
               <div
@@ -1284,12 +1304,6 @@ export default function Profile({
                   </button>
 
                   <div className="profile-card-top-right">
-                    {it.liked ? (
-                      <span className="profile-card-liked">Liked</span>
-                    ) : (
-                      <span className="profile-card-liked ghost">Liked</span>
-                    )}
-
                     {confirming ? (
                       <div className="profile-card-confirm" role="group" aria-label="Confirm delete">
                         <button
@@ -1393,12 +1407,45 @@ export default function Profile({
 
                     {expanded && inputs ? (
                       <div className="profile-card-details">
-                        {/* Actions (right aligned): Animate then Re-create */}
-                        {it.canRecreate && it.draft ? (
+                        {/* Actions (right aligned): Scene (still) + Animate (still) + Re-create */}
+                        {showActionsRow ? (
                           <div className="profile-card-detailrow profile-card-detailrow--actions">
                             <span className="k">Actions</span>
                             <span className="v profile-card-actionwrap">
-                              {canAnimate ? (
+                              {canScene ? (
+                                <button
+                                  type="button"
+                                  className="profile-card-show profile-card-scene"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+
+                                    const draft: RecreateDraft = {
+                                      mode: "still",
+                                      brief: SCENE_PROMPT,
+                                      settings: {
+                                        aspect_ratio: inputs?.aspectRatio || undefined,
+                                        minaVisionEnabled: inputs?.minaVisionEnabled,
+                                        stylePresetKeys: inputs?.stylePresetKeys?.length
+                                          ? inputs.stylePresetKeys
+                                          : undefined,
+                                      },
+                                      assets: {
+                                        productImageUrl: inputs?.productImageUrl || undefined,
+                                        logoImageUrl: inputs?.logoImageUrl || undefined,
+                                        // ✅ ONLY the generated image becomes the inspiration
+                                        styleImageUrls: [canonicalAssetUrl(sceneImageUrl)],
+                                      },
+                                    };
+
+                                    onRecreate?.(draft);
+                                    onBackToStudio?.();
+                                  }}
+                                >
+                                  Scene
+                                </button>
+                              ) : null}
+
+                              {canAnimateBtn ? (
                                 <button
                                   type="button"
                                   className="profile-card-show profile-card-animate"
@@ -1409,7 +1456,7 @@ export default function Profile({
                                       mode: "motion",
                                       assets: {
                                         ...it.draft!.assets,
-                                        kling_start_image_url: it.url,
+                                        kling_start_image_url: sceneImageUrl,
                                       },
                                     };
                                     onRecreate?.(motionDraft);
@@ -1420,17 +1467,19 @@ export default function Profile({
                                 </button>
                               ) : null}
 
-                              <button
-                                type="button"
-                                className="profile-card-show profile-card-recreate"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onRecreate?.(it.draft!);
-                                  onBackToStudio?.();
-                                }}
-                              >
-                                Re-create
-                              </button>
+                              {canRecreateBtn ? (
+                                <button
+                                  type="button"
+                                  className="profile-card-show profile-card-recreate"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRecreate?.(it.draft!);
+                                    onBackToStudio?.();
+                                  }}
+                                >
+                                  Re-create
+                                </button>
+                              ) : null}
                             </span>
                           </div>
                         ) : null}
