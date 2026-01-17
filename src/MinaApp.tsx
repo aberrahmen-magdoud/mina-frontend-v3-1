@@ -2016,7 +2016,8 @@ const showControls = uiStage >= 3 || hasEverTyped;
   };
 
   const fetchHistoryForPass = async (pid: string): Promise<HistoryResponse> => {
-    const res = await apiFetch(`/history/pass/${encodeURIComponent(pid)}`);
+    const qs = new URLSearchParams({ limit: "5000" }); // backend may ignore if not supported
+    const res = await apiFetch(`/history/pass/${encodeURIComponent(pid)}?${qs.toString()}`);
     if (!res.ok) throw new Error(`Status ${res.status}`);
     const json = (await res.json().catch(() => ({}))) as HistoryResponse;
     if (!json.ok) throw new Error("History error");
@@ -2731,6 +2732,7 @@ const styleHeroUrls = (stylePresetKeys || [])
         },
         inputs: {
           brief: trimmed,
+          prompt: trimmed, // ✅ helps history/profile store the brief
           tone,
           platform: currentAspect.platformKey,
           aspect_ratio: safeAspectRatio,
@@ -2780,11 +2782,12 @@ const styleHeroUrls = (stylePresetKeys || [])
         id: generationId,
         url,
         createdAt: new Date().toISOString(),
-        prompt: String(result?.prompt || trimmed),
+        prompt: trimmed, // ✅ user brief always
         aspectRatio: effectiveAspectRatio,
         draft: {
           mode: "still",
-          brief: String(result?.prompt || trimmed),
+          brief: trimmed, // ✅ user brief always (Re-create uses this)
+          used_prompt: String(result?.prompt || "").trim() || undefined, // optional debug
           assets: {
             product_image_url: isHttpUrl(productUrl) ? productUrl : "",
             logo_image_url: isHttpUrl(logoUrl) ? logoUrl : "",
@@ -2978,6 +2981,7 @@ const styleHeroUrls = (stylePresetKeys || [])
 
     try {
       const sid = await ensureSession();
+      const usedMotionPrompt = (motionFinalPrompt || motionTextTrimmed).trim();
 
       const frame0 = uploads.product[0]?.remoteUrl || uploads.product[0]?.url || "";
       const frame1 = uploads.product[1]?.remoteUrl || uploads.product[1]?.url || "";
@@ -2985,17 +2989,48 @@ const styleHeroUrls = (stylePresetKeys || [])
       const startFrame = isHttpUrl(frame0) ? frame0 : motionReferenceImageUrl;
       const endFrame = isHttpUrl(frame1) ? frame1 : "";
 
+      // ✅ include selected style preset hero urls + custom style heroUrls + user inspiration uploads (cap 4)
+      const styleHeroUrls = (stylePresetKeys || [])
+        .flatMap((k) => {
+          const preset = (computedStylePresets as any[])?.find((p) => String(p.key) === String(k));
+          if (preset) {
+            const hero = preset?.hero;
+            if (Array.isArray(hero)) return hero.filter((u: any) => typeof u === "string" && isHttpUrl(u));
+            if (typeof hero === "string" && hero.trim() && isHttpUrl(hero.trim())) return [hero.trim()];
+            if (typeof preset?.thumb === "string" && preset.thumb.trim() && isHttpUrl(preset.thumb.trim()))
+              return [preset.thumb.trim()];
+          }
+
+          const cs = (customStyles || []).find((s) => String(s.key) === String(k));
+          if (cs) {
+            const arr = Array.isArray((cs as any).heroUrls) ? (cs as any).heroUrls : [];
+            const fallback = typeof cs.thumbUrl === "string" ? [cs.thumbUrl] : [];
+            return [...arr, ...fallback].filter((u) => typeof u === "string" && isHttpUrl(u)).slice(0, 3);
+          }
+
+          return [];
+        })
+        .filter((u) => isHttpUrl(u));
+
+      const userInspirationUrls = (uploads.inspiration || [])
+        .map((u) => u.remoteUrl || u.url)
+        .filter((u) => isHttpUrl(u));
+
+      const inspirationUrls = Array.from(new Set([...styleHeroUrls, ...userInspirationUrls])).slice(0, 4);
+
       const mmaBody = {
         passId: currentPassId,
         assets: {
           start_image_url: startFrame,
           end_image_url: endFrame || "",
           kling_image_urls: endFrame ? [startFrame, endFrame] : [startFrame],
+          inspiration_image_urls: inspirationUrls, // ✅ keeps recreate consistent
         },
         inputs: {
-          motionDescription: (motionFinalPrompt || motionTextTrimmed).trim(),
-          prompt_override: (motionFinalPrompt || motionTextTrimmed).trim(),
-          use_prompt_override: !!(motionFinalPrompt || motionTextTrimmed).trim(),
+          motionDescription: usedMotionPrompt,
+          prompt: usedMotionPrompt, // ✅ helps history/profile store it
+          prompt_override: usedMotionPrompt,
+          use_prompt_override: !!usedMotionPrompt,
           tone,
           platform: animateAspectOption.platformKey,
           aspect_ratio: animateAspectOption.ratio,
@@ -3046,13 +3081,15 @@ const styleHeroUrls = (stylePresetKeys || [])
         id: generationId,
         url,
         createdAt: new Date().toISOString(),
-        prompt: String(result?.prompt || motionTextTrimmed),
+        prompt: usedMotionPrompt, // ✅ stable + matches what you actually used
         draft: {
           mode: "motion",
-          brief: String(result?.prompt || (motionFinalPrompt || motionTextTrimmed).trim()),
+          brief: usedMotionPrompt, // ✅ Re-create uses this
+          used_prompt: String(result?.prompt || "").trim() || undefined, // optional debug
           assets: {
             start_image_url: startFrame,
             end_image_url: endFrame || "",
+            inspiration_image_urls: inspirationUrls,
           },
           settings: {
             aspect_ratio: animateAspectOption.ratio,
@@ -3133,6 +3170,7 @@ const styleHeroUrls = (stylePresetKeys || [])
               user_tweak: tweak,
 
               brief: (stillBrief || brief || "").trim(),
+              prompt: (stillBrief || brief || "").trim(),
               platform: currentAspect.platformKey,
               aspect_ratio: safeAspectRatio,
 
@@ -3167,12 +3205,35 @@ const styleHeroUrls = (stylePresetKeys || [])
 
           applyCreditsFromResponse(result?.credits);
 
+          const tweakBrief = (stillBrief || brief || "").trim();
+
+          const productUrl = uploads.product[0]?.remoteUrl || uploads.product[0]?.url || "";
+          const logoUrl = uploads.logo[0]?.remoteUrl || uploads.logo[0]?.url || "";
+          const insp = (uploads.inspiration || [])
+            .map((u) => u.remoteUrl || u.url)
+            .filter((u) => isHttpUrl(u))
+            .slice(0, 4);
+
           const item: StillItem = {
             id: generationId,
             url,
             createdAt: new Date().toISOString(),
-            prompt: String(result?.prompt || stillBrief || brief || ""),
+            prompt: tweakBrief, // ✅ user tweak brief
             aspectRatio: currentAspect.ratio,
+            draft: {
+              mode: "still",
+              brief: tweakBrief,
+              assets: {
+                product_image_url: isHttpUrl(productUrl) ? productUrl : "",
+                logo_image_url: isHttpUrl(logoUrl) ? logoUrl : "",
+                inspiration_image_urls: insp,
+              },
+              settings: {
+                aspect_ratio: REPLICATE_ASPECT_RATIO_MAP[currentAspect.ratio] || currentAspect.ratio || "2:3",
+                stylePresetKeys: stylePresetKeys,
+                minaVisionEnabled,
+              },
+            },
           };
 
           setStillItems((prev) => {
@@ -3182,6 +3243,7 @@ const styleHeroUrls = (stylePresetKeys || [])
           });
 
           setActiveMediaKind("still");
+          setLastStillPrompt(item.prompt);
         } else {
           const frame0 = uploads.product[0]?.remoteUrl || uploads.product[0]?.url || "";
           const frame1 = uploads.product[1]?.remoteUrl || uploads.product[1]?.url || "";
@@ -3203,6 +3265,7 @@ const styleHeroUrls = (stylePresetKeys || [])
               user_tweak: tweak,
 
               motionDescription: (motionTextTrimmed || motionDescription || brief || "").trim(),
+              prompt: (motionTextTrimmed || motionDescription || brief || "").trim(),
               platform: animateAspectOption.platformKey,
               aspect_ratio: animateAspectOption.ratio,
 
@@ -3235,11 +3298,32 @@ const styleHeroUrls = (stylePresetKeys || [])
 
           applyCreditsFromResponse(result?.credits);
 
+          const tweakBrief = (motionTextTrimmed || motionDescription || brief || "").trim();
+
+          const insp = (uploads.inspiration || [])
+            .map((u) => u.remoteUrl || u.url)
+            .filter((u) => isHttpUrl(u))
+            .slice(0, 4);
+
           const item: MotionItem = {
             id: generationId,
             url,
             createdAt: new Date().toISOString(),
-            prompt: String(result?.prompt || motionTextTrimmed || motionDescription || brief || ""),
+            prompt: tweakBrief,
+            draft: {
+              mode: "motion",
+              brief: tweakBrief,
+              assets: {
+                start_image_url: startFrame,
+                end_image_url: endFrame || "",
+                inspiration_image_urls: insp,
+              },
+              settings: {
+                aspect_ratio: animateAspectOption.ratio,
+                stylePresetKeys: stylePresetKeys,
+                minaVisionEnabled,
+              },
+            },
           };
 
           setMotionItems((prev) => {
@@ -3274,6 +3358,7 @@ const styleHeroUrls = (stylePresetKeys || [])
       currentAspect.platformKey,
       stylePresetKeysForApi,
       primaryStyleKeyForApi,
+      stylePresetKeys,
       minaVisionEnabled,
       sessionId,
       sessionTitle,
@@ -3283,6 +3368,8 @@ const styleHeroUrls = (stylePresetKeys || [])
       ensureAssetsUrl,
       fetchCredits,
       uploads.product,
+      uploads.logo,
+      uploads.inspiration,
       motionReferenceImageUrl,
       motionTextTrimmed,
       motionDescription,
