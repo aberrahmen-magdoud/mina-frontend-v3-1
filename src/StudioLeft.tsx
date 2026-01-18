@@ -131,6 +131,13 @@ type StudioLeftProps = {
   animateMode?: boolean;
   onToggleAnimateMode?: (next: boolean) => void;
 
+  // ✅ Motion controls
+  motionDurationSec?: 5 | 10;
+  onToggleMotionDuration?: () => void;
+
+  motionAudioEnabled?: boolean; // true = sound on
+  onToggleMotionAudio?: () => void;
+
   motionStyleKeys?: MotionStyleKey[];
   setMotionStyleKeys?: (k: MotionStyleKey[]) => void;
 
@@ -369,6 +376,11 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
     motionError,
     onCreateMotion,
     onTypeForMe,
+    motionDurationSec,
+    onToggleMotionDuration,
+
+    motionAudioEnabled,
+    onToggleMotionAudio,
 
     imageCreditsOk: imageCreditsOkProp,
     credits: creditsProp,
@@ -465,6 +477,10 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
     const base = String(currentAspect?.label || currentAspect?.ratio || "").trim();
     return aspectLandscape && base && !isSquareRatio(base) ? "rotate(90deg)" : undefined;
   }, [aspectLandscape, currentAspect?.label, currentAspect?.ratio]);
+
+  const motionAspect = (animateAspect ?? currentAspect) as AspectOptionLike;
+  const motionAspectLabel = String(motionAspect?.label || motionAspect?.ratio || "").trim() || "Auto";
+  const motionAspectSubtitle = String(motionAspect?.subtitle || "").trim();
 
   const clearAspectHold = () => {
     if (aspectHoldTimerRef.current !== null) {
@@ -1422,8 +1438,38 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                     <span className="studio-pill-main">{motionStyleLabel}</span>
                   </button>
 
-                  {/* Ratio */}
-                  <button type="button" className={classNames("studio-pill", "studio-pill--aspect")} style={pillBaseStyle(3)} disabled>
+                  {/* ✅ Sound / Mute */}
+                  <button
+                    type="button"
+                    className={classNames(
+                      "studio-pill",
+                      "pill-audio-toggle",
+                      motionAudioEnabled === false ? "is-mute" : "is-sound"
+                    )}
+                    style={pillBaseStyle(3)}
+                    onClick={() => onToggleMotionAudio?.()}
+                    disabled={!onToggleMotionAudio}
+                    title="Toggle audio"
+                  >
+                    <span className="studio-pill-main">
+                      {motionAudioEnabled === false ? "Mute" : "Sound"}
+                    </span>
+                  </button>
+
+                  {/* ✅ Duration 5s / 10s */}
+                  <button
+                    type="button"
+                    className={classNames("studio-pill", "pill-duration-toggle")}
+                    style={pillBaseStyle(4)}
+                    onClick={() => onToggleMotionDuration?.()}
+                    disabled={!onToggleMotionDuration}
+                    title="Toggle duration"
+                  >
+                    <span className="studio-pill-main">{motionDurationSec === 10 ? "10s" : "5s"}</span>
+                  </button>
+
+                  {/* ✅ Ratio (fixed label fallback) */}
+                  <button type="button" className={classNames("studio-pill", "studio-pill--aspect")} style={pillBaseStyle(5)} disabled>
                     <span className="studio-pill-icon">
                       <img
                         src={animateAspectIconUrl || currentAspectIconUrl}
@@ -1431,8 +1477,8 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                         style={{ transform: animateAspectIconRotated ? "rotate(90deg)" : undefined }}
                       />
                     </span>
-                    <span className="studio-pill-main">{(animateAspect ?? currentAspect).label}</span>
-                    <span className="studio-pill-sub">{(animateAspect ?? currentAspect).subtitle}</span>
+                    <span className="studio-pill-main">{motionAspectLabel}</span>
+                    <span className="studio-pill-sub">{motionAspectSubtitle}</span>
                   </button>
                 </>
               )}

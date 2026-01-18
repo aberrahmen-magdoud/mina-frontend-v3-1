@@ -664,6 +664,8 @@ const MinaApp: React.FC<MinaAppProps> = () => {
   const [animateAspectRotated, setAnimateAspectRotated] = useState(false);
   const [motionGenerating, setMotionGenerating] = useState(false);
   const [motionError, setMotionError] = useState<string | null>(null);
+  const [motionAudioEnabled, setMotionAudioEnabled] = useState(true);
+  const [motionDurationSec, setMotionDurationSec] = useState<5 | 10>(5);
 
  
   const [activeMediaKind, setActiveMediaKind] = useState<"still" | "motion" | null>(null);
@@ -3217,6 +3219,8 @@ const styleHeroUrls = (stylePresetKeys || [])
           tone,
           platform: animateAspectOption.platformKey,
           aspect_ratio: animateAspectOption.ratio,
+          duration: motionDurationSec,
+          generate_audio: motionAudioEnabled,
 
           stylePresetKeys: stylePresetKeysForApi,
           stylePresetKey: primaryStyleKeyForApi,
@@ -4871,6 +4875,10 @@ const headerOverlayClass =
               motionError={motionError}
               onCreateMotion={handleGenerateMotion}
               onTypeForMe={onTypeForMe}
+              motionAudioEnabled={motionAudioEnabled}
+              onToggleMotionAudio={() => setMotionAudioEnabled((v) => !v)}
+              motionDurationSec={motionDurationSec}
+              onToggleMotionDuration={() => setMotionDurationSec((v) => (v === 5 ? 10 : 5))}
               imageCreditsOk={imageCreditsOk}
               matchaUrl={MATCHA_URL}
               minaMessage={minaMessage}
