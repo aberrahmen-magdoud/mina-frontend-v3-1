@@ -25,10 +25,16 @@ export default function SceneLibraryModal({
   const [hoverId, setHoverId] = useState<string>("");
 
   const items: SceneLibraryItem[] = useMemo(() => {
-    // Vite env
-    const raw = (import.meta as any)?.env?.VITE_SCENE_LIBRARY_JSON;
-    return parseSceneLibraryEnv(raw);
-  }, []);
+  const envRaw = (import.meta as any)?.env?.VITE_SCENE_LIBRARY_JSON;
+
+  const FALLBACK =
+    "1,Fostered glass bottle,https://assets.faltastudio.com/mma/still/12656216-f4ae-44a2-8416-e9b98875f024.png,editorial;balck;gradient;luxury;blur;soft|" +
+    "2,Perfume bottle 1,https://assets.faltastudio.com/mma/still/88a1569d-0e9f-486e-b664-ac4d3cc8dce0.png,editorial;warm;beige;muted tone;luxury;calm;perfume;soft";
+
+  const raw = String(envRaw || "").trim() || FALLBACK;
+  return parseSceneLibraryEnv(raw);
+}, []);
+
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
