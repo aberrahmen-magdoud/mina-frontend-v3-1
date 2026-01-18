@@ -1044,6 +1044,15 @@ const showControls = uiStage >= 3 || hasEverTyped;
 
   const motionReferenceImageUrl = animateImageHttp || currentStill?.url || latestStill?.url || "";
 
+  // ✅ If 2 frames are present, backend forces v2.1 mute → lock sound OFF
+  const uiFrame1 = uploads.product?.[1]?.remoteUrl || uploads.product?.[1]?.url || "";
+  const motionHasTwoFrames = animateMode && isHttpUrl(uiFrame1);
+  const motionAudioLocked = motionHasTwoFrames;
+
+  useEffect(() => {
+    if (motionAudioLocked) setMotionAudioEnabled(false);
+  }, [motionAudioLocked]);
+
   const personalityThinking = useMemo(
   () => (adminConfig.ai?.personality?.thinking?.length ? adminConfig.ai.personality.thinking : []),
   [adminConfig.ai?.personality?.thinking]
