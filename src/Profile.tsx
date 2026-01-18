@@ -24,6 +24,12 @@ function safeString(v: any, fallback = ""): string {
   return s === "undefined" || s === "null" ? fallback : s;
 }
 
+function asStrOrNull(v: any): string | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  return s ? s : null;
+}
+
 function pick(row: any, keys: string[], fallback = ""): string {
   for (const k of keys) {
     const v = row?.[k];
@@ -302,6 +308,7 @@ function extractInputsForDisplay(row: Row, isMotionHint?: boolean) {
   const varsHistory = vars && typeof vars === "object" ? (vars as any).history : null;
   const varsMeta = vars && typeof vars === "object" ? (vars as any).meta : null;
   const varsFeedback = vars && typeof vars === "object" ? (vars as any).feedback : null;
+  const inputs = varsInputs || {};
 
   const flow = String(varsMeta?.flow || meta?.flow || "").toLowerCase();
   const mmaMode = String((row as any)?.mg_mma_mode || vars?.mode || "").toLowerCase();
@@ -511,12 +518,45 @@ function extractInputsForDisplay(row: Row, isMotionHint?: boolean) {
     : [];
 
   // ✅ Reference video/audio (Frame 2 types) — NEW AI support (frame2_* + video/audio)
-  const frame2KindRaw =
-    pick(varsInputs, ["frame2_kind", "frame2Kind"], "") ||
-    pick(varsAssets, ["frame2_kind", "frame2Kind"], "") ||
-    pick(vars as any, ["frame2_kind", "frame2Kind"], "");
+  const frame2VideoUrl =
+    asStrOrNull(inputs.frame2_video_url || inputs.frame2VideoUrl) ||
+    asStrOrNull(varsAssets?.frame2_video_url || varsAssets?.frame2VideoUrl) ||
+    asStrOrNull((vars as any)?.frame2_video_url || (vars as any)?.frame2VideoUrl);
 
-  const frame2Kind = String(frame2KindRaw || "").toLowerCase();
+  const frame2AudioUrl =
+    asStrOrNull(inputs.frame2_audio_url || inputs.frame2AudioUrl) ||
+    asStrOrNull(varsAssets?.frame2_audio_url || varsAssets?.frame2AudioUrl) ||
+    asStrOrNull((vars as any)?.frame2_audio_url || (vars as any)?.frame2AudioUrl);
+
+  // ✅ Frame2 routing fields (controllers usually read from vars.inputs)
+  const frame2Kind = safeString(
+    inputs.frame2_kind ||
+      inputs.frame2Kind ||
+      (frame2VideoUrl ? "video" : frame2AudioUrl ? "audio" : ""),
+    ""
+  );
+
+  const frame2Url =
+    asStrOrNull(inputs.frame2_url || inputs.frame2Url) ||
+    frame2VideoUrl ||
+    frame2AudioUrl ||
+    null;
+
+  const frame2DurationSec = (() => {
+    const raw =
+      inputs.frame2_duration_sec ||
+      inputs.frame2DurationSec ||
+      inputs.duration_sec ||
+      inputs.durationSec ||
+      inputs.duration ||
+      null;
+
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return Math.max(1, Math.min(30, Math.floor(n))); // clamp 1..30
+  })();
+
+  const frame2KindLower = frame2Kind.toLowerCase();
 
   const referenceVideoUrlRaw =
     // new keys
@@ -592,13 +632,13 @@ function extractInputsForDisplay(row: Row, isMotionHint?: boolean) {
   // ✅ accept URLs even if they don't end with .mp4/.mp3 (some R2/public links won't)
   const refVideo =
     /^https?:\/\//i.test(referenceVideoUrl) &&
-    (isVideoUrl(referenceVideoUrl) || frame2Kind.includes("video"))
+    (isVideoUrl(referenceVideoUrl) || frame2KindLower.includes("video"))
       ? referenceVideoUrl
       : "";
 
   const refAudio =
     /^https?:\/\//i.test(referenceAudioUrl) &&
-    (isAudioUrl(referenceAudioUrl) || frame2Kind.includes("audio") || !isVideoUrl(referenceAudioUrl))
+    (isAudioUrl(referenceAudioUrl) || frame2KindLower.includes("audio") || !isVideoUrl(referenceAudioUrl))
       ? referenceAudioUrl
       : "";
 
@@ -680,6 +720,14 @@ function extractInputsForDisplay(row: Row, isMotionHint?: boolean) {
     platform,
     motionDurationSec,
     generateAudio,
+    // ✅ NEW: frame2 routing (Fabric / Motion-Control)
+    frame2_kind: frame2Kind,
+    frame2_url: frame2Url,
+    frame2_duration_sec: frame2DurationSec,
+
+    // ✅ also expose direct urls (extra-safe)
+    frame2_audio_url: frame2AudioUrl,
+    frame2_video_url: frame2VideoUrl,
     referenceVideoUrl: refVideo,
     referenceAudioUrl: refAudio,
   };
