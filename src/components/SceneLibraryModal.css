@@ -16,7 +16,7 @@
   width: 90vw;
   height: 86vh;
   background: var(--mina-bg, #FCFAF4);
-  border: 1px solid rgba(8,10,0,0.16);
+  border: 0px solid rgba(8,10,0,0.16);
   border-radius: 0;
   display:flex;
   flex-direction: column;
@@ -56,7 +56,7 @@
   flex: 1;
   border: 0;
   outline: none;
-  border-bottom: 1px solid rgba(8,10,0,0.18);
+  border-bottom: 0px solid rgba(8,10,0,0.18);
   padding: 6px 0;
   font-size: 13px;
   font-weight: 600;
