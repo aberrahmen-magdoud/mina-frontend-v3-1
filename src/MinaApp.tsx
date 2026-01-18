@@ -1056,13 +1056,23 @@ const showControls = uiStage >= 3 || hasEverTyped;
 );
 
   // ==========================
-  // FIXED matcha rules (your exact ask)
-  // - Animate/motion: need >= 10
-  // - Still niche:    need >= 2
-  // - Still main:     need >= 1
+  // Matcha rules
+  // - Still niche:    2
+  // - Still main:     1
+  // - Motion:         5s => 5, 10s => 10
   // ==========================
   const imageCost = stillLane === "niche" ? 2 : 1;
-  const motionCost = 10;
+  const motionCost = motionDurationSec === 10 ? 10 : 5;
+
+  // ✅ 2 frames (start + end) => forced v2.1 => mute only (user can't change)
+  const motionHasTwoFrames = animateMode && (uploads?.product?.length || 0) >= 2;
+  const motionAudioLocked = motionHasTwoFrames;
+  const effectiveMotionAudioEnabled = motionAudioLocked ? false : motionAudioEnabled;
+
+  // If it becomes locked, force state OFF once
+  useEffect(() => {
+    if (motionAudioLocked && motionAudioEnabled) setMotionAudioEnabled(false);
+  }, [motionAudioLocked, motionAudioEnabled]);
 
   const creditBalance = credits?.balance;
   const hasCreditNumber = typeof creditBalance === "number" && Number.isFinite(creditBalance);
@@ -3220,7 +3230,7 @@ const styleHeroUrls = (stylePresetKeys || [])
           platform: animateAspectOption.platformKey,
           aspect_ratio: animateAspectOption.ratio,
           duration: motionDurationSec,
-          generate_audio: motionAudioEnabled,
+          generate_audio: effectiveMotionAudioEnabled,
 
           stylePresetKeys: stylePresetKeysForApi,
           stylePresetKey: primaryStyleKeyForApi,
