@@ -1039,17 +1039,12 @@ export default function Profile({
   }, [generations, feedbacks, likedUrlSet, motion, activeAspectFilter, onRecreate, removedIds, sizeClassForIndex]);
 
   useEffect(() => {
-  setVisibleCount(36);
-}, [motion, activeAspectFilter]);
-
-useEffect(() => {
-  setVisibleCount((current) => Math.min(current, items.length));
-}, [items.length]);
-
-
-  useEffect(() => {
     setVisibleCount(36);
   }, [motion, activeAspectFilter]);
+
+  useEffect(() => {
+    setVisibleCount((current) => Math.min(current, items.length));
+  }, [items.length]);
 
   useEffect(() => {
     loadingMoreRefFlag.current = !!loadingMore;
@@ -1086,6 +1081,8 @@ useEffect(() => {
     const el = loadMoreRef.current;
     if (!el) return;
 
+    const root = getScrollParent(el); // ✅ critical for "popup" scroll containers
+
     const obs = new IntersectionObserver(
       (entries) => {
         if (!entries[0]?.isIntersecting) return;
@@ -1094,7 +1091,11 @@ useEffect(() => {
         loadingMoreRefFlag.current = true; // ✅ lock until parent flips loadingMore back
         onLoadMore();
       },
-      { rootMargin: "1200px 0px 1200px 0px" }
+      {
+        root: root || null,
+        rootMargin: root ? "1200px 0px 1200px 0px" : "1400px 0px 1400px 0px",
+        threshold: 0.01,
+      }
     );
 
     obs.observe(el);

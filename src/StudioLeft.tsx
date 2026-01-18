@@ -513,7 +513,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
 
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [tutorialMobile, setTutorialMobile] = useState(false);
-  const [sceneLibOpen, setSceneLibOpen] = useState(false);
+  const [sceneLibraryOpen, setSceneLibraryOpen] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 900px)");
@@ -1200,9 +1200,9 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
         max={10}
       />
       <SceneLibraryModal
-        open={sceneLibOpen}
-        onClose={() => setSceneLibOpen(false)}
-        onPickScene={(sceneUrl) => {
+        open={sceneLibraryOpen}
+        onClose={() => setSceneLibraryOpen(false)}
+        onSetScene={(sceneUrl) => {
           openPanel("product");
           onImageUrlPasted?.(sceneUrl);
         }}
@@ -1490,11 +1490,10 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                           </button>
                           <button
                             type="button"
-                            className="studio-uploadbox studio-uploadbox--library"
-                            onClick={() => setSceneLibOpen(true)}
+                            className="studio-librarybox"
+                            onClick={() => setSceneLibraryOpen(true)}
                           >
-                            <div className="studio-uploadbox-plus">📚</div>
-                            <div className="studio-uploadbox-label">Library</div>
+                            Library
                           </button>
                         </>
                       )}
