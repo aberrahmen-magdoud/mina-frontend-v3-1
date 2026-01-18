@@ -664,8 +664,10 @@ function extractInputsForDisplay(row: Row, isMotionHint?: boolean) {
       varsInputs?.motionDurationSec ||
       varsInputs?.duration_sec ||
       varsInputs?.durationSec ||
+      varsInputs?.duration ||
       varsMeta?.motion_duration_sec ||
       varsMeta?.motionDurationSec ||
+      varsMeta?.duration ||
       null;
 
     const n = Number(raw);
@@ -749,6 +751,8 @@ type RecreateDraft = {
     styleImageUrls?: string[];
     kling_start_image_url?: string;
     kling_end_image_url?: string;
+    frame2_audio_url?: string;
+    frame2_video_url?: string;
   };
 };
 
@@ -1176,7 +1180,16 @@ export default function Profile({
 
         const prompt = (inputs.brief || "").trim();
 
-        const canRecreate = source === "generation" && !!onRecreate && !!prompt;
+        // ✅ For video/audio "reference-only" runs, prompt can be empty.
+        // Still allow recreate if we have ref media or frames.
+        const hasRefMedia =
+          !!inputs.referenceAudioUrl ||
+          !!inputs.referenceVideoUrl ||
+          !!inputs.startImageUrl ||
+          !!inputs.endImageUrl ||
+          (Array.isArray(inputs.klingFrameUrls) && inputs.klingFrameUrls.length > 0);
+
+        const canRecreate = source === "generation" && !!onRecreate && (!!prompt || hasRefMedia);
 
         const draft: RecreateDraft | null = canRecreate
           ? {
@@ -1205,6 +1218,8 @@ export default function Profile({
                 styleImageUrls: inputs.styleImageUrls.length ? inputs.styleImageUrls : undefined,
                 ...(isMotion && inputs.startImageUrl ? { kling_start_image_url: inputs.startImageUrl } : {}),
                 ...(isMotion && inputs.endImageUrl ? { kling_end_image_url: inputs.endImageUrl } : {}),
+                ...(isMotion && inputs.referenceAudioUrl ? { frame2_audio_url: inputs.referenceAudioUrl } : {}),
+                ...(isMotion && inputs.referenceVideoUrl ? { frame2_video_url: inputs.referenceVideoUrl } : {}),
               },
             }
           : null;
