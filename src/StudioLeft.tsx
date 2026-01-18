@@ -1217,7 +1217,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
         onSetScene={(sceneUrl) => {
           // ✅ match Profile "Scene" behavior: set the scene + inject the scene prompt
           const SCENE_PROMPT =
-            "Replace my product in the scene, keep my scene setup the same, composition tone, aesthetic, highlights and vibe style.";
+            "Replace my product in the scene, keep my scene, composition, tone, aesthetic, highlights, and vibe style exactly the same";
 
           openPanel("product");
 
