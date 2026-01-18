@@ -74,7 +74,7 @@ export default function SceneLibraryModal({
     <div className="scene-lib-backdrop" onClick={onClose} role="dialog" aria-modal="true">
       <div className="scene-lib-modal" onClick={(e) => e.stopPropagation()}>
         <div className="scene-lib-head">
-          <div className="scene-lib-title">Library</div>
+          <div className="scene-lib-title">Commercial-friendly Library</div>
           <button className="scene-lib-close" type="button" onClick={onClose}>
             ×
           </button>
