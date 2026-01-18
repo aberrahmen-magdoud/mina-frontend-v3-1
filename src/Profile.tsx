@@ -1038,13 +1038,15 @@ export default function Profile({
     return { items: out, activeCount: out.length };
   }, [generations, feedbacks, likedUrlSet, motion, activeAspectFilter, onRecreate, removedIds, sizeClassForIndex]);
 
-  // Reset paging when list changes
-  const previousItemsLengthRef = useRef(items.length);
   useEffect(() => {
     const previousLength = previousItemsLengthRef.current;
     previousItemsLengthRef.current = items.length;
     if (items.length > previousLength) return;
     setVisibleCount(36);
+  }, [motion, activeAspectFilter]);
+
+  useEffect(() => {
+    setVisibleCount((current) => Math.min(current, items.length));
   }, [items.length]);
 
   useEffect(() => {
