@@ -3512,19 +3512,113 @@ const styleHeroUrls = (stylePresetKeys || [])
           aspect_ratio: animateAspectOption.ratio,
           duration: motionDurationSec,
 
-          stylePresetKeys: stylePresetKeysForApi,
-          stylePresetKey: primaryStyleKeyForApi,
+      // ✅ Case A: Frame2 is a reference VIDEO (image + video model)
+      if (hasFrame2Video && frame2Http) {
+        mmaBody = {
+          passId: currentPassId,
+          assets: {
+            image: startFrame,
+            video: frame2Http,
+          },
+          inputs: {
+            // enforce model defaults
+            mode: "pro",
+            character_orientation: "video",
+            keep_original_sound: true,
 
-          minaVisionEnabled,
-        },
-        settings: {},
-        history: {
-          sessionId: sid || sessionId || null,
-          sessionTitle: sessionTitle || null,
-        },
-        feedback: {},
-        prompts: {},
-      };
+            // required fields (send redundantly)
+            image: startFrame,
+            video: frame2Http,
+
+            // prompt is optional here
+            prompt: usedMotionPrompt || "",
+
+            // billing hints (frontend-aligned)
+            duration_sec: Math.min(30, Math.max(3, Math.round(videoSec || 5))),
+            billing_blocks_5s: Math.ceil((videoSec || 5) / 5),
+            billing_cost_matchas: motionCost,
+
+            stylePresetKeys: stylePresetKeysForApi,
+            stylePresetKey: primaryStyleKeyForApi,
+            minaVisionEnabled,
+          },
+          settings: {},
+          history: {
+            sessionId: sid || sessionId || null,
+            sessionTitle: sessionTitle || null,
+          },
+          feedback: {},
+          prompts: {},
+        };
+      }
+
+      // ✅ Case B: Frame2 is AUDIO (image + audio model)
+      else if (hasFrame2Audio && frame2Http) {
+        mmaBody = {
+          passId: currentPassId,
+          assets: {
+            image: startFrame,
+            audio: frame2Http,
+          },
+          inputs: {
+            image: startFrame,
+            audio: frame2Http,
+            resolution: "720p",
+            prompt: usedMotionPrompt || "",
+
+            duration_sec: Math.min(60, Math.max(3, Math.round(audioSec || 5))),
+            billing_blocks_5s: Math.ceil((audioSec || 5) / 5),
+            billing_cost_matchas: motionCost,
+
+            stylePresetKeys: stylePresetKeysForApi,
+            stylePresetKey: primaryStyleKeyForApi,
+            minaVisionEnabled,
+          },
+          settings: {},
+          history: {
+            sessionId: sid || sessionId || null,
+            sessionTitle: sessionTitle || null,
+          },
+          feedback: {},
+          prompts: {},
+        };
+      }
+
+      // ✅ Case C: existing behavior (1 image => v2.6 / 2 images => v2.1)
+      else {
+        mmaBody = {
+          passId: currentPassId,
+          assets: {
+            start_image_url: startFrame,
+            end_image_url: endFrame || "",
+            kling_image_urls: endFrame ? [startFrame, endFrame] : [startFrame],
+            inspiration_image_urls: inspirationUrls, // ✅ keeps recreate consistent
+          },
+          inputs: {
+            motionDescription: usedMotionPrompt,
+            prompt: usedMotionPrompt, // ✅ helps history/profile store it
+            prompt_override: usedMotionPrompt,
+            use_prompt_override: !!usedMotionPrompt,
+            tone,
+            platform: animateAspectOption.platformKey,
+            aspect_ratio: animateAspectOption.ratio,
+            duration: motionDurationSec,
+            generate_audio: effectiveMotionAudioEnabled,
+
+            stylePresetKeys: stylePresetKeysForApi,
+            stylePresetKey: primaryStyleKeyForApi,
+
+            minaVisionEnabled,
+          },
+          settings: {},
+          history: {
+            sessionId: sid || sessionId || null,
+            sessionTitle: sessionTitle || null,
+          },
+          feedback: {},
+          prompts: {},
+        };
+      }
 
      const { generationId } = await mmaCreateAndWait(
         "/mma/video/animate",
