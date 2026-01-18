@@ -1108,14 +1108,14 @@ const showControls = uiStage >= 3 || hasEverTyped;
       const blocks = Math.ceil((videoSec || 5) / 5);
       const cost = blocks * 5;
       const shownSec = Math.round(videoSec || 5);
-      if (blocks <= 1) return `5s = 5 matchas (${shownSec}s video)`;
+      if (blocks <= 1) return `${cost} matchas (${shownSec}s video)`;
       return `${blocks}×5s = ${cost} matchas (${shownSec}s video)`;
     }
     if (hasFrame2Audio) {
       const blocks = Math.ceil((audioSec || 5) / 5);
       const cost = blocks * 5;
       const shownSec = Math.round(audioSec || 5);
-      if (blocks <= 1) return `5s = 5 matchas (${shownSec}s audio)`;
+      if (blocks <= 1) return `${cost} matchas (${shownSec}s audio)`;
       return `${blocks}×5s = ${cost} matchas (${shownSec}s audio)`;
     }
     return `${motionDurationSec}s = ${motionCost} matchas`;
@@ -4100,7 +4100,20 @@ const styleHeroUrls = (stylePresetKeys || [])
       }
 
       const base = replace ? [] : prev[panel];
-      const next = [...base, ...created.map((c) => c.item)].slice(0, max);
+      let next = [...base, ...created.map((c) => c.item)].slice(0, max);
+
+      if (panel === "product" && animateMode && base.length === 1) {
+        const baseType = base[0]?.mediaType || inferMediaTypeFromUrl(base[0]?.remoteUrl || base[0]?.url || "");
+        const wantsStartFrame = baseType === "video" || baseType === "audio";
+        if (wantsStartFrame) {
+          const newImages = created
+            .map((c) => c.item)
+            .filter((it) => it.mediaType === "image" || !it.mediaType);
+          if (newImages.length) {
+            next = [...newImages, ...base].slice(0, max);
+          }
+        }
+      }
 
       const accepted = new Set(next.map((x) => x.id));
       created.forEach((c) => {
@@ -4129,6 +4142,7 @@ const styleHeroUrls = (stylePresetKeys || [])
 
     setUploads((prev) => {
       const base = replace ? [] : prev[panel];
+      const mediaType = inferMediaTypeFromUrl(url) || "image";
 
       const next: UploadItem = {
         id,
@@ -4136,8 +4150,18 @@ const styleHeroUrls = (stylePresetKeys || [])
         url,
         remoteUrl: undefined,
         uploading: true,
-        mediaType: inferMediaTypeFromUrl(url) || "image",
+        mediaType,
       };
+
+      if (
+        panel === "product" &&
+        animateMode &&
+        base.length === 1 &&
+        (base[0]?.mediaType === "video" || base[0]?.mediaType === "audio") &&
+        mediaType === "image"
+      ) {
+        return { ...prev, [panel]: [next, ...base].slice(0, max) };
+      }
 
       return { ...prev, [panel]: [...base, next].slice(0, max) };
     });

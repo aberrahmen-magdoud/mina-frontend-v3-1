@@ -919,11 +919,11 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
   const computedMotionCostLabel = (() => {
     const blocks = Math.ceil((refSeconds || 5) / 5);
     if (hasFrame2Video) {
-      if (blocks <= 1) return `5s = 5 matchas (${Math.round(refSeconds || 5)}s video)`;
+      if (blocks <= 1) return `${MOTION_COST} matchas (${Math.round(refSeconds || 5)}s video)`;
       return `${blocks}×5s = ${MOTION_COST} matchas (${Math.round(refSeconds || 5)}s video)`;
     }
     if (hasFrame2Audio) {
-      if (blocks <= 1) return `5s = 5 matchas (${Math.round(refSeconds || 5)}s audio)`;
+      if (blocks <= 1) return `${MOTION_COST} matchas (${Math.round(refSeconds || 5)}s audio)`;
       return `${blocks}×5s = ${MOTION_COST} matchas (${Math.round(refSeconds || 5)}s audio)`;
     }
     return `${motionDurationSec === 10 ? "10s" : "5s"} = ${MOTION_COST} matchas`;
@@ -1882,6 +1882,25 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
 
                   <div className="studio-panel-row">
                     <div className="studio-thumbs studio-thumbs--inline" onDragOver={handleDragOver} onDrop={handleDropOnPanel("product")}>
+                      {(() => {
+                        const solo = uploads.product.length === 1;
+                        const item = uploads.product[0];
+                        const kind = inferMediaTypeFromItem(item);
+                        const hasSoloRef = solo && (kind === "video" || kind === "audio");
+
+                        if (!hasSoloRef) return null;
+
+                        return (
+                          <button
+                            type="button"
+                            className="studio-plusbox studio-plusbox--inline"
+                            onClick={() => triggerPick("product")}
+                            title="Add start frame (image)"
+                          >
+                            <span aria-hidden="true">+</span>
+                          </button>
+                        );
+                      })()}
                       {uploads.product.map((it, idx) => (
                         <button
                           key={it.id}
@@ -1959,7 +1978,14 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                         </button>
                       ))}
 
-                      {uploads.product.length < 2 && (
+                      {uploads.product.length < 2 &&
+                        !(
+                          uploads.product.length === 1 &&
+                          (() => {
+                            const kind = inferMediaTypeFromItem(uploads.product[0]);
+                            return kind === "video" || kind === "audio";
+                          })()
+                        ) && (
                         <button
                           type="button"
                           className="studio-plusbox studio-plusbox--inline"
