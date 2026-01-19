@@ -18,10 +18,17 @@ type StudioRightProps = {
   setTweakText: (v: string) => void;
   onSendTweak: (text: string) => void;
 
+  // ✅ NEW: recreate action (same behavior as Profile -> Recreate)
+  onRecreate?: (args: { kind: "still" | "motion"; stillIndex: number }) => void;
+
+  // ✅ NEW: set current generated still as Scene (fills Scene pill = assets.product on your wiring)
+  // clearInspiration=true means: do NOT keep this image in inspiration/elements.
+  onSetScene?: (args: { url: string; clearInspiration?: boolean }) => void;
+
   sending?: boolean;
   error?: string | null;
 
-  // ✅ NEW: credit gate for tweak
+  // ✅ credit gate for tweak
   tweakCreditsOk?: boolean;
   tweakBlockReason?: string | null;
 };
@@ -36,6 +43,8 @@ export default function StudioRight(props: StudioRightProps) {
     tweakText,
     setTweakText,
     onSendTweak,
+    onRecreate,
+    onSetScene,
     sending,
     error,
     tweakCreditsOk,
@@ -53,14 +62,53 @@ export default function StudioRight(props: StudioRightProps) {
     setShowMotion(!!currentMotion);
   }, [currentMotion?.url]);
 
+  const safeStillUrl = useMemo(() => {
+    const clean = (u: any) => String(u || "").trim();
+
+    const isInputAsset = (u: string) => /\/(product|logo|inspiration|style)\//i.test(u);
+    const isReplicateTemp = (u: string) => /replicate\.delivery/i.test(u);
+
+    // ✅ treat YOUR generated outputs as real:
+    // - assets.faltastudio.com/mma/... (still + motion frames)
+    // - or anything under /generations/ if you ever use that too
+    const isGeneratedStill = (u: string) =>
+      !!u &&
+      !isReplicateTemp(u) &&
+      !isInputAsset(u) &&
+      (/\/mma\//i.test(u) || /\/generations\//i.test(u));
+
+    const byIndex = clean(stillItems?.[stillIndex]?.url);
+    const fromCurrent = clean(currentStill?.url);
+
+    // If user-selected still is legit, use it
+    if (isGeneratedStill(byIndex)) return byIndex;
+
+    // If currentStill is legit, use it
+    if (isGeneratedStill(fromCurrent)) return fromCurrent;
+
+    // Otherwise, pick the best real generated still in the carousel
+    const best =
+      stillItems?.map((it) => clean(it?.url)).find((u) => isGeneratedStill(u)) ||
+      "";
+
+    if (best) return best;
+
+    // Last resort: show something non-replicate if it exists
+    const fallback = byIndex || fromCurrent;
+    if (fallback && !isReplicateTemp(fallback)) return fallback;
+
+    return "";
+  }, [stillItems, stillIndex, currentStill?.url]);
+
+
   const media = useMemo(() => {
     // If we have motion and we either want to show it, OR we have no still to show, display video.
-    if (currentMotion && (showMotion || !currentStill)) {
+    if (currentMotion && (showMotion || !safeStillUrl)) {
       return { type: "video" as const, url: currentMotion.url };
     }
-    if (currentStill) return { type: "image" as const, url: currentStill.url };
+    if (safeStillUrl) return { type: "image" as const, url: safeStillUrl };
     return null;
-  }, [currentMotion, currentStill, showMotion]);
+  }, [currentMotion, showMotion, safeStillUrl]);
 
   // Swipe/drag handling
   const suppressClickRef = useRef(false);
@@ -244,6 +292,7 @@ export default function StudioRight(props: StudioRightProps) {
               <div className={`studio-output-frame ${containMode ? "is-contain" : ""}`}>
                 {media?.type === "video" ? (
                   <video
+                    key={media.url}
                     className="studio-output-media"
                     src={media.url}
                     autoPlay
@@ -255,6 +304,7 @@ export default function StudioRight(props: StudioRightProps) {
                   />
                 ) : (
                   <img
+                    key={media.url}
                     className="studio-output-media"
                     src={media?.url || ""}
                     alt=""
@@ -315,8 +365,38 @@ export default function StudioRight(props: StudioRightProps) {
             <button
               type="button"
               className="studio-action-btn"
+              onClick={() => {
+                // ✅ Always use the best generated still (even if video is showing)
+                if (!safeStillUrl) return;
+                onSetScene?.({ url: safeStillUrl, clearInspiration: true });
+              }}
+              disabled={isEmpty || !!sending || !onSetScene || !safeStillUrl}
+              title={!onSetScene ? "Set Scene not available" : undefined}
+            >
+              Set Scene
+            </button>
+
+            <button
+              type="button"
+              className="studio-action-btn"
+              onClick={() => {
+                if (!media) return;
+                onRecreate?.({
+                  kind: media.type === "video" ? "motion" : "still",
+                  stillIndex,
+                });
+              }}
+              disabled={isEmpty || !!sending || !onRecreate}
+              title={!onRecreate ? "Re-create not available" : undefined}
+            >
+              Re-create
+            </button>
+
+            <button
+              type="button"
+              className="studio-action-btn"
               onClick={sendNow}
-              disabled={!canSend} // ✅ includes no-matcha case
+              disabled={!canSend}
               title={!creditsOk ? blockMsg : undefined}
             >
               {sending ? "Tweaking…" : "Tweak"}

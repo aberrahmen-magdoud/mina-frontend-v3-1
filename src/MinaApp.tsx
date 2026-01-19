@@ -19,6 +19,13 @@ import { useAuthContext, usePassId } from "./components/AuthGate";
 import Profile from "./Profile";
 import TopLoadingBar from "./components/TopLoadingBar";
 import { downloadMinaAsset } from "./lib/minaDownload";
+import {
+  extractMmaErrorTextFromResult,
+  humanizeUploadError,
+  humanizeMmaError,
+  isTimeoutLikeStatus,
+  UI_ERROR_MESSAGES,
+} from "./lib/mmaErrors";
 
 // ============================================================================
 // [PART 1 START] Imports & environment
@@ -46,6 +53,10 @@ const API_BASE_URL = (() => {
 
 const LIKE_STORAGE_KEY = "minaLikedMap";
 const RECREATE_DRAFT_KEY = "mina_recreate_draft_v1";
+const MOTION_FRAME2_VIDEO_MIN_SEC = 0;
+const MOTION_FRAME2_VIDEO_MAX_SEC = 30;
+const FABRIC_AUDIO_MIN_SEC = 0;
+const FABRIC_AUDIO_MAX_SEC = 60;
 // ============================================================================
 // [PART 1 END]
 // ============================================================================
@@ -124,6 +135,13 @@ type HistoryResponse = {
       createdAt: string;
     }[];
   };
+  page?: {
+    limit?: number;
+    cursor?: string | null;
+    nextCursor?: string | null;
+    hasMore?: boolean;
+    returned?: number;
+  };
   generations: GenerationRecord[];
   feedbacks: FeedbackRecord[];
 };
@@ -134,6 +152,7 @@ type StillItem = {
   createdAt: string;
   prompt: string;
   aspectRatio?: string;
+  draft?: any; // ✅ used by "Re-create" button
 };
 
 type MotionItem = {
@@ -141,6 +160,7 @@ type MotionItem = {
   url: string;
   createdAt: string;
   prompt: string;
+  draft?: any; // ✅ used by "Re-create" button
 };
 
 // MMA (Mina Mind API) Types
@@ -201,6 +221,10 @@ type UploadItem = {
   file?: File;
   uploading?: boolean;
   error?: string;
+
+  // ✅ NEW: media type + duration (used for frame-2 video/audio pricing)
+  mediaType?: "image" | "video" | "audio";
+  durationSec?: number; // for video/audio (seconds)
 };
 
 type UploadPanelKey = "product" | "logo" | "inspiration";
@@ -258,8 +282,6 @@ const STYLE_PRESETS = [
     thumb: "https://assets.faltastudio.com/Website%20Assets/Vintage.jpg",
     hero: [
       "https://assets.faltastudio.com/mma/still/8167b69f-048f-49d3-a45d-669303cefc70.png",//luxury pearl
-      "https://assets.faltastudio.com/mma/still/368bd75e-92ec-4d1d-a887-dc269804c043.png",//brown wood
-      "https://assets.faltastudio.com/mma/still/8a098823-1373-4caf-8851-63ad2d7edb95.png",//brown wood
     ],
   },
   {
@@ -267,8 +289,6 @@ const STYLE_PRESETS = [
     label: "Luxury",
     thumb: "https://assets.faltastudio.com/Website%20Assets/Luxury.jpg",
     hero: [
-      "https://assets.faltastudio.com/mma/still/fb5512eb-05bd-4e69-a07f-d7b4a7c397eb.png", //grey
-      "https://assets.faltastudio.com/mma/still/eb667709-b1f3-42af-8357-92da11a7356e.png", //white
       "https://assets.faltastudio.com/mma/still/8a098823-1373-4caf-8851-63ad2d7edb95.png", //
     ],
   },
@@ -277,9 +297,7 @@ const STYLE_PRESETS = [
     label: "Minimal",
     thumb: "https://assets.faltastudio.com/Website%20Assets/Minimal.jpg",
     hero: [
-      "https://assets.faltastudio.com/mma/still/ba77edf8-4efe-443e-9128-9a810ba1013e.png", //purple
       "https://assets.faltastudio.com/mma/still/e213a6c9-7705-426d-a057-84af20a05e60.png", //red
-      "https://assets.faltastudio.com/mma/still/33adf824-9895-43cf-b1fb-3d2aa414d4fe.png", //beige
       "",
     ],
   },
@@ -358,37 +376,6 @@ function isHttpUrl(url: string) {
 function extractFirstHttpUrl(text: string) {
   const m = text.match(/https?:\/\/[^\s)]+/i);
   return m ? m[0] : null;
-}
-
-function humanizeMmaError(err: any): string {
-  const raw = String(err?.message || err || "").trim();
-  if (!raw) return "I couldn't make it. Please try again.";
-
-  const s = raw.toLowerCase();
-
-  if (
-    s.includes("no url") ||
-    s.includes("mma_no_url") ||
-    s.includes("seedream_no_url") ||
-    s.includes("nanobanana_no_url")
-  ) {
-    return "That was too complicated, try simpler task.";
-  }
-
-  if (s.includes("timeout")) return "Oops I run out of time. Try better images.";
-  if (s.includes("credit")) return "You don’t have enough matchas to do that.";
-  if (s.includes("failed to fetch") || s.includes("network"))
-    return "Connection issue. Please check your internet and try again.";
-
-  const cleaned = raw
-    .replace(/replicate/gi, "the generator")
-    .replace(/seedream/gi, "the generator")
-    .replace(/nanobanana/gi, "the generator")
-    .replace(/kling/gi, "the generator");
-
-  if (/[A-Z_]{6,}/.test(raw)) return "Something went wrong. Please try again.";
-
-  return cleaned;
 }
 
 function aspectRatioToNumber(ratio: string) {
@@ -648,6 +635,36 @@ const MinaApp: React.FC<MinaAppProps> = () => {
   const [minaMessage, setMinaMessage] = useState("");
   const [minaTalking, setMinaTalking] = useState(false);
   const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
+  type MinaNoticeTone = "thinking" | "error" | "info";
+  const [minaTone, setMinaTone] = useState<MinaNoticeTone>("thinking");
+
+  const dismissMinaNotice = useCallback(() => {
+    if (minaTone === "thinking") return;
+    setMinaTalking(false);
+    setMinaMessage("");
+    setMinaOverrideText(null);
+    setMinaTone("thinking");
+  }, [minaTone]);
+
+  const showMinaError = useCallback((err: any) => {
+    const msg = humanizeMmaError(err);
+    setMinaTone("error");
+    setMinaTalking(true);
+    setMinaOverrideText(null);
+    setMinaMessage(msg);
+  }, []);
+
+  const showMinaInfo = useCallback((msg: string) => {
+    setMinaTone("info");
+    setMinaTalking(true);
+    setMinaOverrideText(null);
+    setMinaMessage(msg);
+  }, []);
+
+  const clearMinaError = useCallback(() => {
+    if (minaTone !== "error") return;
+    dismissMinaNotice();
+  }, [dismissMinaNotice, minaTone]);
 
   // Motion
   const [motionItems, setMotionItems] = useState<MotionItem[]>([]);
@@ -661,6 +678,8 @@ const MinaApp: React.FC<MinaAppProps> = () => {
   const [animateAspectRotated, setAnimateAspectRotated] = useState(false);
   const [motionGenerating, setMotionGenerating] = useState(false);
   const [motionError, setMotionError] = useState<string | null>(null);
+  const [motionAudioEnabled, setMotionAudioEnabled] = useState(true);
+  const [motionDurationSec, setMotionDurationSec] = useState<5 | 10>(5);
 
  
   const [activeMediaKind, setActiveMediaKind] = useState<"still" | "motion" | null>(null);
@@ -746,9 +765,21 @@ const MinaApp: React.FC<MinaAppProps> = () => {
   const [historyFeedbacks, setHistoryFeedbacks] = useState<FeedbackRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
-  const [visibleHistoryCount, setVisibleHistoryCount] = useState(20);
+  const HISTORY_PAGE_LIMIT = 200;
+  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null);
+  const [historyHasMore, setHistoryHasMore] = useState<boolean>(false);
+  const [historyLoadingMore, setHistoryLoadingMore] = useState<boolean>(false);
 
-  const historyCacheRef = useRef<Record<string, { generations: GenerationRecord[]; feedbacks: FeedbackRecord[] }>>({});
+  const historyCacheRef = useRef<
+    Record<
+      string,
+      {
+        generations: GenerationRecord[];
+        feedbacks: FeedbackRecord[];
+        page?: { nextCursor: string | null; hasMore: boolean; limit: number };
+      }
+    >
+  >({});
   const historyDirtyRef = useRef<boolean>(false);
 
   const creditsCacheRef = useRef<Record<string, CreditsState>>({});
@@ -785,9 +816,6 @@ const MinaApp: React.FC<MinaAppProps> = () => {
     if (typeof window === "undefined") return [];
     return loadCustomStyles();
   });
-
-  // Load-more sentinel (Profile)
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   // Stable refs
   const uploadsRef = useRef(uploads);
@@ -1030,6 +1058,35 @@ const showControls = uiStage >= 3 || hasEverTyped;
 
   const motionReferenceImageUrl = animateImageHttp || currentStill?.url || latestStill?.url || "";
 
+  const frame2Item = uploads.product?.[1] || null;
+const frame2Url = frame2Item?.remoteUrl || frame2Item?.url || "";
+
+// ✅ FIX: make sure frame2Http exists (used later in handleGenerateMotion)
+const frame2Http = isHttpUrl(frame2Url) ? frame2Url : "";
+
+const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || null;
+
+
+  const hasFrame2Image = animateMode && frame2Kind === "image" && isHttpUrl(frame2Url);
+  const hasFrame2Video = animateMode && frame2Kind === "video" && isHttpUrl(frame2Url);
+  const hasFrame2Audio = animateMode && frame2Kind === "audio" && isHttpUrl(frame2Url);
+
+  // v2.1 two-image frames => forced mute
+  // ref-video => forced keep original sound
+  // ref-audio => forced sound on (audio drives the video)
+  const motionAudioLocked = hasFrame2Image || hasFrame2Video || hasFrame2Audio;
+
+  const effectiveMotionAudioEnabled =
+    hasFrame2Image ? false : (hasFrame2Video || hasFrame2Audio) ? true : motionAudioEnabled;
+
+  useEffect(() => {
+    // if forced mute
+    if (hasFrame2Image && motionAudioEnabled) setMotionAudioEnabled(false);
+
+    // if forced on
+    if ((hasFrame2Video || hasFrame2Audio) && !motionAudioEnabled) setMotionAudioEnabled(true);
+  }, [hasFrame2Image, hasFrame2Video, hasFrame2Audio, motionAudioEnabled]);
+
   const personalityThinking = useMemo(
   () => (adminConfig.ai?.personality?.thinking?.length ? adminConfig.ai.personality.thinking : []),
   [adminConfig.ai?.personality?.thinking]
@@ -1041,17 +1098,55 @@ const showControls = uiStage >= 3 || hasEverTyped;
   [adminConfig.ai?.personality?.filler]
 );
 
+  // ==========================
+  // Matcha rules
+  // - Still niche:    2
+  // - Still main:     1
+  // - Motion:         5s => 5, 10s => 10
+  // ==========================
+  const imageCost = stillLane === "niche" ? 2 : 1;
+  const roundUpTo5 = (sec: number) => Math.max(5, Math.ceil(sec / 5) * 5);
 
-  const imageCost = credits?.meta?.imageCost ?? adminConfig.pricing?.imageCost ?? 1;
-  const motionCost = credits?.meta?.motionCost ?? adminConfig.pricing?.motionCost ?? 10;
+  const frame2Duration = Number(frame2Item?.durationSec || 0);
+
+  const videoSec = hasFrame2Video ? Math.min(30, Math.max(0, frame2Duration || 0)) : 0;
+  const audioSec = hasFrame2Audio ? Math.min(60, Math.max(0, frame2Duration || 0)) : 0;
+
+  const videoCost = hasFrame2Video ? roundUpTo5(videoSec || 5) : 0;
+  const audioCost = hasFrame2Audio ? roundUpTo5(audioSec || 5) : 0;
+
+  const motionCost =
+    hasFrame2Video ? videoCost : hasFrame2Audio ? audioCost : motionDurationSec === 10 ? 10 : 5;
+
+  const motionCostLabel = (() => {
+    if (hasFrame2Video) {
+      const blocks = Math.ceil((videoSec || 5) / 5);
+      const cost = blocks * 5;
+      const shownSec = Math.round(videoSec || 5);
+      if (blocks <= 1) return `${cost} matchas (${shownSec}s video)`;
+      return `${blocks}×5s = ${cost} matchas (${shownSec}s video)`;
+    }
+    if (hasFrame2Audio) {
+      const blocks = Math.ceil((audioSec || 5) / 5);
+      const cost = blocks * 5;
+      const shownSec = Math.round(audioSec || 5);
+      if (blocks <= 1) return `${cost} matchas (${shownSec}s audio)`;
+      return `${blocks}×5s = ${cost} matchas (${shownSec}s audio)`;
+    }
+    return `${motionCost} matchas (${motionDurationSec}s)`;
+  })();
 
   const creditBalance = credits?.balance;
-  const imageCreditsOk = creditBalance === null || creditBalance === undefined ? true : creditBalance >= imageCost;
-  const motionCreditsOk = creditBalance === null || creditBalance === undefined ? true : creditBalance >= motionCost;
+  const hasCreditNumber = typeof creditBalance === "number" && Number.isFinite(creditBalance);
+
+  const imageCreditsOk = hasCreditNumber ? creditBalance >= imageCost : true;
+  const motionCreditsOk = hasCreditNumber ? creditBalance >= motionCost : true;
+
   const motionBlockReason = motionCreditsOk ? null : "Get more matchas to animate.";
+
   // ✅ Tweak uses the same pricing rules as the media type you're tweaking
   const tweakCreditsOk =
-  activeMediaKind === "motion" ? motionCreditsOk : activeMediaKind === "still" ? imageCreditsOk : true;
+    activeMediaKind === "motion" ? motionCreditsOk : activeMediaKind === "still" ? imageCreditsOk : true;
 
   const tweakBlockReason = tweakCreditsOk ? null : "Get more matchas to tweak.";
 
@@ -1163,7 +1258,10 @@ const showControls = uiStage >= 3 || hasEverTyped;
 
   const motionTextTrimmed = motionDescription.trim();
   const canCreateMotion =
-    !!motionReferenceImageUrl && motionTextTrimmed.length > 0 && !motionSuggestTyping && !motionSuggesting;
+    !!motionReferenceImageUrl &&
+    (motionTextTrimmed.length > 0 || hasFrame2Video || hasFrame2Audio) &&
+    !motionSuggestTyping &&
+    !motionSuggesting;
 
   const minaBusy =
     stillGenerating ||
@@ -1231,6 +1329,7 @@ const showControls = uiStage >= 3 || hasEverTyped;
   // MINA “thinking out loud” UI
   // ========================================================================
   useEffect(() => {
+    if (minaTone !== "thinking") return;
     if (!minaBusy) return;
     if (minaOverrideText) return;
 
@@ -1263,9 +1362,10 @@ const showControls = uiStage >= 3 || hasEverTyped;
     return () => {
       if (t !== null) window.clearTimeout(t);
     };
-  }, [minaBusy, minaOverrideText, personalityThinking, personalityFiller]);
+  }, [minaBusy, minaOverrideText, minaTone, personalityThinking, personalityFiller]);
 
   useEffect(() => {
+    if (minaTone !== "thinking") return;
     if (!minaOverrideText) return;
 
     setMinaTalking(true);
@@ -1291,23 +1391,18 @@ const showControls = uiStage >= 3 || hasEverTyped;
       cancelled = true;
       if (t !== null) window.clearTimeout(t);
     };
-  }, [minaOverrideText]);
+  }, [minaOverrideText, minaTone]);
 
   useEffect(() => {
     if (minaBusy) return;
+    if (minaOverrideText) return;
 
-    if (minaOverrideText) {
-      const hold = window.setTimeout(() => {
-        setMinaTalking(false);
-        setMinaMessage("");
-        setMinaOverrideText(null);
-      }, 2200);
-      return () => window.clearTimeout(hold);
-    }
+    // Keep error/info sticky until user dismisses
+    if (minaTone !== "thinking") return;
 
     setMinaTalking(false);
     setMinaMessage("");
-  }, [minaBusy, minaOverrideText]);
+  }, [minaBusy, minaOverrideText, minaTone]);
 
   // ========================================================================
   // [PART 7 START] API helpers (MMA + history/credits/R2)
@@ -1325,7 +1420,7 @@ const showControls = uiStage >= 3 || hasEverTyped;
   const apiFetch = async (path: string, init: RequestInit = {}) => {
     setPendingRequests((n) => n + 1);
     try {
-      if (!API_BASE_URL) throw new Error("Missing API base URL");
+      if (!API_BASE_URL) throw new Error(UI_ERROR_MESSAGES.missingApiBaseUrl);
 
       const headers = new Headers(init.headers || {});
       const token = await getSupabaseAccessToken(authContext?.accessToken || null);
@@ -1440,11 +1535,17 @@ const showControls = uiStage >= 3 || hasEverTyped;
   ): Promise<{ generationId: string }> => {
     const actionKey = buildMmaActionKey(createPath, body);
 
+    // ✅ if an error happened, stop any queued/batch behavior immediately
+    if (mmaAbortAllRef.current) {
+      return Promise.reject(new Error("Stopped."));
+    }
+
     // ✅ If double-fired, return the same in-flight promise (no second backend call)
     const existing = mmaInFlightRef.current.get(actionKey);
     if (existing) return existing;
 
     const run = (async () => {
+      if (mmaAbortAllRef.current) throw new Error("Stopped.");
       const idem = getIdemForRun(actionKey);
       const bodyWithIdem = attachIdempotencyKey(body || {}, idem);
 
@@ -1579,122 +1680,311 @@ const showControls = uiStage >= 3 || hasEverTyped;
 
 
   // ============================================================================
-// MMA result polling helpers (backend: GET /mma/generations/:generation_id)
-// ============================================================================
+  // MMA result polling helpers (backend: GET /mma/generations/:generation_id)
+  // FIX: handle provider outputs nested/array + mg_mma_vars JSON-string
+  // ============================================================================
 
-async function mmaFetchResult(generationId: string): Promise<MmaGenerationResponse> {
-  const id = encodeURIComponent(String(generationId || ""));
-  const res = await apiFetch(`/mma/generations/${id}`);
+  function deepPickHttpUrl(root: any, opts?: { preferVideo?: boolean }): string {
+    const preferVideo = !!opts?.preferVideo;
+    const isHttp = (s: any) => typeof s === "string" && /^https?:\/\//i.test(s.trim());
+    const clean = (s: string) => s.trim();
 
-  // Keep UI alive even if backend is briefly behind
-  if (!res.ok) {
-    return { generation_id: String(generationId), status: "queued" } as any;
+    const seen = new Set<any>();
+    let bestUrl = "";
+    let bestScore = -1;
+
+    const scoreUrl = (url: string, keyHint = "") => {
+      const u = url.toLowerCase();
+      const k = keyHint.toLowerCase();
+
+      let score = 0;
+
+      const isVid = /\.(mp4|webm|mov|m4v)(\?|#|$)/.test(u);
+      const isImg = /\.(png|jpe?g|webp|gif|avif)(\?|#|$)/.test(u);
+
+      if (preferVideo) {
+        if (isVid) score += 80;
+        if (k.includes("video") || k.includes("kling")) score += 40;
+        if (isImg) score -= 20;
+      } else {
+        if (isImg) score += 80;
+        if (k.includes("image") || k.includes("seedream") || k.includes("nanobanana")) score += 40;
+        if (isVid) score -= 20;
+      }
+
+      if (k.includes("output")) score += 10;
+      if (k.includes("url")) score += 10;
+      if (u.includes("assets.faltastudio.com")) score += 25;
+
+      return score;
+    };
+
+    const visit = (node: any, depth: number, keyHint = "") => {
+      if (depth > 10 || node == null) return;
+
+      if (isHttp(node)) {
+        const url = clean(node);
+        const sc = scoreUrl(url, keyHint);
+        if (sc > bestScore) {
+          bestScore = sc;
+          bestUrl = url;
+        }
+        return;
+      }
+
+      if (typeof node !== "object") return;
+      if (seen.has(node)) return;
+      seen.add(node);
+
+      if (Array.isArray(node)) {
+        for (const item of node) visit(item, depth + 1, keyHint);
+        return;
+      }
+
+      const keys = Object.keys(node);
+
+      const keyPriority = preferVideo
+        ? ["video_url", "kling", "video", "mp4", "outputs", "output", "url", "result", "provider_outputs"]
+        : ["image_url", "seedream", "nanobanana", "image", "png", "jpg", "jpeg", "webp", "outputs", "output", "url", "result", "provider_outputs"];
+
+      keys.sort((a, b) => {
+        const ai = keyPriority.findIndex((p) => a.toLowerCase().includes(p));
+        const bi = keyPriority.findIndex((p) => b.toLowerCase().includes(p));
+        const ax = ai === -1 ? 999 : ai;
+        const bx = bi === -1 ? 999 : bi;
+        if (ax !== bx) return ax - bx;
+        return a.localeCompare(b);
+      });
+
+      for (const k of keys) visit((node as any)[k], depth + 1, k);
+    };
+
+    visit(root, 0, "");
+    return bestUrl;
   }
 
-  const json = (await res.json().catch(() => ({}))) as any;
+  // ✅ Prevent "inspiration/product/logo" URLs from being mistaken as outputs
+  function normalizeCompareUrl(u: any): string {
+    if (typeof u !== "string") return "";
+    return stripSignedQuery(u).trim();
+  }
 
-  const mmaVars = json?.mma_vars ?? json?.mg_mma_vars ?? json?.vars ?? undefined;
+  function isHttp(u: any): u is string {
+    return typeof u === "string" && /^https?:\/\//i.test(u.trim());
+  }
 
-  const status =
-    json?.status ??
-    json?.mg_mma_status ??
-    json?.mma_status ??
-    json?.state ??
-    "queued";
+  function collectInputAssetUrlSet(mmaVars: any): Set<string> {
+    const set = new Set<string>();
+    const add = (v: any) => {
+      const s = normalizeCompareUrl(v);
+      if (s && isHttp(s)) set.add(s);
+    };
+    const addArr = (arr: any) => {
+      if (!Array.isArray(arr)) return;
+      for (const v of arr) add(v);
+    };
 
-  const outputs =
-    json?.outputs ??
-    mmaVars?.outputs ??
-    mmaVars?.provider_outputs ??
-    mmaVars?.result?.outputs ??
-    undefined;
+    const assets = mmaVars?.assets || mmaVars?.asset || {};
+    const inputs = mmaVars?.inputs || {};
 
-  const prompt =
-    json?.prompt ??
-    json?.mg_prompt ??
-    mmaVars?.prompt ??
-    null;
+    // Common asset keys (still + motion)
+    add(assets.product_image_url);
+    add(assets.logo_image_url);
+    addArr(assets.inspiration_image_urls);
 
-  const error =
-    json?.error ??
-    json?.mg_error ??
-    mmaVars?.error ??
-    undefined;
+    add(assets.start_image_url);
+    add(assets.end_image_url);
+    addArr(assets.kling_image_urls);
 
-  // helpful fallbacks for your later `(result as any)?.outputUrl/imageUrl/videoUrl` checks
-  const outputUrl =
-    json?.outputUrl ??
-    json?.mg_output_url ??
-    outputs?.nanobanana_image_url ??
-    outputs?.seedream_image_url ??
-    outputs?.kling_video_url ??
-    outputs?.image_url ??
-    outputs?.video_url ??
-    "";
+    // Possible alternate keys your backend may emit
+    add(assets.productImageUrl);
+    add(assets.logoImageUrl);
+    addArr(assets.inspirationImageUrls);
+    addArr(assets.style_image_urls);
+    addArr(assets.styleImageUrls);
 
-  return {
-    generation_id: String(json?.generation_id ?? json?.mg_generation_id ?? generationId),
-    status: String(status),
-    mode: json?.mode ?? json?.mg_mma_mode,
-    mma_vars: mmaVars,
-    outputs,
-    prompt,
-    error,
-    credits: json?.credits ?? json?.billing ?? undefined,
-    ...(outputUrl ? { outputUrl } : {}),
-  } as any;
-}
+    add(assets.startImageUrl);
+    add(assets.endImageUrl);
 
-async function mmaWaitForFinal(
-  generationId: string,
-  opts?: { timeoutMs?: number; intervalMs?: number }
-): Promise<MmaGenerationResponse> {
-  const timeoutMs = Math.max(5_000, Number(opts?.timeoutMs ?? 180_000)); // 3 min default
-  const intervalMs = Math.max(400, Number(opts?.intervalMs ?? 900));
+    // Sometimes refs leak into inputs too
+    add(inputs.product_image_url);
+    add(inputs.logo_image_url);
+    addArr(inputs.inspiration_image_urls);
+    add(inputs.start_image_url);
+    add(inputs.end_image_url);
+    addArr(inputs.kling_image_urls);
 
-  const started = Date.now();
-  let last: MmaGenerationResponse = { generation_id: generationId, status: "queued" } as any;
+    addArr(inputs.style_image_urls);
+    addArr(inputs.styleImageUrls);
 
-  const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+    return set;
+  }
 
-  while (Date.now() - started < timeoutMs) {
-    last = await mmaFetchResult(generationId);
+  function pickFirstHttpNotInput(candidates: any[], inputSet: Set<string>): string {
+    for (const c of candidates) {
+      const s = normalizeCompareUrl(c);
+      if (!s || !isHttp(s)) continue;
+      if (inputSet.has(s)) continue; // ✅ skip inspiration/product/logo/start/end refs
+      return s;
+    }
+    return "";
+  }
 
-    const st = String(last?.status || "").toLowerCase().trim();
+  function pickMmaImageUrl(resp: any): string {
+    const inputSet = collectInputAssetUrlSet(resp?.mma_vars);
 
-    // terminal statuses (cover common variants)
-    if (
-      st === "done" ||
-      st === "error" ||
-      st === "failed" ||
-      st === "succeeded" ||
-      st === "success" ||
-      st === "completed" ||
-      st === "cancelled" ||
-      st === "canceled" ||
-      st === "suggested"
-    ) {
-      return last;
+    // ✅ Only consider OUTPUT-shaped fields first, then deep-pick ONLY inside outputs
+    const candidates = [
+      resp?.outputs?.nanobanana_image_url,
+      resp?.outputs?.seedream_image_url,
+      resp?.outputs?.image_url,
+
+      // sometimes backend flattens:
+      resp?.imageUrl,
+      resp?.outputUrl,
+      resp?.mg_output_url,
+
+      // deep scan outputs only (not mma_vars!)
+      deepPickHttpUrl(resp?.outputs, { preferVideo: false }),
+    ];
+
+    return pickFirstHttpNotInput(candidates, inputSet);
+  }
+
+  function pickMmaVideoUrl(resp: any): string {
+    const inputSet = collectInputAssetUrlSet(resp?.mma_vars);
+
+    const candidates = [
+      resp?.outputs?.kling_video_url,
+      resp?.outputs?.video_url,
+
+      resp?.videoUrl,
+      resp?.outputUrl,
+      resp?.mg_output_url,
+
+      deepPickHttpUrl(resp?.outputs, { preferVideo: true }),
+    ];
+
+    return pickFirstHttpNotInput(candidates, inputSet);
+  }
+
+  async function mmaFetchResult(generationId: string): Promise<MmaGenerationResponse> {
+    const id = encodeURIComponent(String(generationId || ""));
+    const res = await apiFetch(`/mma/generations/${id}`);
+
+    if (!res.ok) {
+      return { generation_id: String(generationId), status: "queued" } as any;
     }
 
-    // sometimes outputs appear before status flips
-    const hasOutputs =
-      !!last?.outputs?.nanobanana_image_url ||
-      !!last?.outputs?.seedream_image_url ||
-      !!last?.outputs?.kling_video_url ||
-      !!last?.outputs?.image_url ||
-      !!last?.outputs?.video_url ||
-      !!(last as any)?.outputUrl ||
-      !!(last as any)?.imageUrl ||
-      !!(last as any)?.videoUrl;
+    const json = (await res.json().catch(() => ({}))) as any;
 
-    if (hasOutputs) return last;
+    const mmaVarsRaw = json?.mma_vars ?? json?.mg_mma_vars ?? json?.vars ?? undefined;
 
-    await sleep(intervalMs);
+    let mmaVars: any = mmaVarsRaw;
+    if (typeof mmaVarsRaw === "string") {
+      try {
+        mmaVars = JSON.parse(mmaVarsRaw);
+      } catch {
+        mmaVars = undefined;
+      }
+    }
+
+    const status =
+      json?.status ??
+      json?.mg_mma_status ??
+      json?.mma_status ??
+      json?.state ??
+      "queued";
+
+    const mode = (json?.mode ?? json?.mg_mma_mode ?? mmaVars?.mode ?? "").toString();
+
+    const outputs =
+      json?.outputs ??
+      mmaVars?.outputs ??
+      mmaVars?.provider_outputs ??
+      mmaVars?.result?.outputs ??
+      undefined;
+
+    const prompt =
+      json?.prompt ??
+      json?.mg_prompt ??
+      mmaVars?.prompt ??
+      null;
+
+    const error =
+      json?.error ??
+      json?.mg_error ??
+      mmaVars?.error ??
+      undefined;
+
+    const outputUrl =
+      json?.outputUrl ??
+      json?.mg_output_url ??
+      (mode.toLowerCase().includes("video")
+        ? pickMmaVideoUrl({ outputs, mma_vars: mmaVars, ...json })
+        : pickMmaImageUrl({ outputs, mma_vars: mmaVars, ...json })) ??
+      "";
+
+    return {
+      generation_id: String(json?.generation_id ?? json?.mg_generation_id ?? generationId),
+      status: String(status),
+      mode: mode || undefined,
+      mma_vars: mmaVars,
+      outputs,
+      prompt,
+      error,
+      credits: json?.credits ?? json?.billing ?? undefined,
+      ...(outputUrl ? { outputUrl } : {}),
+    } as any;
   }
 
-  return last;
-}
+  async function mmaWaitForFinal(
+    generationId: string,
+    opts?: { timeoutMs?: number; intervalMs?: number; refreshEveryMs?: number },
+    onTick?: (snapshot: any) => void
+  ): Promise<MmaGenerationResponse> {
+    const timeoutMs = Math.max(5_000, Number(opts?.timeoutMs ?? 600_000)); // 10 minutes
+    const intervalMs = Math.max(400, Number(opts?.intervalMs ?? 900));
+
+    const started = Date.now();
+    let last: MmaGenerationResponse = { generation_id: generationId, status: "queued" } as any;
+
+    const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+
+    while (Date.now() - started < timeoutMs) {
+      last = await mmaFetchResult(generationId);
+      try {
+        onTick?.(last);
+      } catch {}
+
+      const earlyErr = extractMmaErrorTextFromResult(last);
+      if (earlyErr) return last;
+
+      const st = String(last?.status || "").toLowerCase().trim();
+
+      if (
+        st === "done" ||
+        st === "error" ||
+        st === "failed" ||
+        st === "succeeded" ||
+        st === "success" ||
+        st === "completed" ||
+        st === "cancelled" ||
+        st === "canceled" ||
+        st === "suggested"
+      ) {
+        return last;
+      }
+
+      // If a URL exists, treat it as finished even if status lags
+      const hasMedia = !!pickMmaImageUrl(last) || !!pickMmaVideoUrl(last);
+      if (hasMedia) return last;
+
+      await sleep(intervalMs);
+    }
+
+    return last;
+  }
 
 
 
@@ -1837,12 +2127,53 @@ async function mmaWaitForFinal(
     return null;
   };
 
-  const fetchHistoryForPass = async (pid: string): Promise<HistoryResponse> => {
-    const res = await apiFetch(`/history/pass/${encodeURIComponent(pid)}`);
+  const fetchHistoryForPass = async (
+    pid: string,
+    opts?: { limit?: number; cursor?: string | null }
+  ): Promise<HistoryResponse> => {
+    const qs = new URLSearchParams();
+    qs.set("limit", String(opts?.limit ?? HISTORY_PAGE_LIMIT));
+    if (opts?.cursor) qs.set("cursor", String(opts.cursor));
+
+    const res = await apiFetch(`/history/pass/${encodeURIComponent(pid)}?${qs.toString()}`);
     if (!res.ok) throw new Error(`Status ${res.status}`);
     const json = (await res.json().catch(() => ({}))) as HistoryResponse;
     if (!json.ok) throw new Error("History error");
     return json;
+  };
+
+  const normalizeHistoryGeneration = async (g: GenerationRecord): Promise<GenerationRecord> => {
+    const original = String(g.outputUrl || "").trim();
+    if (!original) return g;
+
+    const stable = stripSignedQuery(original);
+
+    // Replicate: never keep/display it. Store to assets or blank.
+    if (isReplicateUrl(original) || isReplicateUrl(stable)) {
+      try {
+        const kind = isVideoUrl(original) ? "motions" : "generations";
+        const r2 = await storeRemoteToR2(original, kind);
+        const r2Stable = stripSignedQuery(r2);
+        if (r2Stable && isAssetsUrl(r2Stable)) return { ...g, outputUrl: r2Stable };
+        if (r2 && isAssetsUrl(r2)) return { ...g, outputUrl: r2 };
+        return { ...g, outputUrl: "" };
+      } catch {
+        return { ...g, outputUrl: "" };
+      }
+    }
+
+    // Non-replicate: safe to strip signatures for display
+    return stable && stable !== original ? { ...g, outputUrl: stable } : g;
+  };
+
+  const normalizeHistoryGenerations = async (gens: GenerationRecord[]) => {
+    return await Promise.all((gens || []).map(normalizeHistoryGeneration));
+  };
+
+  const mergeAppendUniqueById = <T extends { id: string }>(prev: T[], next: T[]) => {
+    const seen = new Set(prev.map((x) => x.id));
+    const add = (next || []).filter((x) => x?.id && !seen.has(x.id));
+    return [...prev, ...add];
   };
 
   const fetchHistory = async () => {
@@ -1853,13 +2184,16 @@ async function mmaWaitForFinal(
         const cached = historyCacheRef.current[currentPassId];
         setHistoryGenerations(cached.generations);
         setHistoryFeedbacks(cached.feedbacks);
+        setHistoryNextCursor(cached.page?.nextCursor ?? null);
+        setHistoryHasMore(!!cached.page?.hasMore);
         return;
       }
 
       setHistoryLoading(true);
       setHistoryError(null);
 
-      const history = await fetchHistoryForPass(currentPassId);
+      // ✅ first page
+      const history = await fetchHistoryForPass(currentPassId, { limit: HISTORY_PAGE_LIMIT, cursor: null });
 
       if (history?.credits) {
         setCredits((prev) => ({
@@ -1875,41 +2209,67 @@ async function mmaWaitForFinal(
       const gens = history?.generations || [];
       const feedbacks = history?.feedbacks || [];
 
-      const strippedGens = gens.map((g) => {
-        const original = g.outputUrl || "";
-        const stable = stripSignedQuery(original);
-        return stable && stable !== original ? { ...g, outputUrl: stable } : g;
-      });
+      const updated = await normalizeHistoryGenerations(gens);
 
-      const hasReplicate = strippedGens.some((g) => isReplicateUrl(g.outputUrl || ""));
+      const nextCursor = history?.page?.nextCursor ?? null;
+      const hasMore = !!history?.page?.hasMore;
 
-      const updated = hasReplicate
-        ? await Promise.all(
-            strippedGens.map(async (g) => {
-              const url = g.outputUrl || "";
-              if (!url) return g;
-              if (!isReplicateUrl(url)) return g;
-              try {
-                const kind = isVideoUrl(url) ? "motions" : "generations";
-                const r2 = await storeRemoteToR2(url, kind);
-                const stable = stripSignedQuery(r2);
-                return stable ? { ...g, outputUrl: stable } : g;
-              } catch {
-                return g;
-              }
-            })
-          )
-        : strippedGens;
-
-      historyCacheRef.current[currentPassId] = { generations: updated, feedbacks };
+      historyCacheRef.current[currentPassId] = {
+        generations: updated,
+        feedbacks,
+        page: { nextCursor, hasMore, limit: HISTORY_PAGE_LIMIT },
+      };
       historyDirtyRef.current = false;
 
       setHistoryGenerations(updated);
       setHistoryFeedbacks(feedbacks);
+      setHistoryNextCursor(nextCursor);
+      setHistoryHasMore(hasMore);
     } catch (err: any) {
       setHistoryError(err?.message || "Unable to load history.");
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  const fetchHistoryMore = async () => {
+    if (!API_BASE_URL || !currentPassId) return;
+    if (historyLoading || historyLoadingMore) return;
+    if (!historyHasMore || !historyNextCursor) return;
+
+    try {
+      setHistoryLoadingMore(true);
+
+      const history = await fetchHistoryForPass(currentPassId, {
+        limit: HISTORY_PAGE_LIMIT,
+        cursor: historyNextCursor,
+      });
+
+      const gens = await normalizeHistoryGenerations(history?.generations || []);
+      const feedbacks = history?.feedbacks || [];
+
+      const mergedGens = mergeAppendUniqueById(historyGenerations, gens);
+      const mergedFeedbacks = mergeAppendUniqueById(historyFeedbacks, feedbacks);
+
+      const nextCursor = history?.page?.nextCursor ?? null;
+      const hasMore = !!history?.page?.hasMore;
+
+      setHistoryGenerations(mergedGens);
+      setHistoryFeedbacks(mergedFeedbacks);
+      setHistoryNextCursor(nextCursor);
+      setHistoryHasMore(hasMore);
+
+      historyCacheRef.current[currentPassId] = {
+        generations: mergedGens,
+        feedbacks: mergedFeedbacks,
+        page: { nextCursor, hasMore, limit: HISTORY_PAGE_LIMIT },
+      };
+      historyDirtyRef.current = false;
+    } catch (err: any) {
+      // keep already loaded items
+      setHistoryError(err?.message || "Unable to load more history.");
+    } finally {
+      setHistoryLoadingMore(false);
     }
   };
 
@@ -1918,7 +2278,6 @@ async function mmaWaitForFinal(
     if (activeTab !== "profile") return;
     if (!currentPassId) return;
 
-    setVisibleHistoryCount(20);
     void fetchCredits();
     void fetchHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1944,27 +2303,6 @@ async function mmaWaitForFinal(
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPassId]);
-
-  // Infinite scroll for profile
-  useEffect(() => {
-    if (activeTab !== "profile") return undefined;
-    const target = loadMoreRef.current;
-    if (!target) return undefined;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisibleHistoryCount((count) =>
-            Math.min(historyGenerations.length, count + Math.max(10, Math.floor(count * 0.2)))
-          );
-        }
-      },
-      { rootMargin: "1200px 0px 1200px 0px" }
-    );
-
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [activeTab, historyGenerations.length]);
 
   // Admin numbering helpers
   const getEditorialNumber = (id: string, index: number) => {
@@ -2005,6 +2343,37 @@ async function mmaWaitForFinal(
   const ALLOWED_EXTS = new Set(["png", "jpg", "jpeg", "webp"]);
   const ALLOWED_MIMES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
+  // ============================================================
+  // Motion control specs (frame 1 image + frame 2 video)
+  // - Image: <= 10MB, 340px-3850px, jpg/png (we force jpg for frame1)
+  // - Video: mp4/mov, <= 100MB, 3-30s (for ref video)
+  // ============================================================
+  const MOTION_FRAME1_MAX_BYTES = 10 * 1024 * 1024; // 10MB
+  const MOTION_FRAME1_MAX_DIM = 3840; // <= 3850px safe
+
+  const MOTION_FRAME2_VIDEO_MAX_BYTES = 100 * 1024 * 1024; // 100MB
+  const MOTION_FRAME2_VIDEO_MIN_SEC = 3;
+  const MOTION_FRAME2_VIDEO_MAX_SEC = 30;
+
+  const ALLOWED_VIDEO_EXTS = new Set(["mp4", "mov"]);
+  const ALLOWED_VIDEO_MIMES = new Set(["video/mp4", "video/quicktime"]);
+
+  // ===========================
+  // Fabric 1.0 (VEED) constraints
+  // ===========================
+  const FABRIC_AUDIO_MAX_BYTES = 10 * 1024 * 1024; // 10MB
+  const FABRIC_AUDIO_MAX_SEC = 60; // 1 minute
+
+  const FABRIC_AUDIO_EXTS = new Set(["mp3", "wav", "m4a", "aac"]); // (+ "ogg" only if your provider supports it)
+  const FABRIC_AUDIO_MIMES = new Set([
+    "audio/mpeg", // mp3
+    "audio/wav", // wav
+    "audio/x-wav", // wav alt
+    "audio/mp4", // m4a
+    "audio/aac", // aac
+    // "audio/ogg", // only if supported by your provider
+  ]);
+
   // When we decide to “optimize”, we re-encode to JPEG (most compatible)
   const OPT_OUT_TYPE = "image/jpeg";
   const OPT_MAX_DIM = 3072; // keeps quality high but avoids giant inputs
@@ -2026,6 +2395,7 @@ async function mmaWaitForFinal(
 
     // show message in your existing single error spot (below Create)
     // (no provider names, no tech jargon)
+    showMinaError(message);
     setStillError(message);
     setMotionError(message);
 
@@ -2036,7 +2406,7 @@ async function mmaWaitForFinal(
       setMotionError((prev) => (prev === message ? null : prev));
       uploadMsgTimerRef.current = null;
     }, 5000);
-  }, []);
+  }, [showMinaError]);
 
   useEffect(() => {
     return () => {
@@ -2048,21 +2418,6 @@ async function mmaWaitForFinal(
   function getFileExt(name: string) {
     const m = String(name || "").toLowerCase().match(/\.([a-z0-9]+)$/i);
     return m ? m[1] : "";
-  }
-
-  function friendlyUploadError(reason: "unsupported" | "too_big" | "broken" | "link_broken") {
-    switch (reason) {
-      case "unsupported":
-        return "That file type isn’t supported. Please upload a JPG, PNG, or WebP.";
-      case "too_big":
-        return "That image is too large. Please choose one under 25MB.";
-      case "broken":
-        return "We couldn’t read that image. Please try a different file.";
-      case "link_broken":
-        return "That link didn’t load as an image. Please paste a direct image link.";
-      default:
-        return "Upload failed. Please try again.";
-    }
   }
 
   function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
@@ -2119,7 +2474,8 @@ async function mmaWaitForFinal(
   }
 
   async function normalizeImageForUpload(
-    file: File
+    file: File,
+    opts?: { forceJpeg?: boolean; maxDim?: number; maxBytes?: number }
   ): Promise<{ file: File; previewUrl?: string; changed: boolean }> {
     const ext = getFileExt(file.name);
     const mime = String(file.type || "").toLowerCase();
@@ -2128,20 +2484,23 @@ async function mmaWaitForFinal(
     const mimeAllowed = mime ? ALLOWED_MIMES.has(mime) : false;
     const isAllowed = extAllowed || mimeAllowed;
 
-    // If totally huge, we’ll try to optimize; if still > 25MB after optimization, we reject.
-    const tooBig = file.size > MAX_UPLOAD_BYTES;
+    const forceJpeg = !!opts?.forceJpeg;
+    const maxDim = Math.max(340, Math.min(3850, Number(opts?.maxDim ?? OPT_MAX_DIM)));
+    const maxBytes = Math.max(1024 * 1024, Number(opts?.maxBytes ?? MAX_UPLOAD_BYTES));
 
-    // Decide when to optimize:
-    // - unsupported format BUT decodable (ex AVIF) → convert to JPEG
-    // - too big → compress/resize to safe JPEG
-    // - very large files (even if under max) → optional optimization to avoid broken/slow downstream
-    const shouldOptimize = !isAllowed || tooBig || file.size > 18 * 1024 * 1024;
+    const tooBig = file.size > maxBytes;
+
+    // optimize if:
+    // - force jpeg (ex: motion frame1)
+    // - unsupported format but decodable
+    // - too big
+    // - very large even if under max (safety)
+    const shouldOptimize = forceJpeg || !isAllowed || tooBig || file.size > 18 * 1024 * 1024;
 
     if (!shouldOptimize) return { file, changed: false };
 
     const bmp = await decodeToBitmap(file);
     if (!bmp) {
-      // If it’s unsupported or broken, we fail nicely.
       throw new Error(!isAllowed ? "UNSUPPORTED" : "BROKEN");
     }
 
@@ -2154,7 +2513,7 @@ async function mmaWaitForFinal(
       throw new Error("BROKEN");
     }
 
-    const scale = Math.min(1, OPT_MAX_DIM / Math.max(srcW, srcH));
+    const scale = Math.min(1, maxDim / Math.max(srcW, srcH));
     const outW = Math.max(1, Math.round(srcW * scale));
     const outH = Math.max(1, Math.round(srcH * scale));
 
@@ -2175,17 +2534,18 @@ async function mmaWaitForFinal(
       (bmp as any).close?.();
     } catch {}
 
-    // Iteratively reduce quality until under MAX_UPLOAD_BYTES
+    // Always output JPEG when optimizing (most compatible)
     let q = OPT_START_QUALITY;
     let blob: Blob | null = null;
-    for (let i = 0; i < 7; i++) {
+
+    for (let i = 0; i < 8; i++) {
       blob = await canvasToBlob(canvas, OPT_OUT_TYPE, q).catch(() => null);
-      if (blob && blob.size <= MAX_UPLOAD_BYTES) break;
+      if (blob && blob.size <= maxBytes) break;
       q = Math.max(0.5, q - 0.08);
     }
 
     if (!blob) throw new Error("BROKEN");
-    if (blob.size > MAX_UPLOAD_BYTES) throw new Error("TOO_BIG");
+    if (blob.size > maxBytes) throw new Error("TOO_BIG");
 
     const baseName = file.name.replace(/\.[^.]+$/i, "") || "upload";
     const newName = `${baseName}.jpg`;
@@ -2195,36 +2555,203 @@ async function mmaWaitForFinal(
     return { file: newFile, previewUrl, changed: true };
   }
 
-  function probeImageUrl(url: string, timeoutMs = 8000): Promise<boolean> {
+  function probeMediaUrl(url: string, kind: "image" | "video" | "audio", timeoutMs = 8000): Promise<boolean> {
     return new Promise((resolve) => {
-      if (!url || !isHttpUrl(url)) return resolve(false);
-
-      const img = new Image();
-      (img as any).decoding = "async";
+      if (!url || (!isHttpUrl(url) && !url.startsWith("blob:"))) return resolve(false);
 
       let done = false;
       const finish = (ok: boolean) => {
         if (done) return;
         done = true;
-        try {
-          img.src = "";
-        } catch {}
         resolve(ok);
       };
 
       const t = window.setTimeout(() => finish(false), timeoutMs);
 
-      img.onload = () => {
+      if (kind === "image") {
+        const img = new Image();
+        (img as any).decoding = "async";
+        img.onload = () => {
+          window.clearTimeout(t);
+          finish(true);
+        };
+        img.onerror = () => {
+          window.clearTimeout(t);
+          finish(false);
+        };
+        img.src = url;
+        return;
+      }
+
+      const el = document.createElement(kind === "video" ? "video" : "audio");
+      (el as any).preload = "metadata";
+      (el as any).muted = true;
+
+      const cleanup = () => {
+        try {
+          el.pause();
+        } catch {}
+        try {
+          el.removeAttribute("src");
+          el.load();
+        } catch {}
+      };
+
+      el.onloadedmetadata = () => {
         window.clearTimeout(t);
+        cleanup();
         finish(true);
       };
-      img.onerror = () => {
+      el.onerror = () => {
         window.clearTimeout(t);
+        cleanup();
         finish(false);
       };
 
-      img.src = url;
+      el.src = url;
     });
+  }
+
+  function getMediaDurationSec(url: string, kind: "video" | "audio", timeoutMs = 8000): Promise<number | null> {
+    return new Promise((resolve) => {
+      if (!url || (!isHttpUrl(url) && !url.startsWith("blob:"))) return resolve(null);
+
+      const el = document.createElement(kind === "video" ? "video" : "audio");
+      (el as any).preload = "metadata";
+      (el as any).muted = true;
+
+      let done = false;
+      const finish = (val: number | null) => {
+        if (done) return;
+        done = true;
+        try {
+          el.pause();
+        } catch {}
+        try {
+          el.removeAttribute("src");
+          el.load();
+        } catch {}
+        resolve(val);
+      };
+
+      const t = window.setTimeout(() => finish(null), timeoutMs);
+
+      el.onloadedmetadata = () => {
+        window.clearTimeout(t);
+        const d = Number((el as any).duration);
+        finish(Number.isFinite(d) && d > 0 ? d : null);
+      };
+      el.onerror = () => {
+        window.clearTimeout(t);
+        finish(null);
+      };
+
+      el.src = url;
+    });
+  }
+
+  // ============================================================================
+  // INPUT OPTIMIZATION for MMA (NO reupload)
+  // - If URL is our assets host, rewrite to Cloudflare /cdn-cgi/image/… (1080px)
+  // - No extra R2 objects; Cloudflare caches the resized variant at the edge
+  // - Fallback: if resizing isn't enabled, we auto-fallback to the original URL
+  // ============================================================================
+  const mmaAbortAllRef = useRef(false);
+
+  // cache: original url -> optimized url (or original if resizing unavailable)
+  const inputOptCacheRef = useRef<Map<string, string>>(new Map());
+
+  // remember once if /cdn-cgi/image works on this zone
+  const cdnResizeOkRef = useRef<boolean | null>(null);
+
+  function buildCdn1080Url(rawUrl: string, kind: UploadPanelKey): string {
+    const clean = stripSignedQuery(String(rawUrl || "").trim());
+    if (!clean || !isHttpUrl(clean)) return "";
+
+    // only transform OUR CDN host
+    if (!isAssetsUrl(clean)) return clean;
+
+    try {
+      const u = new URL(clean);
+
+      // already transformed
+      if (u.pathname.startsWith("/cdn-cgi/image/")) return u.toString();
+
+      // logos may need alpha → keep png; everything else force jpeg for max compatibility
+      const format = kind === "logo" ? "png" : "jpeg";
+
+      // IMPORTANT: fit=scale-down prevents upscaling; onerror=redirect falls back to origin image
+      const opts = `width=1080,fit=scale-down,quality=85,format=${format},onerror=redirect`;
+
+      // keep query if you rely on cache-busting (?v=…)
+      return `${u.origin}/cdn-cgi/image/${opts}${u.pathname}${u.search}`;
+    } catch {
+      return clean;
+    }
+  }
+
+  async function ensureOptimizedInputUrl(rawUrl: string, kind: UploadPanelKey): Promise<string> {
+    const clean = stripSignedQuery(String(rawUrl || "").trim());
+    if (!clean || !isHttpUrl(clean)) return "";
+
+    const cached = inputOptCacheRef.current.get(clean);
+    if (cached) return cached;
+
+    // non-assets → no transform
+    if (!isAssetsUrl(clean)) {
+      inputOptCacheRef.current.set(clean, clean);
+      return clean;
+    }
+
+    const optimized = buildCdn1080Url(clean, kind);
+    if (!optimized || optimized === clean) {
+      inputOptCacheRef.current.set(clean, clean);
+      return clean;
+    }
+
+    // if we already know if resizing works, skip probing
+    if (cdnResizeOkRef.current === true) {
+      inputOptCacheRef.current.set(clean, optimized);
+      return optimized;
+    }
+    if (cdnResizeOkRef.current === false) {
+      inputOptCacheRef.current.set(clean, clean);
+      return clean;
+    }
+
+    // first time: probe once to detect if /cdn-cgi/image is enabled
+    const ok = await probeMediaUrl(optimized, "image", 3500);
+    cdnResizeOkRef.current = ok;
+
+    const finalUrl = ok ? optimized : clean;
+    inputOptCacheRef.current.set(clean, finalUrl);
+    return finalUrl;
+  }
+
+  function stopAllMmaUiNow() {
+    mmaAbortAllRef.current = true;
+
+    try {
+      mmaStreamRef.current?.close();
+    } catch {}
+    mmaStreamRef.current = null;
+
+    try {
+      mmaInFlightRef.current.clear();
+    } catch {}
+    try {
+      mmaIdemKeyRef.current.clear();
+    } catch {}
+
+    // release ALL UI locks immediately (covers batch buttons too)
+    setStillGenerating(false);
+    setMotionGenerating(false);
+    setFeedbackSending(false);
+
+    // allow new clicks shortly after (prevents runaway loops)
+    window.setTimeout(() => {
+      mmaAbortAllRef.current = false;
+    }, 300);
   }
 
   // ========================================================================
@@ -2316,6 +2843,109 @@ async function mmaWaitForFinal(
     return base.endsWith(".mp4") || base.endsWith(".webm") || base.endsWith(".mov") || base.endsWith(".m4v");
   }
 
+  function isAudioUrl(url: string) {
+    const base = (url || "").split("?")[0].split("#")[0].toLowerCase();
+    return (
+      base.endsWith(".mp3") ||
+      base.endsWith(".wav") ||
+      base.endsWith(".m4a") ||
+      base.endsWith(".aac") ||
+      base.endsWith(".ogg")
+    );
+  }
+
+  function inferMediaTypeFromFile(file: File): "image" | "video" | "audio" | null {
+    const t = String(file?.type || "").toLowerCase();
+    if (t.startsWith("image/")) return "image";
+    if (t.startsWith("video/")) return "video";
+    if (t.startsWith("audio/")) return "audio";
+    return null;
+  }
+
+  function inferMediaTypeFromUrl(url: string): "image" | "video" | "audio" | null {
+    const u = String(url || "").toLowerCase();
+    if (!/^https?:\/\//i.test(u) && !u.startsWith("blob:")) return null;
+    if (isVideoUrl(u)) return "video";
+    if (isAudioUrl(u)) return "audio";
+    // default “image” for http(s) that isn’t video/audio (matches your current behavior)
+    return "image";
+  }
+
+  function buildMmaMotionBody({
+    brief,
+    uploadsProduct,
+    motionDurationSec,
+    motionAudioEnabled,
+    motionStyleKeys,
+  }: {
+    brief: string;
+    uploadsProduct: Array<{
+      remoteUrl?: string;
+      url: string;
+      mediaType?: "image" | "video" | "audio";
+      durationSec?: number;
+    }>;
+    motionDurationSec: 5 | 10;
+    motionAudioEnabled: boolean;
+    motionStyleKeys?: string[];
+  }) {
+    const frame1 = uploadsProduct?.[0];
+    const frame2 = uploadsProduct?.[1];
+
+    const startUrl = String(frame1?.remoteUrl || "").trim();
+    if (!startUrl) throw new Error("Missing frame 1 image");
+
+    const frame2Url = String(frame2?.remoteUrl || "").trim();
+    const frame2Kind = (frame2?.mediaType || "image") as "image" | "video" | "audio";
+    const frame2DurationSec = Number(frame2?.durationSec || 0) || 0;
+
+    const inputs: any = {
+      // keep your existing brief key if different — but keep ONE user brief field
+      motion_user_brief: brief,
+
+      // keep existing motion controls for normal kling
+      motion_duration_sec: motionDurationSec,
+      generate_audio: motionAudioEnabled !== false,
+
+      // ✅ NEW canonical frame2 contract
+      frame2_kind: frame2 ? frame2Kind : null,
+      frame2_url: frame2 ? frame2Url : "",
+      frame2_duration_sec: frame2 ? frame2DurationSec : 0,
+
+      // optional
+      motion_style_keys: Array.isArray(motionStyleKeys) ? motionStyleKeys : [],
+    };
+
+    const assets: any = {
+      // ✅ always
+      kling_start_image_url: startUrl,
+    };
+
+    // Frame2 logic:
+    if (frame2 && frame2Kind === "image") {
+      assets.kling_end_image_url = frame2Url;
+      inputs.generate_audio = false; // mute lock for end frame
+    } else {
+      // video/audio => DO NOT set end image
+      delete assets.kling_end_image_url;
+    }
+
+    return {
+      mode: "video",
+      inputs,
+      assets,
+    };
+  }
+
+  const applyMotionControlRules = (rawPrompt: string, hasReferenceVideo: boolean) => {
+    const prompt = String(rawPrompt || "").trim();
+    if (!hasReferenceVideo) return prompt;
+    const rule =
+      "Follow the reference video motion and timing. Preserve framing, subject, and lighting. No new objects.";
+    if (!prompt) return rule;
+    return `${prompt}\n\n${rule}`;
+  };
+
   async function storeRemoteToR2(url: string, kind: string): Promise<string> {
     const res = await apiFetch("/api/r2/store-remote-signed", {
       method: "POST",
@@ -2339,13 +2969,34 @@ async function mmaWaitForFinal(
   }
 
   async function ensureAssetsUrl(url: string, kind: "generations" | "motions") {
-    const stable = stripSignedQuery(url || "");
-    if (!stable) return "";
-    if (isAssetsUrl(stable)) return stable;
+    const raw = String(url || "").trim();
+    if (!raw) return "";
 
-    const stored = await storeRemoteToR2(stable, kind);
-    const storedStable = stripSignedQuery(stored);
-    return storedStable || stable;
+    const displayStable = stripSignedQuery(raw);
+
+    // Already our CDN/assets -> OK to display
+    if (displayStable && isAssetsUrl(displayStable)) return displayStable;
+
+    // If it's a Replicate URL, we NEVER want to show it to the user.
+    const isReplicate = isReplicateUrl(raw) || isReplicateUrl(displayStable);
+
+    // Try to store using the ORIGINAL (possibly signed) URL
+    try {
+      const stored = await storeRemoteToR2(raw, kind);
+      const storedStable = stripSignedQuery(stored);
+
+      // Only return if it becomes an assets URL
+      if (storedStable && isAssetsUrl(storedStable)) return storedStable;
+      if (stored && isAssetsUrl(stored)) return stored;
+    } catch {
+      // ignore, handled below
+    }
+
+    // If it's Replicate and store failed -> return empty so UI shows friendly retry (not Replicate URL)
+    if (isReplicate) return "";
+
+    // Non-replicate fallback: allow displaying the stable remote URL
+    return displayStable || raw;
   }
 
   function patchUploadItem(panel: UploadPanelKey, id: string, patch: Partial<UploadItem>) {
@@ -2355,9 +3006,116 @@ async function mmaWaitForFinal(
     }));
   }
 
-  async function startUploadForFileItem(panel: UploadPanelKey, id: string, file: File) {
+  async function startUploadForFileItem(
+    panel: UploadPanelKey,
+    id: string,
+    file: File,
+    previewUrl: string,
+    mediaType: "image" | "video" | "audio"
+  ) {
     try {
       patchUploadItem(panel, id, { uploading: true, error: undefined });
+
+      // ============================================================
+      // Animate mode strict rules:
+      // - Frame 1 (product[0]) MUST be image -> auto convert to JPG <=10MB and <=3850px
+      // - Frame 2 video MUST be mp4/mov <=100MB and 3-30s
+      // ============================================================
+      const curList = uploadsRef.current?.[panel] || [];
+      const indexInPanel = curList.findIndex((x) => x.id === id);
+
+      const isAnimateFrame1 =
+        panel === "product" && animateMode && indexInPanel === 0 && mediaType === "image";
+
+      const isAnimateFrame2Video =
+        panel === "product" && animateMode && indexInPanel === 1 && mediaType === "video";
+
+      if (isAnimateFrame2Video) {
+        const ext = getFileExt(file.name);
+        const mime = String(file.type || "").toLowerCase();
+
+        if (!ALLOWED_VIDEO_EXTS.has(ext) && !ALLOWED_VIDEO_MIMES.has(mime)) {
+          showUploadNotice("product", "Video must be MP4 or MOV.");
+          removeUploadItem("product", id);
+          return;
+        }
+
+        if (file.size > MOTION_FRAME2_VIDEO_MAX_BYTES) {
+          showUploadNotice("product", "Video too large. Max 100MB.");
+          removeUploadItem("product", id);
+          return;
+        }
+
+        const d = await getMediaDurationSec(previewUrl, "video");
+        if (typeof d === "number") {
+          if (d < MOTION_FRAME2_VIDEO_MIN_SEC) {
+            showUploadNotice("product", "Video too short. Minimum 3 seconds.");
+            removeUploadItem("product", id);
+            return;
+          }
+          if (d > MOTION_FRAME2_VIDEO_MAX_SEC) {
+            showUploadNotice("product", "Video too long. Max 30 seconds.");
+            removeUploadItem("product", id);
+            return;
+          }
+        }
+      }
+
+      // ✅ Fabric audio rules (apply when your flow expects audio as frame2)
+      if (panel === "product" && animateMode && mediaType === "audio") {
+        const ext = getFileExt(file.name);
+        const mime = String(file.type || "").toLowerCase();
+
+        if (!FABRIC_AUDIO_EXTS.has(ext) && !FABRIC_AUDIO_MIMES.has(mime)) {
+          showUploadNotice("product", "Audio must be mp3, wav, m4a, or aac.");
+          removeUploadItem("product", id);
+          return;
+        }
+
+        if (file.size > FABRIC_AUDIO_MAX_BYTES) {
+          showUploadNotice("product", "Audio too large. Max 10MB.");
+          removeUploadItem("product", id);
+          return;
+        }
+
+        const d = await getMediaDurationSec(previewUrl, "audio");
+        if (typeof d === "number" && d > FABRIC_AUDIO_MAX_SEC) {
+          showUploadNotice("product", "Audio too long. Max 60 seconds.");
+          removeUploadItem("product", id);
+          return;
+        }
+      }
+
+      // ✅ Animate rule: video/audio ONLY allowed as product frame #2 (index 1)
+      if (panel === "product" && animateMode && (mediaType === "video" || mediaType === "audio")) {
+        const cur = uploadsRef.current?.product || [];
+        const hasFrame0 = !!cur?.[0];
+        const frame0Type =
+          cur?.[0]?.mediaType || inferMediaTypeFromUrl(cur?.[0]?.remoteUrl || cur?.[0]?.url || "") || "image";
+
+        if (!hasFrame0 || frame0Type !== "image") {
+          setMinaOverrideText("first frame must be an image");
+          showUploadNotice("product", "First frame must be an image. Add video/audio only as frame 2.");
+          removeUploadItem("product", id);
+          return;
+        }
+
+        // validate duration early from blob preview
+        const maxSec = mediaType === "video" ? MOTION_FRAME2_VIDEO_MAX_SEC : FABRIC_AUDIO_MAX_SEC;
+        const minSec = mediaType === "video" ? MOTION_FRAME2_VIDEO_MIN_SEC : FABRIC_AUDIO_MIN_SEC;
+        const d = await getMediaDurationSec(previewUrl, mediaType === "video" ? "video" : "audio");
+        if (typeof d === "number" && (d > maxSec || d < minSec)) {
+          setMinaOverrideText(
+            mediaType === "video" ? UI_ERROR_MESSAGES.videoTooLong : UI_ERROR_MESSAGES.audioTooLong
+          );
+          showUploadNotice(
+            "product",
+            mediaType === "video" ? UI_ERROR_MESSAGES.videoTooLongNotice : UI_ERROR_MESSAGES.audioTooLongNotice
+          );
+          removeUploadItem("product", id);
+          return;
+        }
+      }
 
       // 1) Validate / normalize (auto convert + resize if needed)
       const ext = getFileExt(file.name);
@@ -2372,59 +3130,87 @@ async function mmaWaitForFinal(
       let normalized = file;
       let newPreviewUrl: string | undefined;
 
-      try {
-        const norm = await normalizeImageForUpload(file);
-        normalized = norm.file;
-        newPreviewUrl = norm.previewUrl;
+      if (mediaType === "image") {
+        try {
+          const norm = await normalizeImageForUpload(
+            file,
+            isAnimateFrame1
+              ? { forceJpeg: true, maxDim: MOTION_FRAME1_MAX_DIM, maxBytes: MOTION_FRAME1_MAX_BYTES }
+              : undefined
+          );
+          normalized = norm.file;
+          newPreviewUrl = norm.previewUrl;
 
-        // If we generated a new preview, swap it in (feels automatic)
-        if (norm.changed && newPreviewUrl) {
-          setUploads((prev) => {
-            const item = prev[panel].find((x) => x.id === id);
-            if (item?.kind === "file" && item.url?.startsWith("blob:")) {
-              try {
-                URL.revokeObjectURL(item.url);
-              } catch {}
-            }
-            return {
-              ...prev,
-              [panel]: prev[panel].map((it) =>
-                it.id === id ? { ...it, file: normalized, url: newPreviewUrl } : it
-              ),
-            };
-          });
+          // If we generated a new preview, swap it in (feels automatic)
+          if (norm.changed && newPreviewUrl) {
+            setUploads((prev) => {
+              const item = prev[panel].find((x) => x.id === id);
+              if (item?.kind === "file" && item.url?.startsWith("blob:")) {
+                try {
+                  URL.revokeObjectURL(item.url);
+                } catch {}
+              }
+              return {
+                ...prev,
+                [panel]: prev[panel].map((it) =>
+                  it.id === id ? { ...it, file: normalized, url: newPreviewUrl } : it
+                ),
+              };
+            });
+          }
+        } catch (e: any) {
+          const code = String(e?.message || "");
+          const reason =
+            code === "TOO_BIG" || file.size > MAX_UPLOAD_BYTES
+              ? "too_big"
+              : !isAllowed || code === "UNSUPPORTED"
+                ? "unsupported"
+                : "broken";
+
+          const msg = humanizeUploadError(reason as any);
+          showUploadNotice(panel, msg);
+
+          // Remove bad item immediately so user can upload again right away
+          removeUploadItem(panel, id);
+          return;
         }
-      } catch (e: any) {
-        const code = String(e?.message || "");
-        const reason =
-          code === "TOO_BIG" || file.size > MAX_UPLOAD_BYTES
-            ? "too_big"
-            : !isAllowed || code === "UNSUPPORTED"
-              ? "unsupported"
-              : "broken";
-
-        const msg = friendlyUploadError(reason as any);
-        showUploadNotice(panel, msg);
-
-        // Remove bad item immediately so user can upload again right away
-        removeUploadItem(panel, id);
-        return;
       }
 
       // 2) Upload to R2
       const remoteUrl = await uploadFileToR2(panel, normalized);
 
-      // 3) Verify the uploaded URL actually loads as an image (catches “broken upload”)
-      const ok = await probeImageUrl(remoteUrl, 8000);
+      // 3) Verify the uploaded URL actually loads as media (catches “broken upload”)
+      const ok = await probeMediaUrl(remoteUrl, mediaType, 8000);
       if (!ok) {
-        showUploadNotice(panel, friendlyUploadError("broken"));
+        showUploadNotice(panel, humanizeUploadError("broken"));
         removeUploadItem(panel, id);
         return;
       }
 
-      patchUploadItem(panel, id, { remoteUrl, uploading: false, error: undefined });
+      let durationSec: number | undefined = undefined;
+
+      if (panel === "product" && animateMode && (mediaType === "video" || mediaType === "audio")) {
+        const d = await getMediaDurationSec(remoteUrl, mediaType === "video" ? "video" : "audio");
+        if (typeof d === "number" && d > 0) durationSec = d;
+
+        const maxSec = mediaType === "video" ? MOTION_FRAME2_VIDEO_MAX_SEC : FABRIC_AUDIO_MAX_SEC;
+        const minSec = mediaType === "video" ? MOTION_FRAME2_VIDEO_MIN_SEC : FABRIC_AUDIO_MIN_SEC;
+        if (typeof d === "number" && (d > maxSec || d < minSec)) {
+          setMinaOverrideText(
+            mediaType === "video" ? UI_ERROR_MESSAGES.videoTooLong : UI_ERROR_MESSAGES.audioTooLong
+          );
+          showUploadNotice(
+            panel,
+            mediaType === "video" ? UI_ERROR_MESSAGES.videoTooLongNotice : UI_ERROR_MESSAGES.audioTooLongNotice
+          );
+          removeUploadItem(panel, id);
+          return;
+        }
+      }
+
+      patchUploadItem(panel, id, { remoteUrl, uploading: false, error: undefined, durationSec, mediaType });
     } catch {
-      showUploadNotice(panel, "Upload failed. Please try again.");
+      showUploadNotice(panel, UI_ERROR_MESSAGES.uploadFailed);
       removeUploadItem(panel, id);
     }
   }
@@ -2433,10 +3219,11 @@ async function mmaWaitForFinal(
     try {
       patchUploadItem(panel, id, { uploading: true, error: undefined });
 
-      // quick sanity: does the link load as an image?
-      const ok = await probeImageUrl(url, 7000);
+      // quick sanity: does the link load as media?
+      const kind = inferMediaTypeFromUrl(url) || "image";
+      const ok = await probeMediaUrl(url, kind, 7000);
       if (!ok) {
-        showUploadNotice(panel, friendlyUploadError("link_broken"));
+        showUploadNotice(panel, humanizeUploadError("link_broken"));
         removeUploadItem(panel, id);
         return;
       }
@@ -2444,16 +3231,38 @@ async function mmaWaitForFinal(
       const remoteUrl = await storeRemoteToR2(url, panel);
 
       // verify stored URL too
-      const ok2 = await probeImageUrl(remoteUrl, 8000);
+      const kind2 = inferMediaTypeFromUrl(remoteUrl) || kind;
+      const ok2 = await probeMediaUrl(remoteUrl, kind2, 8000);
       if (!ok2) {
-        showUploadNotice(panel, friendlyUploadError("broken"));
+        showUploadNotice(panel, humanizeUploadError("broken"));
         removeUploadItem(panel, id);
         return;
       }
 
-      patchUploadItem(panel, id, { remoteUrl, uploading: false, error: undefined });
+      let durationSec: number | undefined = undefined;
+
+      if (panel === "product" && animateMode && (kind2 === "video" || kind2 === "audio")) {
+        const maxSec = kind2 === "video" ? MOTION_FRAME2_VIDEO_MAX_SEC : FABRIC_AUDIO_MAX_SEC;
+        const minSec = kind2 === "video" ? MOTION_FRAME2_VIDEO_MIN_SEC : FABRIC_AUDIO_MIN_SEC;
+        const d = await getMediaDurationSec(remoteUrl, kind2 === "video" ? "video" : "audio");
+        if (typeof d === "number" && d > 0) durationSec = d;
+
+        if (typeof d === "number" && (d > maxSec || d < minSec)) {
+          setMinaOverrideText(
+            kind2 === "video" ? UI_ERROR_MESSAGES.videoTooLong : UI_ERROR_MESSAGES.audioTooLong
+          );
+          showUploadNotice(
+            panel,
+            kind2 === "video" ? UI_ERROR_MESSAGES.videoTooLongNotice : UI_ERROR_MESSAGES.audioTooLongNotice
+          );
+          removeUploadItem(panel, id);
+          return;
+        }
+      }
+
+      patchUploadItem(panel, id, { remoteUrl, uploading: false, error: undefined, mediaType: kind2, durationSec });
     } catch {
-      showUploadNotice(panel, "Upload failed. Please try again.");
+      showUploadNotice(panel, UI_ERROR_MESSAGES.uploadFailed);
       removeUploadItem(panel, id);
     }
   }
@@ -2466,16 +3275,21 @@ async function mmaWaitForFinal(
     if (trimmed.length < 20) return;
 
     if (!API_BASE_URL) {
-      setStillError("Missing API base URL (VITE_MINA_API_BASE_URL).");
+      setStillError(UI_ERROR_MESSAGES.missingApiBaseUrlEnv);
+      showMinaError(UI_ERROR_MESSAGES.missingApiBaseUrlEnv);
       return;
     }
     if (!currentPassId) {
-      setStillError("Missing Pass ID for MEGA session.");
+      setStillError(UI_ERROR_MESSAGES.missingPassIdMega);
+      showMinaError(UI_ERROR_MESSAGES.missingPassIdMega);
       return;
     }
 
     setStillGenerating(true);
     setStillError(null);
+    dismissMinaNotice();
+    setMinaTone("thinking");
+    setMinaOverrideText(null);
 
     try {
       const safeAspectRatio =
@@ -2532,6 +3346,7 @@ const styleHeroUrls = (stylePresetKeys || [])
         },
         inputs: {
           brief: trimmed,
+          prompt: trimmed, // ✅ helps history/profile store the brief
           tone,
           platform: currentAspect.platformKey,
           aspect_ratio: safeAspectRatio,
@@ -2560,21 +3375,26 @@ const styleHeroUrls = (stylePresetKeys || [])
 
       );
 
-      const result = await mmaWaitForFinal(generationId);
+      const result = await mmaWaitForFinal(
+        generationId,
+        { timeoutMs: 120_000 },
+        (snap) => {
+          const errText = extractMmaErrorTextFromResult(snap);
+          if (errText) showMinaError(snap);
+        }
+      );
 
-      if (result?.status === "error") {
-        const msg = result?.error?.message || result?.error?.code || "MMA pipeline failed.";
-        throw new Error(String(msg));
+      const status = String(result?.status || "").toLowerCase().trim();
+      const earlyErr = extractMmaErrorTextFromResult(result);
+      if (earlyErr) throw result;
+
+      if (isTimeoutLikeStatus(status) || status === "queued" || status === "processing") {
+        showMinaInfo("Still generating in the background — open Profile and refresh in a minute.");
+        stopAllMmaUiNow();
+        return;
       }
 
-      const rawUrl =
-        result?.outputs?.nanobanana_image_url ||
-        result?.outputs?.seedream_image_url ||
-        result?.outputs?.image_url ||
-        (result as any)?.imageUrl ||
-        (result as any)?.outputUrl ||
-        "";
-
+      const rawUrl = pickMmaImageUrl(result);
       const url = rawUrl ? await ensureAssetsUrl(rawUrl, "generations") : "";
       if (!url) throw new Error("That was too complicated, try simpler task.");
 
@@ -2588,8 +3408,23 @@ const styleHeroUrls = (stylePresetKeys || [])
         id: generationId,
         url,
         createdAt: new Date().toISOString(),
-        prompt: String(result?.prompt || trimmed),
+        prompt: trimmed, // ✅ user brief always
         aspectRatio: effectiveAspectRatio,
+        draft: {
+          mode: "still",
+          brief: trimmed, // ✅ user brief always (Re-create uses this)
+          used_prompt: String(result?.prompt || "").trim() || undefined, // optional debug
+          assets: {
+            product_image_url: isHttpUrl(productUrl) ? productUrl : "",
+            logo_image_url: isHttpUrl(logoUrl) ? logoUrl : "",
+            inspiration_image_urls: inspirationUrls,
+          },
+          settings: {
+            aspect_ratio: safeAspectRatio,
+            stylePresetKeys: stylePresetKeys, // UI keys
+            minaVisionEnabled,
+          },
+        },
       };
 
       setStillItems((prev) => {
@@ -2601,7 +3436,10 @@ const styleHeroUrls = (stylePresetKeys || [])
       setActiveMediaKind("still");
       setLastStillPrompt(item.prompt);
     } catch (err: any) {
-      setStillError(humanizeMmaError(err));
+      stopAllMmaUiNow();
+      const msg = humanizeMmaError(err);
+      setStillError(msg);
+      showMinaError(msg);
     } finally {
       setStillGenerating(false);
     }
@@ -2647,6 +3485,7 @@ const styleHeroUrls = (stylePresetKeys || [])
   };
 
   const onTypeForMe = useCallback(async () => {
+    if (hasFrame2Video || hasFrame2Audio) return;
     if (motionSuggesting) return;
 
     const frame0 = uploads.product?.[0]?.remoteUrl || uploads.product?.[0]?.url || "";
@@ -2740,6 +3579,8 @@ const styleHeroUrls = (stylePresetKeys || [])
     }
   }, [
     motionSuggesting,
+    hasFrame2Video,
+    hasFrame2Audio,
     uploads.product,
     motionReferenceImageUrl,
     API_BASE_URL,
@@ -2760,39 +3601,85 @@ const styleHeroUrls = (stylePresetKeys || [])
   ]);
 
   const handleGenerateMotion = async () => {
-    if (!API_BASE_URL || !motionReferenceImageUrl || !motionTextTrimmed) return;
+    if (!API_BASE_URL || !motionReferenceImageUrl) return;
+    if (!motionTextTrimmed && !hasFrame2Video && !hasFrame2Audio) return;
 
     if (!currentPassId) {
-      setMotionError("Missing Pass ID for MEGA session.");
+      setMotionError(UI_ERROR_MESSAGES.missingPassIdMega);
+      showMinaError(UI_ERROR_MESSAGES.missingPassIdMega);
       return;
     }
 
     setMotionGenerating(true);
     setMotionError(null);
+    dismissMinaNotice();
+    setMinaTone("thinking");
+    setMinaOverrideText(null);
 
     try {
       const sid = await ensureSession();
+      const rawUserPrompt = (motionFinalPrompt || motionTextTrimmed).trim();
+      const usedMotionPrompt = applyMotionControlRules(rawUserPrompt, hasFrame2Video);
 
-      const frame0 = uploads.product[0]?.remoteUrl || uploads.product[0]?.url || "";
-      const frame1 = uploads.product[1]?.remoteUrl || uploads.product[1]?.url || "";
+      // ✅ include selected style preset hero urls + custom style heroUrls + user inspiration uploads (cap 4)
+      const styleHeroUrls = (stylePresetKeys || [])
+        .flatMap((k) => {
+          const preset = (computedStylePresets as any[])?.find((p) => String(p.key) === String(k));
+          if (preset) {
+            const hero = preset?.hero;
+            if (Array.isArray(hero)) return hero.filter((u: any) => typeof u === "string" && isHttpUrl(u));
+            if (typeof hero === "string" && hero.trim() && isHttpUrl(hero.trim())) return [hero.trim()];
+            if (typeof preset?.thumb === "string" && preset.thumb.trim() && isHttpUrl(preset.thumb.trim()))
+              return [preset.thumb.trim()];
+          }
 
-      const startFrame = isHttpUrl(frame0) ? frame0 : motionReferenceImageUrl;
-      const endFrame = isHttpUrl(frame1) ? frame1 : "";
+          const cs = (customStyles || []).find((s) => String(s.key) === String(k));
+          if (cs) {
+            const arr = Array.isArray((cs as any).heroUrls) ? (cs as any).heroUrls : [];
+            const fallback = typeof cs.thumbUrl === "string" ? [cs.thumbUrl] : [];
+            return [...arr, ...fallback].filter((u) => typeof u === "string" && isHttpUrl(u)).slice(0, 3);
+          }
 
-      const mmaBody = {
+          return [];
+        })
+        .filter((u) => isHttpUrl(u));
+
+      const userInspirationUrls = (uploads.inspiration || [])
+        .map((u) => u.remoteUrl || u.url)
+        .filter((u) => isHttpUrl(u));
+
+      const inspirationUrls = Array.from(new Set([...styleHeroUrls, ...userInspirationUrls])).slice(0, 4);
+
+      const klingBaseBody = buildMmaMotionBody({
+        brief: usedMotionPrompt,
+        uploadsProduct: uploads.product,
+        motionDurationSec,
+        motionAudioEnabled: effectiveMotionAudioEnabled,
+        motionStyleKeys,
+      });
+
+      const startFrame = String((klingBaseBody.assets as any)?.kling_start_image_url || "").trim();
+      const endFrame = String((klingBaseBody.assets as any)?.kling_end_image_url || "").trim();
+
+      // ✅ Build your normal/default motion body first (your existing kling frames logic)
+      const baseBody = {
         passId: currentPassId,
         assets: {
           start_image_url: startFrame,
           end_image_url: endFrame || "",
           kling_image_urls: endFrame ? [startFrame, endFrame] : [startFrame],
+          inspiration_image_urls: inspirationUrls, // ✅ keeps recreate consistent
         },
         inputs: {
-          motionDescription: (motionFinalPrompt || motionTextTrimmed).trim(),
-          prompt_override: (motionFinalPrompt || motionTextTrimmed).trim(),
-          use_prompt_override: !!(motionFinalPrompt || motionTextTrimmed).trim(),
+          motionDescription: usedMotionPrompt,
+          prompt: usedMotionPrompt, // ✅ helps history/profile store it
+          prompt_override: usedMotionPrompt,
+          use_prompt_override: !!usedMotionPrompt,
           tone,
           platform: animateAspectOption.platformKey,
           aspect_ratio: animateAspectOption.ratio,
+          duration: motionDurationSec,
+          generate_audio: effectiveMotionAudioEnabled,
 
           stylePresetKeys: stylePresetKeysForApi,
           stylePresetKey: primaryStyleKeyForApi,
@@ -2808,7 +3695,85 @@ const styleHeroUrls = (stylePresetKeys || [])
         prompts: {},
       };
 
-     const { generationId } = await mmaCreateAndWait(
+      // ✅ Now override the body ONLY when frame2 is video/audio
+      // ✅ FIX: define frame2Http in the SAME scope as handleGenerateMotion
+      const __frame2Item = uploads.product?.[1] || null;
+      const __frame2Url = String(__frame2Item?.remoteUrl || __frame2Item?.url || "").trim();
+      const frame2Http = isHttpUrl(__frame2Url) ? __frame2Url : "";
+      const mmaBody = (() => {
+        // Frame2 VIDEO => kwaivgi/kling-v2.6-motion-control (FULL = pro)
+        if (hasFrame2Video && frame2Http) {
+          return {
+            ...baseBody,
+            mode: "video",
+            assets: {
+              ...(baseBody as any).assets,
+              image: startFrame,
+              video: frame2Http,
+            },
+            inputs: {
+              ...(baseBody as any).inputs,
+
+              // routing keys (backend can pick any)
+              provider_model: "kwaivgi/kling-v2.6-motion-control",
+              model: "kwaivgi/kling-v2.6-motion-control",
+              replicate_model: "kwaivgi/kling-v2.6-motion-control",
+
+              // required by schema
+              image: startFrame,
+              video: frame2Http,
+
+              // FULL
+              mode: "pro",
+              character_orientation: "video",
+              // ✅ match the ref-video length (3–30s)
+              duration: Math.min(30, Math.max(3, Math.round(videoSec || 5))),
+
+              // ✅ keep ref video sound, don't generate new
+              generate_audio: false,
+              keep_original_sound: true,
+
+              motion_control: true,
+              reference_video_url: frame2Http,
+
+              // prompt optional
+              prompt: usedMotionPrompt || "",
+            },
+          };
+        }
+
+        // Frame2 AUDIO => veed/fabric-1.0
+        if (hasFrame2Audio && frame2Http) {
+          return {
+            ...baseBody,
+            mode: "video",
+            assets: {
+              ...(baseBody as any).assets,
+              image: startFrame,
+              audio: frame2Http,
+            },
+            inputs: {
+              ...(baseBody as any).inputs,
+
+              provider_model: "veed/fabric-1.0",
+              model: "veed/fabric-1.0",
+              replicate_model: "veed/fabric-1.0",
+
+              image: startFrame,
+              audio: frame2Http,
+
+              duration: Math.min(FABRIC_AUDIO_MAX_SEC, Math.max(1, Math.round(audioSec || 5))),
+              resolution: "720p",
+              prompt: usedMotionPrompt || "",
+            },
+          };
+        }
+
+        // Default path (your existing kling 1img/2img behavior)
+        return baseBody;
+      })();
+
+      const { generationId } = await mmaCreateAndWait(
         "/mma/video/animate",
         mmaBody,
         ({ status, scanLines }) => {
@@ -2819,22 +3784,28 @@ const styleHeroUrls = (stylePresetKeys || [])
       );
 
 
-      const result = await mmaWaitForFinal(generationId);
+      const result = await mmaWaitForFinal(
+        generationId,
+        { timeoutMs: 120_000 },
+        (snap) => {
+          const errText = extractMmaErrorTextFromResult(snap);
+          if (errText) showMinaError(snap);
+        }
+      );
 
-      if (result?.status === "error") {
-        const msg = result?.error?.message || result?.error?.code || "MMA pipeline failed.";
-        throw new Error(String(msg));
+      const status = String(result?.status || "").toLowerCase().trim();
+      const earlyErr = extractMmaErrorTextFromResult(result);
+      if (earlyErr) throw result;
+
+      if (isTimeoutLikeStatus(status) || status === "queued" || status === "processing") {
+        showMinaInfo("Still generating in the background — open Profile and refresh in a minute.");
+        stopAllMmaUiNow();
+        return;
       }
 
-      const rawUrl =
-        result?.outputs?.kling_video_url ||
-        result?.outputs?.video_url ||
-        (result as any)?.videoUrl ||
-        (result as any)?.outputUrl ||
-        "";
-
+      const rawUrl = pickMmaVideoUrl(result);
       const url = rawUrl ? await ensureAssetsUrl(rawUrl, "motions") : "";
-      if (!url) throw new Error("MMA returned no video URL.");
+      if (!url) throw new Error("That was too complicated, try simpler task.");
 
       historyDirtyRef.current = true;
       creditsDirtyRef.current = true;
@@ -2846,7 +3817,22 @@ const styleHeroUrls = (stylePresetKeys || [])
         id: generationId,
         url,
         createdAt: new Date().toISOString(),
-        prompt: String(result?.prompt || motionTextTrimmed),
+        prompt: usedMotionPrompt, // ✅ stable + matches what you actually used
+        draft: {
+          mode: "motion",
+          brief: usedMotionPrompt, // ✅ Re-create uses this
+          used_prompt: String(result?.prompt || "").trim() || undefined, // optional debug
+          assets: {
+            start_image_url: startFrame,
+            end_image_url: endFrame || "",
+            inspiration_image_urls: inspirationUrls,
+          },
+          settings: {
+            aspect_ratio: animateAspectOption.ratio,
+            stylePresetKeys: stylePresetKeys, // UI keys
+            minaVisionEnabled,
+          },
+        },
       };
 
       setMotionItems((prev) => {
@@ -2857,7 +3843,10 @@ const styleHeroUrls = (stylePresetKeys || [])
 
       setActiveMediaKind("motion");
     } catch (err: any) {
-      setMotionError(humanizeMmaError(err));
+      stopAllMmaUiNow();
+      const msg = humanizeMmaError(err);
+      setMotionError(msg);
+      showMinaError(msg);
     } finally {
       setMotionGenerating(false);
     }
@@ -2870,7 +3859,8 @@ const styleHeroUrls = (stylePresetKeys || [])
     async (rawText: string) => {
       const tweak = String(rawText || "").trim();
       if (!tweak) {
-        setFeedbackError("Type a tweak first.");
+        setFeedbackError(UI_ERROR_MESSAGES.tweakMissingText);
+        showMinaError(UI_ERROR_MESSAGES.tweakMissingText);
         return;
       }
       
@@ -2878,17 +3868,20 @@ const styleHeroUrls = (stylePresetKeys || [])
       const parentId = isMotion ? String(currentMotion?.id || "") : String(currentStill?.id || "");
       
       if (!parentId) {
-        setFeedbackError("Create an image/video first, then tweak it.");
+        setFeedbackError(UI_ERROR_MESSAGES.tweakMissingMedia);
+        showMinaError(UI_ERROR_MESSAGES.tweakMissingMedia);
         return;
       }
       
       if (!API_BASE_URL) {
-        setFeedbackError("Missing API base URL.");
+        setFeedbackError(UI_ERROR_MESSAGES.missingApiBaseUrl);
+        showMinaError(UI_ERROR_MESSAGES.missingApiBaseUrl);
         return;
       }
       
       if (!currentPassId) {
-        setFeedbackError("Missing Pass ID.");
+        setFeedbackError(UI_ERROR_MESSAGES.missingPassId);
+        showMinaError(UI_ERROR_MESSAGES.missingPassId);
         return;
       }
 
@@ -2900,7 +3893,18 @@ const styleHeroUrls = (stylePresetKeys || [])
       try {
         const sid = await ensureSession();
 
-       const onProgress = ({ status, scanLines }: { status: string; scanLines: string[] }) => {
+        const selectedMediaUrl = isMotion ? currentMotion?.url : currentStill?.url;
+        const uiLogoUrl = isMotion ? "" : uploads.logo?.[0]?.remoteUrl || uploads.logo?.[0]?.url || "";
+
+        const optimizedImageUrl = isHttpUrl(selectedMediaUrl)
+          ? await ensureOptimizedInputUrl(selectedMediaUrl, "product")
+          : "";
+
+        const optimizedLogoUrl = isHttpUrl(uiLogoUrl)
+          ? await ensureOptimizedInputUrl(uiLogoUrl, "logo")
+          : "";
+
+        const onProgress = ({ status, scanLines }: { status: string; scanLines: string[] }) => {
           const last = scanLines.slice(-1)[0] || status || "";
           if (last) setMinaOverrideText(last);
         };
@@ -2913,6 +3917,10 @@ const styleHeroUrls = (stylePresetKeys || [])
 
           const mmaBody = {
             passId: currentPassId,
+            assets: {
+              image_url: optimizedImageUrl,
+              logo_image_url: optimizedLogoUrl,
+            },
             inputs: {
               intent: "tweak",
               tweak,
@@ -2920,6 +3928,7 @@ const styleHeroUrls = (stylePresetKeys || [])
               user_tweak: tweak,
 
               brief: (stillBrief || brief || "").trim(),
+              prompt: (stillBrief || brief || "").trim(),
               platform: currentAspect.platformKey,
               aspect_ratio: safeAspectRatio,
 
@@ -2944,29 +3953,45 @@ const styleHeroUrls = (stylePresetKeys || [])
 
           const result = await mmaWaitForFinal(generationId);
           if (result?.status === "error") {
-            const msg = result?.error?.message || result?.error?.code || "MMA tweak failed.";
+            const msg = result?.error?.message || result?.error?.code || UI_ERROR_MESSAGES.mmaTweakFailed;
             throw new Error(String(msg));
           }
 
-          const rawUrl =
-            result?.outputs?.nanobanana_image_url ||
-            result?.outputs?.seedream_image_url ||
-            result?.outputs?.image_url ||
-            (result as any)?.imageUrl ||
-            (result as any)?.outputUrl ||
-            "";
-
+          const rawUrl = pickMmaImageUrl(result);
           const url = rawUrl ? await ensureAssetsUrl(rawUrl, "generations") : "";
-          if (!url) throw new Error("MMA tweak returned no image URL.");
+          if (!url) throw new Error("That was too complicated, try simpler task.");
 
           applyCreditsFromResponse(result?.credits);
+
+          const tweakBrief = (stillBrief || brief || "").trim();
+
+          const productUrl = uploads.product[0]?.remoteUrl || uploads.product[0]?.url || "";
+          const logoUrl = uploads.logo[0]?.remoteUrl || uploads.logo[0]?.url || "";
+          const insp = (uploads.inspiration || [])
+            .map((u) => u.remoteUrl || u.url)
+            .filter((u) => isHttpUrl(u))
+            .slice(0, 4);
 
           const item: StillItem = {
             id: generationId,
             url,
             createdAt: new Date().toISOString(),
-            prompt: String(result?.prompt || stillBrief || brief || ""),
+            prompt: tweakBrief, // ✅ user tweak brief
             aspectRatio: currentAspect.ratio,
+            draft: {
+              mode: "still",
+              brief: tweakBrief,
+              assets: {
+                product_image_url: isHttpUrl(productUrl) ? productUrl : "",
+                logo_image_url: isHttpUrl(logoUrl) ? logoUrl : "",
+                inspiration_image_urls: insp,
+              },
+              settings: {
+                aspect_ratio: REPLICATE_ASPECT_RATIO_MAP[currentAspect.ratio] || currentAspect.ratio || "2:3",
+                stylePresetKeys: stylePresetKeys,
+                minaVisionEnabled,
+              },
+            },
           };
 
           setStillItems((prev) => {
@@ -2976,6 +4001,7 @@ const styleHeroUrls = (stylePresetKeys || [])
           });
 
           setActiveMediaKind("still");
+          setLastStillPrompt(item.prompt);
         } else {
           const frame0 = uploads.product[0]?.remoteUrl || uploads.product[0]?.url || "";
           const frame1 = uploads.product[1]?.remoteUrl || uploads.product[1]?.url || "";
@@ -2986,9 +4012,7 @@ const styleHeroUrls = (stylePresetKeys || [])
           const mmaBody = {
             passId: currentPassId,
             assets: {
-              start_image_url: startFrame,
-              end_image_url: endFrame || "",
-              kling_image_urls: endFrame ? [startFrame, endFrame] : [startFrame],
+              video_url: isHttpUrl(selectedMediaUrl) ? selectedMediaUrl : "",
             },
             inputs: {
               intent: "tweak",
@@ -2997,6 +4021,7 @@ const styleHeroUrls = (stylePresetKeys || [])
               user_tweak: tweak,
 
               motionDescription: (motionTextTrimmed || motionDescription || brief || "").trim(),
+              prompt: (motionTextTrimmed || motionDescription || brief || "").trim(),
               platform: animateAspectOption.platformKey,
               aspect_ratio: animateAspectOption.ratio,
 
@@ -3019,27 +4044,42 @@ const styleHeroUrls = (stylePresetKeys || [])
 
           const result = await mmaWaitForFinal(generationId);
           if (result?.status === "error") {
-            const msg = result?.error?.message || result?.error?.code || "MMA tweak failed.";
+            const msg = result?.error?.message || result?.error?.code || UI_ERROR_MESSAGES.mmaTweakFailed;
             throw new Error(String(msg));
           }
 
-          const rawUrl =
-            result?.outputs?.kling_video_url ||
-            result?.outputs?.video_url ||
-            (result as any)?.videoUrl ||
-            (result as any)?.outputUrl ||
-            "";
-
+          const rawUrl = pickMmaVideoUrl(result);
           const url = rawUrl ? await ensureAssetsUrl(rawUrl, "motions") : "";
-          if (!url) throw new Error("MMA tweak returned no video URL.");
+          if (!url) throw new Error("That was too complicated, try simpler task.");
 
           applyCreditsFromResponse(result?.credits);
+
+          const tweakBrief = (motionTextTrimmed || motionDescription || brief || "").trim();
+
+          const insp = (uploads.inspiration || [])
+            .map((u) => u.remoteUrl || u.url)
+            .filter((u) => isHttpUrl(u))
+            .slice(0, 4);
 
           const item: MotionItem = {
             id: generationId,
             url,
             createdAt: new Date().toISOString(),
-            prompt: String(result?.prompt || motionTextTrimmed || motionDescription || brief || ""),
+            prompt: tweakBrief,
+            draft: {
+              mode: "motion",
+              brief: tweakBrief,
+              assets: {
+                start_image_url: startFrame,
+                end_image_url: endFrame || "",
+                inspiration_image_urls: insp,
+              },
+              settings: {
+                aspect_ratio: animateAspectOption.ratio,
+                stylePresetKeys: stylePresetKeys,
+                minaVisionEnabled,
+              },
+            },
           };
 
           setMotionItems((prev) => {
@@ -3057,6 +4097,7 @@ const styleHeroUrls = (stylePresetKeys || [])
 
         setFeedbackText("");
       } catch (err: any) {
+        stopAllMmaUiNow();
         setFeedbackError(humanizeMmaError(err));
       } finally {
         setFeedbackSending(false);
@@ -3067,13 +4108,16 @@ const styleHeroUrls = (stylePresetKeys || [])
       currentPassId,
       activeMediaKind,
       currentMotion?.id,
+      currentMotion?.url,
       currentStill?.id,
+      currentStill?.url,
       stillBrief,
       brief,
       currentAspect.ratio,
       currentAspect.platformKey,
       stylePresetKeysForApi,
       primaryStyleKeyForApi,
+      stylePresetKeys,
       minaVisionEnabled,
       sessionId,
       sessionTitle,
@@ -3083,6 +4127,8 @@ const styleHeroUrls = (stylePresetKeys || [])
       ensureAssetsUrl,
       fetchCredits,
       uploads.product,
+      uploads.logo,
+      uploads.inspiration,
       motionReferenceImageUrl,
       motionTextTrimmed,
       motionDescription,
@@ -3208,6 +4254,7 @@ const styleHeroUrls = (stylePresetKeys || [])
               url: latestStill.url,
               remoteUrl: latestStill.url,
               uploading: false,
+              mediaType: "image",
             },
           ],
         }));
@@ -3249,9 +4296,20 @@ const styleHeroUrls = (stylePresetKeys || [])
   const addFilesToPanel = (panel: UploadPanelKey, files: FileList) => {
     const max = capForPanel(panel);
 
-    const incoming = Array.from(files || []).filter(
-      (f) => f && typeof f.type === "string" && f.type.startsWith("image/")
-    );
+    const incoming = Array.from(files || []).filter((f) => {
+      if (!f || typeof f.type !== "string") return false;
+
+      const mt = inferMediaTypeFromFile(f);
+      if (panel !== "product") return mt === "image";
+
+      // product:
+      if (!animateMode) return mt === "image";
+
+      // animateMode product: allow image always; allow video/audio ONLY as frame #2
+      if (mt === "image") return true;
+      if (mt === "video" || mt === "audio") return true;
+      return false;
+    });
     if (!incoming.length) return;
 
     // inspiration append; product in animate also append
@@ -3269,6 +4327,8 @@ const styleHeroUrls = (stylePresetKeys || [])
       const id = `${panel}_${now}_${i}_${Math.random().toString(16).slice(2)}`;
       const previewUrl = URL.createObjectURL(file);
 
+      const mediaType = inferMediaTypeFromFile(file) || "image";
+
       const item: UploadItem = {
         id,
         kind: "file",
@@ -3277,6 +4337,7 @@ const styleHeroUrls = (stylePresetKeys || [])
         file,
         uploading: true,
         error: undefined,
+        mediaType,
       };
 
       return { id, file, previewUrl, item };
@@ -3296,7 +4357,20 @@ const styleHeroUrls = (stylePresetKeys || [])
       }
 
       const base = replace ? [] : prev[panel];
-      const next = [...base, ...created.map((c) => c.item)].slice(0, max);
+      let next = [...base, ...created.map((c) => c.item)].slice(0, max);
+
+      if (panel === "product" && animateMode && base.length === 1) {
+        const baseType = base[0]?.mediaType || inferMediaTypeFromUrl(base[0]?.remoteUrl || base[0]?.url || "");
+        const wantsStartFrame = baseType === "video" || baseType === "audio";
+        if (wantsStartFrame) {
+          const newImages = created
+            .map((c) => c.item)
+            .filter((it) => it.mediaType === "image" || !it.mediaType);
+          if (newImages.length) {
+            next = [...newImages, ...base].slice(0, max);
+          }
+        }
+      }
 
       const accepted = new Set(next.map((x) => x.id));
       created.forEach((c) => {
@@ -3312,8 +4386,8 @@ const styleHeroUrls = (stylePresetKeys || [])
       return { ...prev, [panel]: next };
     });
 
-    created.forEach(({ id, file }) => {
-      void startUploadForFileItem(panel, id, file);
+    created.forEach(({ id, file, previewUrl }) => {
+      void startUploadForFileItem(panel, id, file, previewUrl, inferMediaTypeFromFile(file) || "image");
     });
   };
 
@@ -3325,6 +4399,7 @@ const styleHeroUrls = (stylePresetKeys || [])
 
     setUploads((prev) => {
       const base = replace ? [] : prev[panel];
+      const mediaType = inferMediaTypeFromUrl(url) || "image";
 
       const next: UploadItem = {
         id,
@@ -3332,7 +4407,18 @@ const styleHeroUrls = (stylePresetKeys || [])
         url,
         remoteUrl: undefined,
         uploading: true,
+        mediaType,
       };
+
+      if (
+        panel === "product" &&
+        animateMode &&
+        base.length === 1 &&
+        (base[0]?.mediaType === "video" || base[0]?.mediaType === "audio") &&
+        mediaType === "image"
+      ) {
+        return { ...prev, [panel]: [next, ...base].slice(0, max) };
+      }
 
       return { ...prev, [panel]: [...base, next].slice(0, max) };
     });
@@ -3366,8 +4452,33 @@ const styleHeroUrls = (stylePresetKeys || [])
     setUploads((prev) => {
       const arr = [...prev[panel]];
       if (from < 0 || to < 0 || from >= arr.length || to >= arr.length) return prev;
+
       const [moved] = arr.splice(from, 1);
       arr.splice(to, 0, moved);
+
+      // ✅ Animate constraint:
+      // - frame0 must be image
+      // - if a video/audio exists, it MUST be frame2 (index 1)
+      if (panel === "product" && animateMode && arr.length >= 2) {
+        const a0 = arr[0];
+        const a1 = arr[1];
+
+        const t0 = a0?.mediaType || inferMediaTypeFromUrl(a0?.remoteUrl || a0?.url || "") || "image";
+        const t1 = a1?.mediaType || inferMediaTypeFromUrl(a1?.remoteUrl || a1?.url || "") || "image";
+
+        const isVA = (t: string) => t === "video" || t === "audio";
+
+        // if video/audio is in slot 0 -> swap back
+        if (isVA(t0) && !isVA(t1)) {
+          return { ...prev, [panel]: [a1, a0, ...arr.slice(2)] };
+        }
+
+        // if slot0 isn’t image, force swap if slot1 is image
+        if (t0 !== "image" && t1 === "image") {
+          return { ...prev, [panel]: [a1, a0, ...arr.slice(2)] };
+        }
+      }
+
       return { ...prev, [panel]: arr };
     });
   };
@@ -3553,7 +4664,7 @@ const styleHeroUrls = (stylePresetKeys || [])
       setHasEverTyped(true);
     }
 
-    if (trimmedLength > 0 && trimmedLength < 20) {
+    if (!hasFrame2Video && !hasFrame2Audio && trimmedLength > 0 && trimmedLength < 20) {
       describeMoreTimeoutRef.current = window.setTimeout(() => setShowDescribeMore(true), 1200);
     }
   };
@@ -3609,6 +4720,7 @@ const styleHeroUrls = (stylePresetKeys || [])
       url,
       remoteUrl: url,
       uploading: false,
+      mediaType: inferMediaTypeFromUrl(url) || "image",
     });
 
     applyingRecreateDraftRef.current = true;
@@ -3640,6 +4752,142 @@ const styleHeroUrls = (stylePresetKeys || [])
       applyingRecreateDraftRef.current = false;
     }, 0);
   }, []);
+
+  // --------------------------------------------------------------------------
+  // Re-create (button next to Tweak)
+  // - Uses saved draft from the item if present
+  // - Falls back to rebuilding a draft from current UI state
+  // --------------------------------------------------------------------------
+  const buildRecreateDraftFromUi = (kind: "still" | "motion") => {
+    if (kind === "motion") {
+      const frame0 = uploads.product[0]?.remoteUrl || uploads.product[0]?.url || "";
+      const frame1 = uploads.product[1]?.remoteUrl || uploads.product[1]?.url || "";
+      const startFrame = isHttpUrl(frame0) ? frame0 : motionReferenceImageUrl;
+      const endFrame = isHttpUrl(frame1) ? frame1 : "";
+
+      const insp = (uploads.inspiration || [])
+        .map((u) => u.remoteUrl || u.url)
+        .filter((u) => isHttpUrl(u))
+        .slice(0, 4);
+
+      return {
+        mode: "motion",
+        brief: (motionFinalPrompt || motionTextTrimmed || motionDescription || brief || "").trim(),
+        assets: {
+          start_image_url: startFrame,
+          end_image_url: endFrame || "",
+          // optional extras (safe)
+          product_image_url: startFrame,
+          inspiration_image_urls: insp,
+        },
+        settings: {
+          aspect_ratio: animateAspectOption.ratio,
+          stylePresetKeys: stylePresetKeys, // IMPORTANT: UI keys (keep custom-xxx)
+          minaVisionEnabled,
+        },
+      };
+    }
+
+    const productUrl = uploads.product[0]?.remoteUrl || uploads.product[0]?.url || "";
+    const logoUrl = uploads.logo[0]?.remoteUrl || uploads.logo[0]?.url || "";
+
+    const insp = (uploads.inspiration || [])
+      .map((u) => u.remoteUrl || u.url)
+      .filter((u) => isHttpUrl(u))
+      .slice(0, 4);
+
+    return {
+      mode: "still",
+      brief: (lastStillPrompt || stillBrief || brief || "").trim(),
+      assets: {
+        product_image_url: isHttpUrl(productUrl) ? productUrl : "",
+        logo_image_url: isHttpUrl(logoUrl) ? logoUrl : "",
+        inspiration_image_urls: insp,
+      },
+      settings: {
+        aspect_ratio: effectiveAspectRatio,
+        stylePresetKeys: stylePresetKeys, // IMPORTANT: UI keys (keep custom-xxx)
+        minaVisionEnabled,
+      },
+    };
+  };
+
+  const handleRecreateFromViewer = (args: { kind: "still" | "motion"; stillIndex: number }) => {
+    if (args.kind === "motion") {
+      const candidate = motionItems?.[motionIndex] || motionItems?.[0] || null;
+      const draft = (candidate as any)?.draft || buildRecreateDraftFromUi("motion");
+      applyRecreateDraft(draft);
+      return;
+    }
+
+    const candidate = stillItems?.[args.stillIndex] || stillItems?.[stillIndex] || stillItems?.[0] || null;
+    const draft = (candidate as any)?.draft || buildRecreateDraftFromUi("still");
+    applyRecreateDraft(draft);
+  };
+
+  // --------------------------------------------------------------------------
+  // Set Scene (viewer button)
+  // - Scene pill = uploads.product
+  // - Optimize the scene URL to JPG before MMA uses it (prevents timeout)
+  // - Clear inspiration by default (per your rule)
+  // - Keep logo untouched
+  // --------------------------------------------------------------------------
+  const handleSetSceneFromViewer = useCallback(
+    (args: { url: string; clearInspiration?: boolean }) => {
+      const raw = String(args?.url || "").trim();
+      const baseUrl = stripSignedQuery(raw);
+
+      if (!baseUrl || !isHttpUrl(baseUrl)) return;
+
+      const id0 = `product_scene_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+      const mk = (panel: UploadPanelKey, u: string, id?: string): UploadItem => ({
+        id: id || `${panel}_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        kind: "url",
+        url: u,
+        remoteUrl: u,
+        uploading: true, // ✅ we’ll flip to false once JPG is ready
+        error: undefined,
+        mediaType: inferMediaTypeFromUrl(u) || "image",
+      });
+
+      setUploads((prev) => {
+        const frame1 =
+          animateMode ? (prev.product?.[1]?.remoteUrl || prev.product?.[1]?.url || "") : "";
+        const keepFrame1 =
+          animateMode && isHttpUrl(frame1) ? { ...mk("product", frame1), uploading: false } : null;
+
+        return {
+          ...prev,
+          product: animateMode
+            ? [mk("product", baseUrl, id0), ...(keepFrame1 ? [keepFrame1] : [])].slice(0, 2)
+            : [mk("product", baseUrl, id0)],
+          inspiration: args?.clearInspiration ? [] : prev.inspiration,
+          // logo unchanged
+        };
+      });
+
+      if (!hasEverTyped) setHasEverTyped(true);
+      setActivePanel("product");
+      setUiStage((s) => (s < 3 ? 3 : s));
+
+      // ✅ optimize in background and swap it in-place
+      void (async () => {
+        try {
+          const optimized = await ensureOptimizedInputUrl(baseUrl, "product");
+          patchUploadItem("product", id0, {
+            url: optimized,
+            remoteUrl: optimized,
+            uploading: false,
+            error: undefined,
+          });
+        } catch {
+          patchUploadItem("product", id0, { uploading: false });
+        }
+      })();
+    },
+    [animateMode, hasEverTyped]
+  );
 
   useEffect(() => {
     if (activeTab !== "studio") return;
@@ -3727,8 +4975,8 @@ const styleHeroUrls = (stylePresetKeys || [])
     setCustomStyleTraining(true);
     setCustomStyleError(null);
 
-    if (!API_BASE_URL) throw new Error("Missing API base URL.");
-    if (!currentPassId) throw new Error("Missing Pass ID.");
+    if (!API_BASE_URL) throw new Error(UI_ERROR_MESSAGES.missingApiBaseUrl);
+    if (!currentPassId) throw new Error(UI_ERROR_MESSAGES.missingPassId);
 
     // 1) pick hero + two others (from the 10 uploads)
     const hero = customStyleImages.find((x) => x.id === customStyleHeroId);
@@ -3856,6 +5104,10 @@ const styleHeroUrls = (stylePresetKeys || [])
         error={feedbackError}
         tweakCreditsOk={tweakCreditsOk}
         tweakBlockReason={tweakBlockReason}
+        onRecreate={handleRecreateFromViewer}
+        onSetScene={({ url, clearInspiration }) =>
+          handleSetSceneFromViewer({ url, clearInspiration: clearInspiration ?? true })
+        }
       />
     );
   };
@@ -4159,7 +5411,7 @@ const headerOverlayClass =
                     motionGenerating
                   }
                 >
-                  {isCurrentLiked ? "Thanks" : "Love it"}
+                  {isCurrentLiked ? "Ok" : "Like"}
                 </button>
           
                 <button
@@ -4245,10 +5497,21 @@ const headerOverlayClass =
               motionError={motionError}
               onCreateMotion={handleGenerateMotion}
               onTypeForMe={onTypeForMe}
+              motionAudioEnabled={motionAudioEnabled}
+              motionAudioLocked={motionAudioLocked}
+              effectiveMotionAudioEnabled={effectiveMotionAudioEnabled}
+              onToggleMotionAudio={() => setMotionAudioEnabled((v) => !v)}
+              motionDurationSec={motionDurationSec}
+              motionCostLabel={motionCostLabel}
+              onToggleMotionDuration={() => setMotionDurationSec((v) => (v === 5 ? 10 : 5))}
               imageCreditsOk={imageCreditsOk}
               matchaUrl={MATCHA_URL}
               minaMessage={minaMessage}
               minaTalking={minaTalking}
+              minaTone={minaTone}
+              onDismissMinaNotice={dismissMinaNotice}
+              minaError={minaTone === "error" ? minaMessage : null}
+              onClearMinaError={clearMinaError}
               stillLane={stillLane}
               onToggleStillLane={toggleStillLane}
               stillLaneDisabled={minaBusy}
@@ -4276,6 +5539,9 @@ const headerOverlayClass =
             matchaUrl={MATCHA_URL}
             loading={historyLoading || creditsLoading}
             error={historyError}
+            onLoadMore={() => void fetchHistoryMore()}
+            hasMore={historyHasMore}
+            loadingMore={historyLoadingMore}
             onRefresh={() => {
               historyDirtyRef.current = true;
               creditsDirtyRef.current = true;
@@ -4293,9 +5559,11 @@ const headerOverlayClass =
               setHistoryFeedbacks((prev) => prev.filter((f) => f.id !== id));
 
               if (currentPassId && historyCacheRef.current[currentPassId]) {
+                const cached = historyCacheRef.current[currentPassId];
                 historyCacheRef.current[currentPassId] = {
-                  generations: historyCacheRef.current[currentPassId].generations.filter((g) => g.id !== id),
-                  feedbacks: historyCacheRef.current[currentPassId].feedbacks.filter((f) => f.id !== id),
+                  generations: cached.generations.filter((g) => g.id !== id),
+                  feedbacks: cached.feedbacks.filter((f) => f.id !== id),
+                  page: cached.page,
                 };
               }
             }}

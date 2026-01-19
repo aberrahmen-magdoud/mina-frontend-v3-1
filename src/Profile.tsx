@@ -24,6 +24,12 @@ function safeString(v: any, fallback = ""): string {
   return s === "undefined" || s === "null" ? fallback : s;
 }
 
+function asStrOrNull(v: any): string | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  return s ? s : null;
+}
+
 function pick(row: any, keys: string[], fallback = ""): string {
   for (const k of keys) {
     const v = row?.[k];
@@ -40,6 +46,19 @@ function cfThumb(url: string, width = 1200, quality = 75) {
     "https://assets.faltastudio.com/",
     ""
   )}`;
+}
+
+function cfInput1080(url: string, kind: "product" | "logo" | "style" = "product") {
+  const u = String(url || "").trim();
+  if (!u) return "";
+  if (!u.includes("assets.faltastudio.com/")) return u;
+  if (u.includes("/cdn-cgi/image/")) return u;
+
+  // logo may need alpha => keep png, others => jpeg
+  const format = kind === "logo" ? "png" : "jpeg";
+  const opts = `width=1080,fit=scale-down,quality=85,format=${format},onerror=redirect`;
+
+  return `https://assets.faltastudio.com/cdn-cgi/image/${opts}/${u.replace("https://assets.faltastudio.com/", "")}`;
 }
 
 function tryParseJson<T = any>(v: any): T | null {
@@ -61,6 +80,11 @@ function isVideoUrl(url: string) {
   return u.endsWith(".mp4") || u.endsWith(".webm") || u.endsWith(".mov") || u.endsWith(".m4v");
 }
 
+function isAudioUrl(url: string) {
+  const u = (url || "").split("?")[0].split("#")[0].toLowerCase();
+  return u.endsWith(".mp3") || u.endsWith(".wav") || u.endsWith(".m4a") || u.endsWith(".aac") || u.endsWith(".ogg");
+}
+
 function isImageUrl(url: string) {
   const u = (url || "").split("?")[0].split("#")[0].toLowerCase();
   return u.endsWith(".jpg") || u.endsWith(".jpeg") || u.endsWith(".png") || u.endsWith(".gif") || u.endsWith(".webp");
@@ -72,6 +96,8 @@ function normalizeMediaUrl(url: string) {
   return base || url;
 }
 
+const AUDIO_THUMB_URL = "https://assets.faltastudio.com/Website%20Assets/audio-mina-icon.gif";
+
 // Make likes match even if one URL is Cloudflare transformed and the other is raw.
 function canonicalAssetUrl(url: string) {
   const s = normalizeMediaUrl(url);
@@ -82,6 +108,18 @@ function canonicalAssetUrl(url: string) {
   if (m?.[1]) return `https://assets.faltastudio.com/${m[1]}`;
 
   return s;
+}
+
+function getScrollParent(node: HTMLElement | null): HTMLElement | null {
+  let el: HTMLElement | null = node?.parentElement || null;
+  while (el) {
+    const style = window.getComputedStyle(el);
+    const oy = style.overflowY;
+    const isScrollable = oy === "auto" || oy === "scroll" || oy === "overlay";
+    if (isScrollable && el.scrollHeight > el.clientHeight + 10) return el;
+    el = el.parentElement;
+  }
+  return null;
 }
 
 function fmtDate(iso: string | null) {
@@ -270,6 +308,7 @@ function extractInputsForDisplay(row: Row, isMotionHint?: boolean) {
   const varsHistory = vars && typeof vars === "object" ? (vars as any).history : null;
   const varsMeta = vars && typeof vars === "object" ? (vars as any).meta : null;
   const varsFeedback = vars && typeof vars === "object" ? (vars as any).feedback : null;
+  const inputs = varsInputs || {};
 
   const flow = String(varsMeta?.flow || meta?.flow || "").toLowerCase();
   const mmaMode = String((row as any)?.mg_mma_mode || vars?.mode || "").toLowerCase();
@@ -465,6 +504,194 @@ function extractInputsForDisplay(row: Row, isMotionHint?: boolean) {
         ""
     ).trim() || "";
 
+  const klingFramesRaw =
+    varsAssets?.kling_image_urls ||
+    varsAssets?.klingImageUrls ||
+    varsInputs?.kling_image_urls ||
+    varsInputs?.klingImageUrls ||
+    vars?.kling_image_urls ||
+    vars?.klingImageUrls ||
+    [];
+
+  const klingFrameUrls: string[] = Array.isArray(klingFramesRaw)
+    ? klingFramesRaw.map(String).filter((u) => /^https?:\/\//i.test(String(u)))
+    : [];
+
+  // ✅ Reference video/audio (Frame 2 types) — NEW AI support (frame2_* + video/audio)
+  const frame2VideoUrl =
+    asStrOrNull(inputs.frame2_video_url || inputs.frame2VideoUrl) ||
+    asStrOrNull(varsAssets?.frame2_video_url || varsAssets?.frame2VideoUrl) ||
+    asStrOrNull((vars as any)?.frame2_video_url || (vars as any)?.frame2VideoUrl);
+
+  const frame2AudioUrl =
+    asStrOrNull(inputs.frame2_audio_url || inputs.frame2AudioUrl) ||
+    asStrOrNull(varsAssets?.frame2_audio_url || varsAssets?.frame2AudioUrl) ||
+    asStrOrNull((vars as any)?.frame2_audio_url || (vars as any)?.frame2AudioUrl);
+
+  // ✅ Frame2 routing fields (controllers usually read from vars.inputs)
+  const frame2Kind = safeString(
+    inputs.frame2_kind ||
+      inputs.frame2Kind ||
+      (frame2VideoUrl ? "video" : frame2AudioUrl ? "audio" : ""),
+    ""
+  );
+
+  const frame2Url =
+    asStrOrNull(inputs.frame2_url || inputs.frame2Url) ||
+    frame2VideoUrl ||
+    frame2AudioUrl ||
+    null;
+
+  const frame2DurationSec = (() => {
+    const raw =
+      inputs.frame2_duration_sec ||
+      inputs.frame2DurationSec ||
+      inputs.duration_sec ||
+      inputs.durationSec ||
+      inputs.duration ||
+      null;
+
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return Math.max(1, Math.min(30, Math.floor(n))); // clamp 1..30
+  })();
+
+  const frame2KindLower = frame2Kind.toLowerCase();
+
+  const referenceVideoUrlRaw =
+    // new keys
+    varsAssets?.frame2_video_url ||
+    varsAssets?.frame2VideoUrl ||
+    varsAssets?.reference_video_url ||
+    varsAssets?.referenceVideoUrl ||
+    varsAssets?.ref_video_url ||
+    varsAssets?.refVideoUrl ||
+    varsAssets?.kling_reference_video_url ||
+    varsAssets?.klingReferenceVideoUrl ||
+    varsAssets?.video_url ||
+    varsAssets?.videoUrl ||
+    varsAssets?.video ||
+    // inputs fallbacks
+    varsInputs?.frame2_video_url ||
+    varsInputs?.frame2VideoUrl ||
+    varsInputs?.reference_video_url ||
+    varsInputs?.referenceVideoUrl ||
+    varsInputs?.ref_video_url ||
+    varsInputs?.refVideoUrl ||
+    varsInputs?.video_url ||
+    varsInputs?.videoUrl ||
+    varsInputs?.video ||
+    // last resort
+    (vars as any)?.frame2_video_url ||
+    (vars as any)?.frame2VideoUrl ||
+    (vars as any)?.reference_video_url ||
+    (vars as any)?.referenceVideoUrl ||
+    (vars as any)?.ref_video_url ||
+    (vars as any)?.refVideoUrl ||
+    (vars as any)?.video_url ||
+    (vars as any)?.videoUrl ||
+    (vars as any)?.video ||
+    "";
+
+  const referenceAudioUrlRaw =
+    // new keys
+    varsAssets?.frame2_audio_url ||
+    varsAssets?.frame2AudioUrl ||
+    varsAssets?.reference_audio_url ||
+    varsAssets?.referenceAudioUrl ||
+    varsAssets?.ref_audio_url ||
+    varsAssets?.refAudioUrl ||
+    varsAssets?.audio_url ||
+    varsAssets?.audioUrl ||
+    varsAssets?.audio ||
+    // inputs fallbacks
+    varsInputs?.frame2_audio_url ||
+    varsInputs?.frame2AudioUrl ||
+    varsInputs?.reference_audio_url ||
+    varsInputs?.referenceAudioUrl ||
+    varsInputs?.ref_audio_url ||
+    varsInputs?.refAudioUrl ||
+    varsInputs?.audio_url ||
+    varsInputs?.audioUrl ||
+    varsInputs?.audio ||
+    // last resort
+    (vars as any)?.frame2_audio_url ||
+    (vars as any)?.frame2AudioUrl ||
+    (vars as any)?.reference_audio_url ||
+    (vars as any)?.referenceAudioUrl ||
+    (vars as any)?.ref_audio_url ||
+    (vars as any)?.refAudioUrl ||
+    (vars as any)?.audio_url ||
+    (vars as any)?.audioUrl ||
+    (vars as any)?.audio ||
+    "";
+
+  const referenceVideoUrl = String(referenceVideoUrlRaw || "").trim();
+  const referenceAudioUrl = String(referenceAudioUrlRaw || "").trim();
+
+  // ✅ accept URLs even if they don't end with .mp4/.mp3 (some R2/public links won't)
+  const refVideo =
+    /^https?:\/\//i.test(referenceVideoUrl) &&
+    (isVideoUrl(referenceVideoUrl) || frame2KindLower.includes("video"))
+      ? referenceVideoUrl
+      : "";
+
+  const refAudio =
+    /^https?:\/\//i.test(referenceAudioUrl) &&
+    (isAudioUrl(referenceAudioUrl) || frame2KindLower.includes("audio") || !isVideoUrl(referenceAudioUrl))
+      ? referenceAudioUrl
+      : "";
+
+  const stillLane = String(
+    varsInputs?.still_lane ||
+      varsInputs?.stillLane ||
+      varsMeta?.still_lane ||
+      varsMeta?.stillLane ||
+      ""
+  ).trim();
+
+  const movementStyle = String(
+    varsInputs?.selected_movement_style ||
+      varsInputs?.selectedMovementStyle ||
+      varsInputs?.movement_style ||
+      varsInputs?.movementStyle ||
+      ""
+  ).trim();
+
+  const motionDurationSec = (() => {
+    const raw =
+      varsInputs?.motion_duration_sec ||
+      varsInputs?.motionDurationSec ||
+      varsInputs?.duration_sec ||
+      varsInputs?.durationSec ||
+      varsInputs?.duration ||
+      varsMeta?.motion_duration_sec ||
+      varsMeta?.motionDurationSec ||
+      varsMeta?.duration ||
+      null;
+
+    const n = Number(raw);
+    if (n === 10) return 10 as const;
+    if (n === 5) return 5 as const;
+    return undefined;
+  })();
+
+  const generateAudio = (() => {
+    const raw =
+      varsInputs?.generate_audio ??
+      varsInputs?.generateAudio ??
+      varsMeta?.generate_audio ??
+      varsMeta?.generateAudio ??
+      null;
+
+    if (typeof raw === "boolean") return raw;
+    if (raw === 1 || raw === "1" || raw === "true") return true;
+    if (raw === 0 || raw === "0" || raw === "false") return false;
+    return undefined;
+  })();
+
+  const styleLabel = (movementStyle || stillLane || "").trim();
+
   const tone = String(
     meta?.tone || payload?.inputs?.tone || payload?.tone || varsInputs?.tone || varsMeta?.tone || vars?.tone || ""
   ).trim();
@@ -489,8 +716,22 @@ function extractInputsForDisplay(row: Row, isMotionHint?: boolean) {
     styleImageUrls: styleImages,
     startImageUrl,
     endImageUrl,
+    klingFrameUrls,
+    styleLabel,
     tone,
     platform,
+    motionDurationSec,
+    generateAudio,
+    // ✅ NEW: frame2 routing (Fabric / Motion-Control)
+    frame2_kind: frame2Kind,
+    frame2_url: frame2Url,
+    frame2_duration_sec: frame2DurationSec,
+
+    // ✅ also expose direct urls (extra-safe)
+    frame2_audio_url: frame2AudioUrl,
+    frame2_video_url: frame2VideoUrl,
+    referenceVideoUrl: refVideo,
+    referenceAudioUrl: refAudio,
   };
 }
 
@@ -501,6 +742,8 @@ type RecreateDraft = {
     aspect_ratio?: string;
     minaVisionEnabled?: boolean;
     stylePresetKeys?: string[];
+    motion_duration_sec?: 5 | 10;
+    generate_audio?: boolean;
   };
   assets: {
     productImageUrl?: string;
@@ -508,6 +751,8 @@ type RecreateDraft = {
     styleImageUrls?: string[];
     kling_start_image_url?: string;
     kling_end_image_url?: string;
+    frame2_audio_url?: string;
+    frame2_video_url?: string;
   };
 };
 
@@ -532,6 +777,10 @@ type ProfileProps = {
 
   onDelete?: (id: string) => Promise<void> | void;
   onRecreate?: (draft: RecreateDraft) => void;
+
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  loadingMore?: boolean;
 };
 
 export default function Profile({
@@ -546,6 +795,9 @@ export default function Profile({
   onLogout,
   onDelete,
   onRecreate,
+  onLoadMore,
+  hasMore = false,
+  loadingMore = false,
   matchaUrl = "https://www.faltastudio.com/cart/43328351928403:1",
 }: ProfileProps) {
   const [deletingIds, setDeletingIds] = useState<Record<string, boolean>>({});
@@ -561,7 +813,6 @@ export default function Profile({
   const cycleMotion = () => setMotion((prev) => (prev === "all" ? "motion" : prev === "motion" ? "still" : "all"));
   const motionLabel = motion === "all" ? "Show all" : motion === "motion" ? "Motion" : "Still";
 
-  const [likedOnly, setLikedOnly] = useState(false);
   const [aspectFilterStep, setAspectFilterStep] = useState(0);
   const activeAspectFilter = aspectFilterStep === 0 ? null : ASPECT_OPTIONS[aspectFilterStep - 1];
   const cycleAspectFilter = () => setAspectFilterStep((prev) => (prev + 1) % (ASPECT_OPTIONS.length + 1));
@@ -569,9 +820,14 @@ export default function Profile({
 
   const [expandedPromptIds, setExpandedPromptIds] = useState<Record<string, boolean>>({});
 
+  const SCENE_PROMPT =
+    "Replace my product in the scene, keep my scene, composition, tone, aesthetic, highlights, and vibe style exactly the same";
+
   // Pagination
   const [visibleCount, setVisibleCount] = useState(36);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const loadingMoreRefFlag = useRef(false);
 
   // Video refs
   const videoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -600,6 +856,35 @@ export default function Profile({
       el.muted = !hovering;
       el.volume = 1;
       if (hovering) el.play().catch(() => {});
+    } catch {}
+  }, []);
+
+  const hoverAudioRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+
+  const setAudioHover = useCallback((url: string, hovering: boolean) => {
+    if (!url) return;
+    const cache = hoverAudioRef.current;
+    let audio = cache.get(url);
+    if (!audio) {
+      audio = new Audio(url);
+      audio.loop = true;
+      cache.set(url, audio);
+    }
+
+    if (hovering) {
+      try {
+        audio.currentTime = 0;
+      } catch {}
+      const p = audio.play();
+      if (p && typeof (p as Promise<void>).catch === "function") {
+        (p as Promise<void>).catch(() => {});
+      }
+      return;
+    }
+
+    audio.pause();
+    try {
+      audio.currentTime = 0;
     } catch {}
   }, []);
 
@@ -821,6 +1106,13 @@ export default function Profile({
     return s;
   }, [feedbacks]);
 
+  const sizeClassForIndex = useCallback((idx: number) => {
+    if (idx % 13 === 0) return "profile-card--hero";
+    if (idx % 9 === 0) return "profile-card--wide";
+    if (idx % 7 === 0) return "profile-card--mini";
+    return "profile-card--tall";
+  }, []);
+
   const { items, activeCount } = useMemo(() => {
     // liked generation ids from feedback events
     const likedGenIdSet = new Set<string>();
@@ -888,7 +1180,16 @@ export default function Profile({
 
         const prompt = (inputs.brief || "").trim();
 
-        const canRecreate = source === "generation" && !!onRecreate && !!prompt;
+        // ✅ For video/audio "reference-only" runs, prompt can be empty.
+        // Still allow recreate if we have ref media or frames.
+        const hasRefMedia =
+          !!inputs.referenceAudioUrl ||
+          !!inputs.referenceVideoUrl ||
+          !!inputs.startImageUrl ||
+          !!inputs.endImageUrl ||
+          (Array.isArray(inputs.klingFrameUrls) && inputs.klingFrameUrls.length > 0);
+
+        const canRecreate = source === "generation" && !!onRecreate && (!!prompt || hasRefMedia);
 
         const draft: RecreateDraft | null = canRecreate
           ? {
@@ -898,6 +1199,18 @@ export default function Profile({
                 aspect_ratio: inputs.aspectRatio || undefined,
                 minaVisionEnabled: inputs.minaVisionEnabled,
                 stylePresetKeys: inputs.stylePresetKeys.length ? inputs.stylePresetKeys : undefined,
+                ...(isMotion && inputs.motionDurationSec
+                  ? { motion_duration_sec: inputs.motionDurationSec }
+                  : {}),
+                ...(isMotion
+                  ? {
+                      generate_audio: inputs.endImageUrl
+                        ? false
+                        : typeof inputs.generateAudio === "boolean"
+                        ? inputs.generateAudio
+                        : undefined,
+                    }
+                  : {}),
               },
               assets: {
                 productImageUrl: inputs.productImageUrl || undefined,
@@ -905,6 +1218,8 @@ export default function Profile({
                 styleImageUrls: inputs.styleImageUrls.length ? inputs.styleImageUrls : undefined,
                 ...(isMotion && inputs.startImageUrl ? { kling_start_image_url: inputs.startImageUrl } : {}),
                 ...(isMotion && inputs.endImageUrl ? { kling_end_image_url: inputs.endImageUrl } : {}),
+                ...(isMotion && inputs.referenceAudioUrl ? { frame2_audio_url: inputs.referenceAudioUrl } : {}),
+                ...(isMotion && inputs.referenceVideoUrl ? { frame2_video_url: inputs.referenceVideoUrl } : {}),
               },
             }
           : null;
@@ -953,45 +1268,82 @@ export default function Profile({
     // ✅ ACTUAL FILTERING (not just dimming)
     const filtered = deduped.filter((it) => {
       const matchesMotion = motion === "all" ? true : motion === "motion" ? it.isMotion : !it.isMotion;
-      const matchesLiked = !likedOnly || it.liked;
       const matchesAspect = !activeAspectFilter || it.aspectRatio === activeAspectFilter.ratio;
-      return matchesMotion && matchesLiked && matchesAspect;
+      return matchesMotion && matchesAspect;
     });
 
-    const out = filtered.map((it, idx) => {
-      let sizeClass = "profile-card--tall";
-      if (idx % 13 === 0) sizeClass = "profile-card--hero";
-      else if (idx % 9 === 0) sizeClass = "profile-card--wide";
-      else if (idx % 7 === 0) sizeClass = "profile-card--mini";
-      return { ...it, sizeClass };
-    });
+    const out = filtered.map((it, idx) => ({ ...it, sizeClass: sizeClassForIndex(idx) }));
 
     return { items: out, activeCount: out.length };
-  }, [generations, feedbacks, likedUrlSet, motion, likedOnly, activeAspectFilter, onRecreate, removedIds]);
+  }, [generations, feedbacks, likedUrlSet, motion, activeAspectFilter, onRecreate, removedIds, sizeClassForIndex]);
 
-  // Reset paging when list changes
   useEffect(() => {
     setVisibleCount(36);
+  }, [motion, activeAspectFilter]);
+
+  useEffect(() => {
+    setVisibleCount((current) => Math.min(current, items.length));
   }, [items.length]);
+
+  useEffect(() => {
+    loadingMoreRefFlag.current = !!loadingMore;
+  }, [loadingMore]);
 
   // Infinite load
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
 
+    const root = getScrollParent(el);
+
     const obs = new IntersectionObserver(
       (entries) => {
-        if (!entries[0].isIntersecting) return;
+        const entry = entries[0];
+        if (!entry || !entry.isIntersecting) return;
         setVisibleCount((c) => Math.min(items.length, c + 24));
       },
-      { rootMargin: "1400px 0px 1400px 0px" }
+      {
+        root,
+        rootMargin: root ? "900px 0px 900px 0px" : "1400px 0px 1400px 0px",
+        threshold: 0.01,
+      }
     );
 
     obs.observe(el);
     return () => obs.disconnect();
   }, [items.length]);
 
+  useEffect(() => {
+    if (!hasMore) return;
+    if (!onLoadMore) return;
+
+    const el = loadMoreRef.current;
+    if (!el) return;
+
+    const root = getScrollParent(el); // ✅ critical for "popup" scroll containers
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return;
+        if (!hasMore) return;
+        if (loadingMoreRefFlag.current) return; // ✅ guard
+        loadingMoreRefFlag.current = true; // ✅ lock until parent flips loadingMore back
+        onLoadMore();
+      },
+      {
+        root: root || null,
+        rootMargin: root ? "1200px 0px 1200px 0px" : "1400px 0px 1400px 0px",
+        threshold: 0.01,
+      }
+    );
+
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [hasMore, onLoadMore]);
+
   const visibleItems = useMemo(() => items.slice(0, visibleCount), [items, visibleCount]);
+  const showInitialSkeletons = loading && items.length === 0;
+  const skeletonCount = 12;
 
   // Grid video autoplay (muted) + hover audio (desktop)
   useEffect(() => {
@@ -1062,7 +1414,14 @@ export default function Profile({
     };
   }, [visibleItems.length]);
 
-  const onTogglePrompt = (id: string) => setExpandedPromptIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  // ✅ Only one expanded at a time
+const onTogglePrompt = (id: string) =>
+  setExpandedPromptIds((prev) => (prev[id] ? {} : { [id]: true }));
+
+const openPrompt = useCallback((id: string) => {
+  setExpandedPromptIds((prev) => (prev[id] && Object.keys(prev).length === 1 ? prev : { [id]: true }));
+}, []);
+
 
   return (
     <>
@@ -1203,14 +1562,6 @@ export default function Profile({
 
               <button
                 type="button"
-                className={`profile-filter-pill ${likedOnly ? "active" : ""}`}
-                onClick={() => setLikedOnly((v) => !v)}
-              >
-                Liked
-              </button>
-
-              <button
-                type="button"
                 className={`profile-filter-pill ${activeAspectFilter ? "active" : ""}`}
                 onClick={cycleAspectFilter}
               >
@@ -1221,260 +1572,512 @@ export default function Profile({
         </div>
 
         <div className="profile-grid">
-          {visibleItems.map((it) => {
-            const expanded = Boolean(expandedPromptIds[it.id]);
-            const showViewMore = (it.prompt || "").length > 90 || it.canRecreate;
+          {showInitialSkeletons
+            ? Array.from({ length: skeletonCount }).map((_, i) => (
+                <div key={`sk_${i}`} className={`profile-card ${sizeClassForIndex(i)} profile-card--skeleton`}>
+                  <div className="profile-card-top">
+                    <div className="profile-skel-line" style={{ width: 90 }} />
+                    <div className="profile-skel-line" style={{ width: 24 }} />
+                  </div>
+                  <div className="profile-skel-media" />
+                  <div className="profile-card-promptline">
+                    <div className="profile-skel-line" style={{ width: "70%" }} />
+                  </div>
+                </div>
+              ))
+            : visibleItems.map((it) => {
+                const expanded = Boolean(expandedPromptIds[it.id]);
+                const showViewMore = (it.prompt || "").length > 90 || it.canRecreate;
 
-            const deleting = Boolean(deletingIds[it.id]);
-            const removing = Boolean(removingIds[it.id]);
-            const deleteErr = deleteErrors[it.id];
-            const confirming = Boolean(confirmDeleteIds[it.id]);
+                const deleting = Boolean(deletingIds[it.id]);
+                const removing = Boolean(removingIds[it.id]);
+                const deleteErr = deleteErrors[it.id];
+                const confirming = Boolean(confirmDeleteIds[it.id]);
 
-            const inputs = it.inputs || null;
-            const canAnimate = !!it.draft && !it.isMotion && isImageUrl(it.url);
+                const inputs = it.inputs || null;
+                const sceneImageUrl = canonicalAssetUrl(it.url);
+                const canScene = !!onRecreate && !it.isMotion && isImageUrl(sceneImageUrl);
 
-            return (
-              <div
-                key={it.id}
-                className={`profile-card ${it.sizeClass} ${removing ? "is-removing" : ""} ${
-                  ghostIds[it.id] ? "is-ghost" : ""
-                }`}
-              >
-                <div className="profile-card-top">
-                  <button
-                    className="profile-card-show"
-                    type="button"
-                    onClick={() => downloadMedia(it.url, it.prompt || "", it.isMotion)}
-                    disabled={!it.url}
+                const canAnimate = !!it.draft && !it.isMotion && isImageUrl(sceneImageUrl);
+                const canAnimateBtn = !!onRecreate && canAnimate && !!it.draft;
+
+                const canRecreateBtn = !!onRecreate && !!it.draft && it.canRecreate;
+                const showActionsRow = !!inputs && (canScene || canAnimateBtn || canRecreateBtn);
+
+                return (
+                  <div
+                    key={it.id}
+                    className={`profile-card ${it.sizeClass} ${removing ? "is-removing" : ""} ${
+                      ghostIds[it.id] ? "is-ghost" : ""
+                    }`}
                   >
-                    Download
-                  </button>
-
-                  <div className="profile-card-top-right">
-                    {it.liked ? (
-                      <span className="profile-card-liked">Liked</span>
-                    ) : (
-                      <span className="profile-card-liked ghost">Liked</span>
-                    )}
-
-                    {confirming ? (
-                      <div className="profile-card-confirm" role="group" aria-label="Confirm delete">
-                        <button
-                          className="profile-card-confirm-yes"
-                          type="button"
-                          onClick={() => deleteItem(it.id)}
-                          disabled={deleting || !onDelete}
-                        >
-                          delete
-                        </button>
-                        <button
-                          className="profile-card-confirm-no"
-                          type="button"
-                          onClick={() => cancelDelete(it.id)}
-                          disabled={deleting}
-                        >
-                          cancel
-                        </button>
-                      </div>
-                    ) : (
+                    <div className="profile-card-top">
                       <button
-                        className="profile-card-delete"
+                        className="profile-card-show"
                         type="button"
-                        onClick={() => askDelete(it.id)}
-                        disabled={deleting || !onDelete}
-                        title="Delete"
-                        aria-label="Delete"
+                        onClick={() => downloadMedia(it.url, it.prompt || "", it.isMotion)}
+                        disabled={!it.url}
                       >
-                        −
+                        Download
                       </button>
-                    )}
-                  </div>
-                </div>
 
-                {deleteErr ? <div className="profile-error profile-card-deleteerr">{deleteErr}</div> : null}
-
-                <div
-                  className="profile-card-media"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    const big = it.isMotion ? it.url : cfThumb(it.url, 2400, 85);
-                    if (!it.isMotion) prefetchImage(big);
-                    openLightbox(big, it.isMotion);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      const big = it.isMotion ? it.url : cfThumb(it.url, 2400, 85);
-                      if (!it.isMotion) prefetchImage(big);
-                      openLightbox(big, it.isMotion);
-                    }
-                  }}
-                >
-                  {it.url ? (
-                    it.isMotion ? (
-                      <video
-                        ref={(el) => registerVideoEl(it.id, el)}
-                        src={it.url}
-                        loop
-                        playsInline
-                        preload="auto"
-                        autoPlay
-                        muted
-                        onMouseEnter={() => setVideoHover(it.id, true)}
-                        onMouseLeave={() => setVideoHover(it.id, false)}
-                      />
-                    ) : (
-                      <img
-                        src={cfThumb(it.url, 1200, 75)}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = it.url;
-                        }}
-                      />
-                    )
-                  ) : (
-                    <div style={{ padding: 10, fontSize: 12, opacity: 0.6 }}>No media</div>
-                  )}
-                </div>
-
-                <div className="profile-card-promptline">
-                  <div className={`profile-card-prompt ${expanded ? "expanded" : ""}`}>
-                    {it.prompt || "—"}
-
-                    {expanded && inputs ? (
-                      <div className="profile-card-details">
-                        {it.canRecreate && it.draft ? (
-                          <div className="profile-card-detailrow">
+                      <div className="profile-card-top-right">
+                        {confirming ? (
+                          <div className="profile-card-confirm" role="group" aria-label="Confirm delete">
                             <button
+                              className="profile-card-confirm-yes"
                               type="button"
-                              className="profile-card-show profile-card-recreate"
-                              onClick={() => {
-                                onRecreate?.(it.draft!);
-                                onBackToStudio?.();
-                              }}
+                              onClick={() => deleteItem(it.id)}
+                              disabled={deleting || !onDelete}
                             >
-                              Re-create
+                              delete
                             </button>
+                            <button
+                              className="profile-card-confirm-no"
+                              type="button"
+                              onClick={() => cancelDelete(it.id)}
+                              disabled={deleting}
+                            >
+                              cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            className="profile-card-delete"
+                            type="button"
+                            onClick={() => askDelete(it.id)}
+                            disabled={deleting || !onDelete}
+                            title="Delete"
+                            aria-label="Delete"
+                          >
+                            −
+                          </button>
+                        )}
+                      </div>
+                    </div>
 
-                            {canAnimate ? (
-                              <button
-                                type="button"
-                                className="profile-card-show profile-card-animate"
-                                onClick={() => {
-                                  const motionDraft: RecreateDraft = {
-                                    ...it.draft!,
-                                    mode: "motion",
-                                    assets: {
-                                      ...it.draft!.assets,
-                                      kling_start_image_url: it.url,
-                                    },
-                                  };
-                                  onRecreate?.(motionDraft);
-                                  onBackToStudio?.();
+                    {deleteErr ? <div className="profile-error profile-card-deleteerr">{deleteErr}</div> : null}
+
+                    <div
+                      className="profile-card-media"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        const big = it.isMotion ? it.url : cfThumb(it.url, 2400, 85);
+                        if (!it.isMotion) prefetchImage(big);
+                        openLightbox(big, it.isMotion);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          const big = it.isMotion ? it.url : cfThumb(it.url, 2400, 85);
+                          if (!it.isMotion) prefetchImage(big);
+                          openLightbox(big, it.isMotion);
+                        }
+                      }}
+                    >
+                      {it.url ? (
+                        it.isMotion ? (
+                          <video
+                            ref={(el) => registerVideoEl(it.id, el)}
+                            src={it.url}
+                            loop
+                            playsInline
+                            preload="auto"
+                            autoPlay
+                            muted
+                            onMouseEnter={() => setVideoHover(it.id, true)}
+                            onMouseLeave={() => setVideoHover(it.id, false)}
+                          />
+                        ) : (
+                          (() => {
+                            const w =
+                              it.sizeClass === "profile-card--hero"
+                                ? 1400
+                                : it.sizeClass === "profile-card--wide"
+                                  ? 1200
+                                  : it.sizeClass === "profile-card--mini"
+                                    ? 700
+                                    : 900;
+
+                            const thumb = cfThumb(it.url, w, 70);
+
+                            return (
+                              <img
+                                src={thumb}
+                                alt=""
+                                loading="lazy"
+                                decoding="async"
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLImageElement).src = it.url;
                                 }}
-                              >
-                                Animate
-                              </button>
-                            ) : (
-                              <span />
-                            )}
-                          </div>
-                        ) : null}
+                              />
+                            );
+                          })()
+                        )
+                      ) : (
+                        <div style={{ padding: 10, fontSize: 12, opacity: 0.6 }}>No media</div>
+                      )}
+                    </div>
 
-                        {inputs.aspectRatio ? (
-                          <div className="profile-card-detailrow">
-                            <span className="k">Aspect</span>
-                            <span className="v">{inputs.aspectRatio}</span>
-                          </div>
-                        ) : null}
+                    <div className="profile-card-promptline">
+                      <div className={`profile-card-prompt ${expanded ? "expanded" : ""}`}>
+                        {it.prompt || "—"}
 
-                        {typeof inputs.minaVisionEnabled === "boolean" ? (
-                          <div className="profile-card-detailrow">
-                            <span className="k">Vision</span>
-                            <span className="v">{inputs.minaVisionEnabled ? "On" : "Off"}</span>
-                          </div>
-                        ) : null}
+                        {expanded && inputs ? (
+                          <div className="profile-card-details">
+                            {/* Actions (right aligned): Scene (still) + Animate (still) + Re-create */}
+                            {showActionsRow ? (
+                              <div className="profile-card-detailrow profile-card-detailrow--actions">
+                                <span className="k">Actions</span>
+                                <span className="v profile-card-actionwrap">
+                                  {canScene ? (
+                                    <button
+                                      type="button"
+                                      className="profile-card-show profile-card-scene"
+                                      // REPLACE the whole Scene button onClick handler with this:
+                                      onClick={(e) => {
+                                        e.stopPropagation();
 
-                        {inputs.stylePresetKeys?.length ? (
-                          <div className="profile-card-detailrow">
-                            <span className="k">Styles</span>
-                            <span className="v">{inputs.stylePresetKeys.join(", ")}</span>
-                          </div>
-                        ) : null}
+                                        const scene = canonicalAssetUrl(sceneImageUrl);
 
-                        {inputs.productImageUrl ? (
-                          <div className="profile-card-detailrow">
-                            <span className="k">Product</span>
-                            <span className="v">
-                              <button
-                                className="profile-card-mini"
-                                type="button"
-                                onClick={() => {
-                                  prefetchImage(inputs.productImageUrl);
-                                  openLightbox(inputs.productImageUrl, false);
-                                }}
-                              >
-                                view
-                              </button>
-                            </span>
-                          </div>
-                        ) : null}
+                                        const draft: RecreateDraft = {
+                                          mode: "still",
+                                          brief: SCENE_PROMPT,
+                                          settings: {
+                                            aspect_ratio: inputs?.aspectRatio || undefined,
+                                            minaVisionEnabled: inputs?.minaVisionEnabled,
+                                            stylePresetKeys: inputs?.stylePresetKeys?.length
+                                              ? inputs.stylePresetKeys
+                                              : undefined,
+                                          },
+                                          assets: {
+                                            // ✅ Scene pill (your wiring uses assets.product)
+                                            productImageUrl: cfInput1080(scene, "product") || undefined,
 
-                        {inputs.logoImageUrl ? (
-                          <div className="profile-card-detailrow">
-                            <span className="k">Logo</span>
-                            <span className="v">
-                              <button
-                                className="profile-card-mini"
-                                type="button"
-                                onClick={() => {
-                                  prefetchImage(inputs.logoImageUrl);
-                                  openLightbox(inputs.logoImageUrl, false);
-                                }}
-                              >
-                                view
-                              </button>
-                            </span>
-                          </div>
-                        ) : null}
+                                            // ✅ Logo stays in logo slot (never falls into product/elements)
+                                            ...(inputs?.logoImageUrl
+                                              ? {
+                                                  logoImageUrl: cfInput1080(
+                                                    canonicalAssetUrl(inputs.logoImageUrl),
+                                                    "logo"
+                                                  ),
+                                                }
+                                              : {}),
 
-                        {inputs.styleImageUrls?.length ? (
-                          <div className="profile-card-detailrow">
-                            <span className="k">Inspo</span>
-                            <span className="v">
-                              <button
-                                className="profile-card-mini"
-                                type="button"
-                                onClick={() => {
-                                  prefetchImage(inputs.styleImageUrls[0]);
-                                  openLightbox(inputs.styleImageUrls[0], false);
-                                }}
-                              >
-                                view
-                              </button>
-                              {inputs.styleImageUrls.length > 1 ? (
-                                <span className="profile-card-miniNote">+{inputs.styleImageUrls.length - 1}</span>
-                              ) : null}
-                            </span>
+                                            // ✅ Do NOT put anything into inspiration/elements
+                                            styleImageUrls: [], // still force-clear
+                                          },
+                                        };
+
+                                        onRecreate?.(draft);
+                                        onBackToStudio?.();
+                                      }}
+                                    >
+                                      Scene
+                                    </button>
+                                  ) : null}
+
+                                  {canAnimateBtn ? (
+                                    <button
+                                      type="button"
+                                      className="profile-card-show profile-card-animate"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const motionDraft: RecreateDraft = {
+                                          ...it.draft!,
+                                          mode: "motion",
+                                          assets: {
+                                            ...it.draft!.assets,
+                                          kling_start_image_url: sceneImageUrl,
+                                          },
+                                        };
+                                        onRecreate?.(motionDraft);
+                                        onBackToStudio?.();
+                                      }}
+                                    >
+                                      Animate
+                                    </button>
+                                  ) : null}
+
+                                  {canRecreateBtn ? (
+                                    <button
+                                      type="button"
+                                      className="profile-card-show profile-card-recreate"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onRecreate?.(it.draft!);
+                                        onBackToStudio?.();
+                                      }}
+                                    >
+                                      Re-create
+                                    </button>
+                                  ) : null}
+                                </span>
+                              </div>
+                            ) : null}
+
+                            {/* Style (movement style / lane / presets) */}
+                            {(() => {
+                              const styleText =
+                                (inputs.styleLabel || "").trim() ||
+                                (inputs.stylePresetKeys?.length ? inputs.stylePresetKeys.join(", ") : "");
+                              return styleText ? (
+                                <div className="profile-card-detailrow">
+                                  <span className="k">Style</span>
+                                  <span className="v">{styleText}</span>
+                                </div>
+                              ) : null;
+                            })()}
+
+                            {/* Product thumb */}
+                            {inputs.productImageUrl ? (
+                              <div className="profile-card-detailrow">
+                                <span className="k">Product</span>
+                                <span className="v">
+                                  <img
+                                    className="profile-input-thumb"
+                                    src={cfThumb(inputs.productImageUrl, 140, 70)}
+                                    alt=""
+                                    loading="lazy"
+                                    decoding="async"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (it.draft) {
+                                        onRecreate?.(it.draft);
+                                        onBackToStudio?.();
+                                        return;
+                                      }
+                                      prefetchImage(inputs.productImageUrl);
+                                      openLightbox(inputs.productImageUrl, false);
+                                    }}
+                                  />
+                                </span>
+                              </div>
+                            ) : null}
+
+                            {/* Logo thumb */}
+                            {inputs.logoImageUrl ? (
+                              <div className="profile-card-detailrow">
+                                <span className="k">Logo</span>
+                                <span className="v">
+                                  <img
+                                    className="profile-input-thumb"
+                                    src={cfThumb(inputs.logoImageUrl, 140, 70)}
+                                    alt=""
+                                    loading="lazy"
+                                    decoding="async"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (it.draft) {
+                                        onRecreate?.(it.draft);
+                                        onBackToStudio?.();
+                                        return;
+                                      }
+                                      prefetchImage(inputs.logoImageUrl);
+                                      openLightbox(inputs.logoImageUrl, false);
+                                    }}
+                                  />
+                                </span>
+                              </div>
+                            ) : null}
+
+                            {/* Inspo thumb (+count) */}
+                            {inputs.styleImageUrls?.length ? (
+                              <div className="profile-card-detailrow">
+                                <span className="k">Inspo</span>
+                                <span className="v">
+                                  <span className="profile-thumbstack">
+                                    <img
+                                      className="profile-input-thumb"
+                                      src={cfThumb(inputs.styleImageUrls[0], 140, 70)}
+                                      alt=""
+                                      loading="lazy"
+                                      decoding="async"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (it.draft) {
+                                          onRecreate?.(it.draft);
+                                          onBackToStudio?.();
+                                          return;
+                                        }
+                                        prefetchImage(inputs.styleImageUrls[0]);
+                                        openLightbox(inputs.styleImageUrls[0], false);
+                                      }}
+                                    />
+                                    {inputs.styleImageUrls.length > 1 ? (
+                                      <span className="profile-thumbbadge">+{inputs.styleImageUrls.length - 1}</span>
+                                    ) : null}
+                                  </span>
+                                </span>
+                              </div>
+                            ) : null}
+
+                            {/* Motion frames (start/end + kling frames + ref video/audio if present) */}
+                            {(() => {
+                              const items: Array<{ kind: "image" | "video" | "audio"; url: string }> = [];
+
+                              if (inputs.startImageUrl) items.push({ kind: "image", url: inputs.startImageUrl });
+                              if (inputs.endImageUrl) items.push({ kind: "image", url: inputs.endImageUrl });
+
+                              if (Array.isArray((inputs as any).klingFrameUrls)) {
+                                for (const u of (inputs as any).klingFrameUrls as string[]) {
+                                  if (u && !items.some((x) => x.url === u)) items.push({ kind: "image", url: u });
+                                }
+                              }
+
+                              const refVideo = String((inputs as any).referenceVideoUrl || "").trim();
+                              const refAudio = String((inputs as any).referenceAudioUrl || "").trim();
+
+                              if (refVideo) items.push({ kind: "video", url: refVideo });
+                              if (refAudio) items.push({ kind: "audio", url: refAudio });
+
+                              const show = it.isMotion && items.length;
+                              if (!show) return null;
+
+                              const visible = items.slice(0, 3);
+
+                              return (
+                                <div className="profile-card-detailrow">
+                                  <span className="k">Frames</span>
+                                  <span className="v">
+                                    <span className="profile-thumbrow">
+                                      {visible.map((m) => {
+                                        if (m.kind === "video") {
+                                          return (
+                                            <video
+                                              key={m.url}
+                                              className="profile-input-thumb profile-input-thumb--video"
+                                              src={m.url}
+                                              preload="metadata"
+                                              playsInline
+                                              onLoadedData={(e) => {
+                                                try {
+                                                  const v = e.currentTarget;
+                                                  v.currentTime = 0;
+                                                  v.pause();
+                                                } catch {}
+                                              }}
+                                              onMouseEnter={(e) => {
+                                                const v = e.currentTarget;
+                                                try {
+                                                  v.muted = false;
+                                                  v.volume = 1;
+                                                  v.currentTime = 0;
+                                                } catch {}
+                                                const p = v.play();
+                                                if (p && typeof (p as Promise<void>).catch === "function") {
+                                                  (p as Promise<void>).catch(() => {});
+                                                }
+                                              }}
+                                              onMouseLeave={(e) => {
+                                                const v = e.currentTarget;
+                                                v.pause();
+                                                try {
+                                                  v.currentTime = 0;
+                                                } catch {}
+                                              }}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (it.draft) {
+                                                  onRecreate?.(it.draft);
+                                                  onBackToStudio?.();
+                                                  return;
+                                                }
+                                                openLightbox(m.url, true);
+                                              }}
+                                              title="Reference video"
+                                            />
+                                          );
+                                        }
+
+                                        if (m.kind === "audio") {
+                                          return (
+                                            <button
+                                              key={m.url}
+                                              type="button"
+                                              className="profile-input-thumb profile-input-thumb--audio"
+                                              onMouseEnter={() => setAudioHover(m.url, true)}
+                                              onMouseLeave={() => setAudioHover(m.url, false)}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (it.draft) {
+                                                  onRecreate?.(it.draft);
+                                                  onBackToStudio?.();
+                                                  return;
+                                                }
+                                                window.open(m.url, "_blank", "noopener,noreferrer");
+                                              }}
+                                              title="Reference audio"
+                                            >
+                                              <img src={AUDIO_THUMB_URL} alt="" />
+                                            </button>
+                                          );
+                                        }
+
+                                        // image
+                                        return (
+                                          <img
+                                            key={m.url}
+                                            className="profile-input-thumb"
+                                            src={cfThumb(m.url, 140, 70)}
+                                            alt=""
+                                            loading="lazy"
+                                            decoding="async"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (it.draft) {
+                                                onRecreate?.(it.draft);
+                                                onBackToStudio?.();
+                                                return;
+                                              }
+                                              prefetchImage(m.url);
+                                              openLightbox(m.url, false);
+                                            }}
+                                          />
+                                        );
+                                      })}
+
+                                      {items.length > visible.length ? (
+                                        <span className="profile-thumbbadge">+{items.length - visible.length}</span>
+                                      ) : null}
+                                    </span>
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </div>
                         ) : null}
                       </div>
-                    ) : null}
-                  </div>
 
-                  {showViewMore ? (
-                    <button className="profile-card-viewmore" type="button" onClick={() => onTogglePrompt(it.id)}>
-                      {expanded ? "less" : "more"}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
+                      {showViewMore ? (
+                        <button className="profile-card-viewmore" type="button" onClick={() => onTogglePrompt(it.id)}>
+                          {expanded ? "less" : "more"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
 
           <div ref={sentinelRef} className="profile-grid-sentinel" />
+          <div ref={loadMoreRef} style={{ height: 1 }} />
+          {loadingMore
+            ? Array.from({ length: 8 }).map((_, i) => (
+                <div
+                  key={`sk_more_${i}`}
+                  className={`profile-card ${sizeClassForIndex(visibleItems.length + i)} profile-card--skeleton`}
+                >
+                  <div className="profile-card-top">
+                    <div className="profile-skel-line" style={{ width: 90 }} />
+                    <div className="profile-skel-line" style={{ width: 24 }} />
+                  </div>
+                  <div className="profile-skel-media" />
+                  <div className="profile-card-promptline">
+                    <div className="profile-skel-line" style={{ width: "60%" }} />
+                  </div>
+                </div>
+              ))
+            : null}
         </div>
       </div>
     </>
