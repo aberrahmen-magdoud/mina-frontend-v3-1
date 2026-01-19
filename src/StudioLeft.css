@@ -370,6 +370,8 @@ background-color 0s ease 0s,
   color: rgba(234, 87, 143, 0.4);
   pointer-events: auto;
   cursor: pointer;
+  padding: 10px 12px; /* ✅ space around the text */
+
 }
 
 .studio-brief-overlay.is-info {
