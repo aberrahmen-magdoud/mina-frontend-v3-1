@@ -61,19 +61,20 @@ const MatchaQtyModal: React.FC<Props> = ({
   const barRef = useRef<HTMLDivElement | null>(null);
   const [showTransparency, setShowTransparency] = useState(false);
 
-  // ✅ ONLY 50 / 100 / 200 / 500 (max 500)
-  const packList: Pack[] = useMemo(
-    () => [
-      { units: 1 }, // 50
-      { units: 2 }, // 100
-      { units: 4 }, // 200
-      { units: 10 }, // 500
-    ],
-    []
-  );
+  // ✅ ONLY 50 / 100 / 500 / 1000 (max 1000)
+    const packList: Pack[] = useMemo(
+      () => [
+        { units: 1 },  // 50
+        { units: 2 },  // 100
+        { units: 10 }, // 500
+        { units: 20 }, // 1000
+      ],
+      []
+    );
+
 
   const minUnits = 1;
-  const maxUnits = 10;
+  const maxUnits = 20;
 
   const safeQtyRaw = clampInt(qty, minUnits, maxUnits);
   const onScale = packList.some((p) => p.units === safeQtyRaw);
