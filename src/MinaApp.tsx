@@ -2329,6 +2329,37 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
   const ALLOWED_EXTS = new Set(["png", "jpg", "jpeg", "webp"]);
   const ALLOWED_MIMES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
+  // ============================================================
+  // Motion control specs (frame 1 image + frame 2 video)
+  // - Image: <= 10MB, 340px-3850px, jpg/png (we force jpg for frame1)
+  // - Video: mp4/mov, <= 100MB, 3-30s (for ref video)
+  // ============================================================
+  const MOTION_FRAME1_MAX_BYTES = 10 * 1024 * 1024; // 10MB
+  const MOTION_FRAME1_MAX_DIM = 3840; // <= 3850px safe
+
+  const MOTION_FRAME2_VIDEO_MAX_BYTES = 100 * 1024 * 1024; // 100MB
+  const MOTION_FRAME2_VIDEO_MIN_SEC = 3;
+  const MOTION_FRAME2_VIDEO_MAX_SEC = 30;
+
+  const ALLOWED_VIDEO_EXTS = new Set(["mp4", "mov"]);
+  const ALLOWED_VIDEO_MIMES = new Set(["video/mp4", "video/quicktime"]);
+
+  // ===========================
+  // Fabric 1.0 (VEED) constraints
+  // ===========================
+  const FABRIC_AUDIO_MAX_BYTES = 10 * 1024 * 1024; // 10MB
+  const FABRIC_AUDIO_MAX_SEC = 60; // 1 minute
+
+  const FABRIC_AUDIO_EXTS = new Set(["mp3", "wav", "m4a", "aac"]); // (+ "ogg" only if your provider supports it)
+  const FABRIC_AUDIO_MIMES = new Set([
+    "audio/mpeg", // mp3
+    "audio/wav", // wav
+    "audio/x-wav", // wav alt
+    "audio/mp4", // m4a
+    "audio/aac", // aac
+    // "audio/ogg", // only if supported by your provider
+  ]);
+
   // When we decide to “optimize”, we re-encode to JPEG (most compatible)
   const OPT_OUT_TYPE = "image/jpeg";
   const OPT_MAX_DIM = 3072; // keeps quality high but avoids giant inputs
@@ -2443,7 +2474,8 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
   }
 
   async function normalizeImageForUpload(
-    file: File
+    file: File,
+    opts?: { forceJpeg?: boolean; maxDim?: number; maxBytes?: number }
   ): Promise<{ file: File; previewUrl?: string; changed: boolean }> {
     const ext = getFileExt(file.name);
     const mime = String(file.type || "").toLowerCase();
@@ -2452,20 +2484,23 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
     const mimeAllowed = mime ? ALLOWED_MIMES.has(mime) : false;
     const isAllowed = extAllowed || mimeAllowed;
 
-    // If totally huge, we’ll try to optimize; if still > 25MB after optimization, we reject.
-    const tooBig = file.size > MAX_UPLOAD_BYTES;
+    const forceJpeg = !!opts?.forceJpeg;
+    const maxDim = Math.max(340, Math.min(3850, Number(opts?.maxDim ?? OPT_MAX_DIM)));
+    const maxBytes = Math.max(1024 * 1024, Number(opts?.maxBytes ?? MAX_UPLOAD_BYTES));
 
-    // Decide when to optimize:
-    // - unsupported format BUT decodable (ex AVIF) → convert to JPEG
-    // - too big → compress/resize to safe JPEG
-    // - very large files (even if under max) → optional optimization to avoid broken/slow downstream
-    const shouldOptimize = !isAllowed || tooBig || file.size > 18 * 1024 * 1024;
+    const tooBig = file.size > maxBytes;
+
+    // optimize if:
+    // - force jpeg (ex: motion frame1)
+    // - unsupported format but decodable
+    // - too big
+    // - very large even if under max (safety)
+    const shouldOptimize = forceJpeg || !isAllowed || tooBig || file.size > 18 * 1024 * 1024;
 
     if (!shouldOptimize) return { file, changed: false };
 
     const bmp = await decodeToBitmap(file);
     if (!bmp) {
-      // If it’s unsupported or broken, we fail nicely.
       throw new Error(!isAllowed ? "UNSUPPORTED" : "BROKEN");
     }
 
@@ -2478,7 +2513,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
       throw new Error("BROKEN");
     }
 
-    const scale = Math.min(1, OPT_MAX_DIM / Math.max(srcW, srcH));
+    const scale = Math.min(1, maxDim / Math.max(srcW, srcH));
     const outW = Math.max(1, Math.round(srcW * scale));
     const outH = Math.max(1, Math.round(srcH * scale));
 
@@ -2499,17 +2534,18 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
       (bmp as any).close?.();
     } catch {}
 
-    // Iteratively reduce quality until under MAX_UPLOAD_BYTES
+    // Always output JPEG when optimizing (most compatible)
     let q = OPT_START_QUALITY;
     let blob: Blob | null = null;
-    for (let i = 0; i < 7; i++) {
+
+    for (let i = 0; i < 8; i++) {
       blob = await canvasToBlob(canvas, OPT_OUT_TYPE, q).catch(() => null);
-      if (blob && blob.size <= MAX_UPLOAD_BYTES) break;
+      if (blob && blob.size <= maxBytes) break;
       q = Math.max(0.5, q - 0.08);
     }
 
     if (!blob) throw new Error("BROKEN");
-    if (blob.size > MAX_UPLOAD_BYTES) throw new Error("TOO_BIG");
+    if (blob.size > maxBytes) throw new Error("TOO_BIG");
 
     const baseName = file.name.replace(/\.[^.]+$/i, "") || "upload";
     const newName = `${baseName}.jpg`;
@@ -2901,6 +2937,15 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
     };
   }
 
+  const applyMotionControlRules = (rawPrompt: string, hasReferenceVideo: boolean) => {
+    const prompt = String(rawPrompt || "").trim();
+    if (!hasReferenceVideo) return prompt;
+    const rule =
+      "Follow the reference video motion and timing. Preserve framing, subject, and lighting. No new objects.";
+    if (!prompt) return rule;
+    return `${prompt}\n\n${rule}`;
+  };
+
   async function storeRemoteToR2(url: string, kind: string): Promise<string> {
     const res = await apiFetch("/api/r2/store-remote-signed", {
       method: "POST",
@@ -2971,6 +3016,76 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
     try {
       patchUploadItem(panel, id, { uploading: true, error: undefined });
 
+      // ============================================================
+      // Animate mode strict rules:
+      // - Frame 1 (product[0]) MUST be image -> auto convert to JPG <=10MB and <=3850px
+      // - Frame 2 video MUST be mp4/mov <=100MB and 3-30s
+      // ============================================================
+      const curList = uploadsRef.current?.[panel] || [];
+      const indexInPanel = curList.findIndex((x) => x.id === id);
+
+      const isAnimateFrame1 =
+        panel === "product" && animateMode && indexInPanel === 0 && mediaType === "image";
+
+      const isAnimateFrame2Video =
+        panel === "product" && animateMode && indexInPanel === 1 && mediaType === "video";
+
+      if (isAnimateFrame2Video) {
+        const ext = getFileExt(file.name);
+        const mime = String(file.type || "").toLowerCase();
+
+        if (!ALLOWED_VIDEO_EXTS.has(ext) && !ALLOWED_VIDEO_MIMES.has(mime)) {
+          showUploadNotice("product", "Video must be MP4 or MOV.");
+          removeUploadItem("product", id);
+          return;
+        }
+
+        if (file.size > MOTION_FRAME2_VIDEO_MAX_BYTES) {
+          showUploadNotice("product", "Video too large. Max 100MB.");
+          removeUploadItem("product", id);
+          return;
+        }
+
+        const d = await getMediaDurationSec(previewUrl, "video");
+        if (typeof d === "number") {
+          if (d < MOTION_FRAME2_VIDEO_MIN_SEC) {
+            showUploadNotice("product", "Video too short. Minimum 3 seconds.");
+            removeUploadItem("product", id);
+            return;
+          }
+          if (d > MOTION_FRAME2_VIDEO_MAX_SEC) {
+            showUploadNotice("product", "Video too long. Max 30 seconds.");
+            removeUploadItem("product", id);
+            return;
+          }
+        }
+      }
+
+      // ✅ Fabric audio rules (apply when your flow expects audio as frame2)
+      if (panel === "product" && animateMode && mediaType === "audio") {
+        const ext = getFileExt(file.name);
+        const mime = String(file.type || "").toLowerCase();
+
+        if (!FABRIC_AUDIO_EXTS.has(ext) && !FABRIC_AUDIO_MIMES.has(mime)) {
+          showUploadNotice("product", "Audio must be mp3, wav, m4a, or aac.");
+          removeUploadItem("product", id);
+          return;
+        }
+
+        if (file.size > FABRIC_AUDIO_MAX_BYTES) {
+          showUploadNotice("product", "Audio too large. Max 10MB.");
+          removeUploadItem("product", id);
+          return;
+        }
+
+        const d = await getMediaDurationSec(previewUrl, "audio");
+        if (typeof d === "number" && d > FABRIC_AUDIO_MAX_SEC) {
+          showUploadNotice("product", "Audio too long. Max 60 seconds.");
+          removeUploadItem("product", id);
+          return;
+        }
+      }
+
       // ✅ Animate rule: video/audio ONLY allowed as product frame #2 (index 1)
       if (panel === "product" && animateMode && (mediaType === "video" || mediaType === "audio")) {
         const cur = uploadsRef.current?.product || [];
@@ -2986,9 +3101,12 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
         }
 
         // validate duration early from blob preview
-        const maxSec = mediaType === "video" ? 30 : 60;
+        const maxSec = mediaType === "video" ? MOTION_FRAME2_VIDEO_MAX_SEC : FABRIC_AUDIO_MAX_SEC;
         const d = await getMediaDurationSec(previewUrl, mediaType === "video" ? "video" : "audio");
-        if (typeof d === "number" && d > maxSec) {
+        if (
+          typeof d === "number" &&
+          ((mediaType === "video" && d < MOTION_FRAME2_VIDEO_MIN_SEC) || d > maxSec)
+        ) {
           setMinaOverrideText(mediaType === "video" ? "videos max 30s please" : "audios max 60s please");
           showUploadNotice("product", mediaType === "video" ? "Videos max 30s please." : "Audios max 60s please.");
           removeUploadItem("product", id);
@@ -3011,7 +3129,12 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
 
       if (mediaType === "image") {
         try {
-          const norm = await normalizeImageForUpload(file);
+          const norm = await normalizeImageForUpload(
+            file,
+            isAnimateFrame1
+              ? { forceJpeg: true, maxDim: MOTION_FRAME1_MAX_DIM, maxBytes: MOTION_FRAME1_MAX_BYTES }
+              : undefined
+          );
           normalized = norm.file;
           newPreviewUrl = norm.previewUrl;
 
@@ -3067,8 +3190,11 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
         const d = await getMediaDurationSec(remoteUrl, mediaType === "video" ? "video" : "audio");
         if (typeof d === "number" && d > 0) durationSec = d;
 
-        const maxSec = mediaType === "video" ? 30 : 60;
-        if (typeof d === "number" && d > maxSec) {
+        const maxSec = mediaType === "video" ? MOTION_FRAME2_VIDEO_MAX_SEC : FABRIC_AUDIO_MAX_SEC;
+        if (
+          typeof d === "number" &&
+          ((mediaType === "video" && d < MOTION_FRAME2_VIDEO_MIN_SEC) || d > maxSec)
+        ) {
           setMinaOverrideText(mediaType === "video" ? "videos max 30s please" : "audios max 60s please");
           showUploadNotice(panel, mediaType === "video" ? "Videos max 30s please." : "Audios max 60s please.");
           removeUploadItem(panel, id);
@@ -3457,7 +3583,8 @@ const styleHeroUrls = (stylePresetKeys || [])
 
     try {
       const sid = await ensureSession();
-      const usedMotionPrompt = (motionFinalPrompt || motionTextTrimmed).trim();
+      const rawUserPrompt = (motionFinalPrompt || motionTextTrimmed).trim();
+      const usedMotionPrompt = applyMotionControlRules(rawUserPrompt, hasFrame2Video);
 
       // ✅ include selected style preset hero urls + custom style heroUrls + user inspiration uploads (cap 4)
       const styleHeroUrls = (stylePresetKeys || [])
@@ -3564,7 +3691,15 @@ const styleHeroUrls = (stylePresetKeys || [])
               // FULL
               mode: "pro",
               character_orientation: "video",
+              // ✅ match the ref-video length (3–30s)
+              duration: Math.min(30, Math.max(3, Math.round(videoSec || 5))),
+
+              // ✅ keep ref video sound, don't generate new
+              generate_audio: false,
               keep_original_sound: true,
+
+              motion_control: true,
+              reference_video_url: frame2Http,
 
               // prompt optional
               prompt: usedMotionPrompt || "",
@@ -3592,6 +3727,7 @@ const styleHeroUrls = (stylePresetKeys || [])
               image: startFrame,
               audio: frame2Http,
 
+              duration: Math.min(FABRIC_AUDIO_MAX_SEC, Math.max(1, Math.round(audioSec || 5))),
               resolution: "720p",
               prompt: usedMotionPrompt || "",
             },
