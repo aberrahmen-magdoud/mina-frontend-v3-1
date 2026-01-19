@@ -365,9 +365,9 @@ background-color 0s ease 0s,
 }
 
 .studio-brief-overlay.is-error {
-  background: transparent;
+  background: rgba(234, 87, 143, 0.05);
   border: none;
-  color: rgba(177, 0, 99, 0.4);
+  color: rgba(234, 87, 143, 0.4);
   pointer-events: auto;
   cursor: pointer;
 }
