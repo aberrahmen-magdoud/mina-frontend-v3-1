@@ -1773,7 +1773,7 @@ const openPrompt = useCallback((id: string) => {
                                         onBackToStudio?.();
                                       }}
                                     >
-                                      Scene
+                                      Set scene
                                     </button>
                                   ) : null}
 
@@ -1799,19 +1799,8 @@ const openPrompt = useCallback((id: string) => {
                                     </button>
                                   ) : null}
 
-                                  {canRecreateBtn ? (
-                                    <button
-                                      type="button"
-                                      className="profile-card-show profile-card-recreate"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        onRecreate?.(it.draft!);
-                                        onBackToStudio?.();
-                                      }}
-                                    >
-                                      Re-create
-                                    </button>
-                                  ) : null}
+                                  {null}
+
                                 </span>
                               </div>
                             ) : null}
