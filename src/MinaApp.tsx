@@ -1584,6 +1584,23 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
       mmaStreamRef.current = es;
 
       await new Promise<void>((resolve) => {
+        let finished = false;
+
+        const isFinalStatus = (s: any) => {
+          const st = String(s || "").toLowerCase().trim();
+          return (
+            st === "done" ||
+            st === "error" ||
+            st === "failed" ||
+            st === "succeeded" ||
+            st === "success" ||
+            st === "completed" ||
+            st === "cancelled" ||
+            st === "canceled" ||
+            st === "suggested"
+          );
+        };
+
         const cleanup = () => {
           try {
             es.close();
@@ -1591,10 +1608,22 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
           if (mmaStreamRef.current === es) mmaStreamRef.current = null;
         };
 
+        const finish = () => {
+          if (finished) return;
+          finished = true;
+          window.clearTimeout(hardTimeout);
+          cleanup();
+          resolve();
+        };
+
+        // ✅ Safety: never block forever waiting for SSE
+        const hardTimeout = window.setTimeout(finish, 45_000);
+
         es.onmessage = (ev: MessageEvent) => {
           try {
             const raw = (ev as any)?.data;
 
+            // plain text status (non-JSON)
             if (
               typeof raw === "string" &&
               raw.trim() &&
@@ -1603,6 +1632,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
             ) {
               status = raw.trim();
               onProgress?.({ status, scanLines: [...scanLines] });
+              if (isFinalStatus(status)) finish();
               return;
             }
 
@@ -1627,6 +1657,9 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
             }
 
             onProgress?.({ status, scanLines: [...scanLines] });
+
+            // ✅ NEW: resolve when status becomes final
+            if (isFinalStatus(status)) finish();
           } catch {}
         };
 
@@ -1636,6 +1669,9 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
             const next = data.status || data.status_text || data.statusText || data.text || null;
             if (typeof next === "string" && next.trim()) status = next.trim();
             onProgress?.({ status, scanLines: [...scanLines] });
+
+            // ✅ NEW: resolve when status becomes final
+            if (isFinalStatus(status)) finish();
           } catch {}
         });
 
@@ -1648,17 +1684,12 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
           } catch {}
         });
 
-        es.addEventListener("done", () => {
-          cleanup();
-          resolve();
-        });
+        // keep support if backend DOES emit done
+        es.addEventListener("done", finish);
 
         es.onerror = () => {
           // ✅ don’t block forever if SSE drops
-          window.setTimeout(() => {
-            cleanup();
-            resolve();
-          }, 900);
+          window.setTimeout(finish, 900);
         };
       });
 
@@ -1891,9 +1922,15 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
 
     const status =
       json?.status ??
+      json?.status_text ??
+      json?.statusText ??
       json?.mg_mma_status ??
+      json?.mg_mma_status_text ??
       json?.mma_status ??
       json?.state ??
+      mmaVars?.status ??
+      mmaVars?.status_text ??
+      mmaVars?.statusText ??
       "queued";
 
     const mode = (json?.mode ?? json?.mg_mma_mode ?? mmaVars?.mode ?? "").toString();
