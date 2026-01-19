@@ -1067,25 +1067,19 @@ const frame2Http = isHttpUrl(frame2Url) ? frame2Url : "";
 const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || null;
 
 
-  const hasFrame2Image = animateMode && frame2Kind === "image" && isHttpUrl(frame2Url);
   const hasFrame2Video = animateMode && frame2Kind === "video" && isHttpUrl(frame2Url);
   const hasFrame2Audio = animateMode && frame2Kind === "audio" && isHttpUrl(frame2Url);
 
-  // v2.1 two-image frames => forced mute
-  // ref-video => forced keep original sound
+  // v2.1 ref-video => forced keep original sound
   // ref-audio => forced sound on (audio drives the video)
-  const motionAudioLocked = hasFrame2Image || hasFrame2Video || hasFrame2Audio;
+  const motionAudioLocked = hasFrame2Video || hasFrame2Audio;
 
-  const effectiveMotionAudioEnabled =
-    hasFrame2Image ? false : (hasFrame2Video || hasFrame2Audio) ? true : motionAudioEnabled;
+  const effectiveMotionAudioEnabled = motionAudioLocked ? true : motionAudioEnabled;
 
   useEffect(() => {
-    // if forced mute
-    if (hasFrame2Image && motionAudioEnabled) setMotionAudioEnabled(false);
-
     // if forced on
     if ((hasFrame2Video || hasFrame2Audio) && !motionAudioEnabled) setMotionAudioEnabled(true);
-  }, [hasFrame2Image, hasFrame2Video, hasFrame2Audio, motionAudioEnabled]);
+  }, [hasFrame2Video, hasFrame2Audio, motionAudioEnabled]);
 
   const personalityThinking = useMemo(
   () => (adminConfig.ai?.personality?.thinking?.length ? adminConfig.ai.personality.thinking : []),
@@ -3040,7 +3034,6 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
     // Frame2 logic:
     if (frame2 && frame2Kind === "image") {
       assets.kling_end_image_url = frame2Url;
-      inputs.generate_audio = false; // mute lock for end frame
     } else {
       // video/audio => DO NOT set end image
       delete assets.kling_end_image_url;
