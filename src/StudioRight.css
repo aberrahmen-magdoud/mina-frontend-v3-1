@@ -194,6 +194,13 @@
   color: var(--mina-accent, #858e47);
 }
 
+.studio-action-separator {
+  color: rgba(0, 0, 0, 0.35);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+}
+
 /* Error floats above bar without changing layout */
 .studio-feedback-error {
   position: absolute;
