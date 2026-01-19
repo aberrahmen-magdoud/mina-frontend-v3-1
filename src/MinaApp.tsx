@@ -1616,8 +1616,8 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
           resolve();
         };
 
-        // ✅ Safety: never block forever waiting for SSE
-        const hardTimeout = window.setTimeout(finish, 45_000);
+        // ✅ Safety: never block forever waiting for SSE (20 minutes)
+        const hardTimeout = window.setTimeout(finish, 1_200_000);
 
         es.onmessage = (ev: MessageEvent) => {
           try {
