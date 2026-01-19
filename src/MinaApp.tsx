@@ -3845,8 +3845,7 @@ const styleHeroUrls = (stylePresetKeys || [])
         inputs: {
           motionDescription: usedMotionPrompt,
           prompt: usedMotionPrompt, // ✅ helps history/profile store it
-          prompt_override: usedMotionPrompt,
-          use_prompt_override: !!usedMotionPrompt,
+          
           tone,
           platform: animateAspectOption.platformKey,
           aspect_ratio: animateAspectOption.ratio,
