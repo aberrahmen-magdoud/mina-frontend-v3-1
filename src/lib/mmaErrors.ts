@@ -87,12 +87,14 @@ export function isTimeoutLikeStatus(status: string): boolean {
  * Keep the “That was too complicated” message here so it’s consistent everywhere.
  */
 export function humanizeMmaError(err: MmaErrorLike): string {
-  // If caller passes a string, treat it as message
+  // If we were given a full MMA result object, extract error text from it first
+  const extracted = err && typeof err === "object" ? extractMmaErrorTextFromResult(err) : "";
   const raw =
     typeof err === "string"
       ? err
       : safeStr(
-          err?.message ||
+          extracted ||
+            err?.message ||
             err?.error?.message ||
             err?.error ||
             err?.details?.message ||

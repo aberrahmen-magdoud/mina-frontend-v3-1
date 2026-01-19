@@ -2360,6 +2360,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
 
     // show message in your existing single error spot (below Create)
     // (no provider names, no tech jargon)
+    showMinaError(message);
     setStillError(message);
     setMotionError(message);
 
@@ -2370,7 +2371,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
       setMotionError((prev) => (prev === message ? null : prev));
       uploadMsgTimerRef.current = null;
     }, 5000);
-  }, []);
+  }, [showMinaError]);
 
   useEffect(() => {
     return () => {
@@ -3148,10 +3149,12 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
 
     if (!API_BASE_URL) {
       setStillError(UI_ERROR_MESSAGES.missingApiBaseUrlEnv);
+      showMinaError(UI_ERROR_MESSAGES.missingApiBaseUrlEnv);
       return;
     }
     if (!currentPassId) {
       setStillError(UI_ERROR_MESSAGES.missingPassIdMega);
+      showMinaError(UI_ERROR_MESSAGES.missingPassIdMega);
       return;
     }
 
@@ -3250,13 +3253,13 @@ const styleHeroUrls = (stylePresetKeys || [])
         { timeoutMs: 120_000 },
         (snap) => {
           const errText = extractMmaErrorTextFromResult(snap);
-          if (errText) showMinaError(errText);
+          if (errText) showMinaError(snap);
         }
       );
 
       const status = String(result?.status || "").toLowerCase().trim();
       const earlyErr = extractMmaErrorTextFromResult(result);
-      if (earlyErr) throw new Error(String(earlyErr));
+      if (earlyErr) throw result;
 
       if (isTimeoutLikeStatus(status) || status === "queued" || status === "processing") {
         showMinaInfo("Still generating in the background — open Profile and refresh in a minute.");
@@ -3476,6 +3479,7 @@ const styleHeroUrls = (stylePresetKeys || [])
 
     if (!currentPassId) {
       setMotionError(UI_ERROR_MESSAGES.missingPassIdMega);
+      showMinaError(UI_ERROR_MESSAGES.missingPassIdMega);
       return;
     }
 
@@ -3648,13 +3652,13 @@ const styleHeroUrls = (stylePresetKeys || [])
         { timeoutMs: 120_000 },
         (snap) => {
           const errText = extractMmaErrorTextFromResult(snap);
-          if (errText) showMinaError(errText);
+          if (errText) showMinaError(snap);
         }
       );
 
       const status = String(result?.status || "").toLowerCase().trim();
       const earlyErr = extractMmaErrorTextFromResult(result);
-      if (earlyErr) throw new Error(String(earlyErr));
+      if (earlyErr) throw result;
 
       if (isTimeoutLikeStatus(status) || status === "queued" || status === "processing") {
         showMinaInfo("Still generating in the background — open Profile and refresh in a minute.");
@@ -3719,6 +3723,7 @@ const styleHeroUrls = (stylePresetKeys || [])
       const tweak = String(rawText || "").trim();
       if (!tweak) {
         setFeedbackError(UI_ERROR_MESSAGES.tweakMissingText);
+        showMinaError(UI_ERROR_MESSAGES.tweakMissingText);
         return;
       }
       
@@ -3727,16 +3732,19 @@ const styleHeroUrls = (stylePresetKeys || [])
       
       if (!parentId) {
         setFeedbackError(UI_ERROR_MESSAGES.tweakMissingMedia);
+        showMinaError(UI_ERROR_MESSAGES.tweakMissingMedia);
         return;
       }
       
       if (!API_BASE_URL) {
         setFeedbackError(UI_ERROR_MESSAGES.missingApiBaseUrl);
+        showMinaError(UI_ERROR_MESSAGES.missingApiBaseUrl);
         return;
       }
       
       if (!currentPassId) {
         setFeedbackError(UI_ERROR_MESSAGES.missingPassId);
+        showMinaError(UI_ERROR_MESSAGES.missingPassId);
         return;
       }
 

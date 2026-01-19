@@ -1707,19 +1707,22 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                 }}
               />
               {(() => {
-                const overlayText =
-                  minaError && minaError.trim() ? minaError : minaTalking ? minaMessage || "" : "";
+                const hasError = !!(minaError && minaError.trim());
+                const isInfo = !hasError && minaTone === "info";
+
+                const overlayText = hasError ? minaError! : minaTalking ? minaMessage || "" : "";
                 const overlayVisible = !!overlayText;
-                const overlayIsError = !!(minaError && minaError.trim());
 
                 return (
                   <div
                     className={classNames(
                       "studio-brief-overlay",
                       overlayVisible && "is-visible",
-                      overlayIsError && "is-error"
+                      hasError && "is-error",
+                      isInfo && "is-info"
                     )}
                     onClick={() => {
+                      if (!hasError && !isInfo) return;
                       onDismissMinaNotice?.();
                       requestAnimationFrame(() => briefInputRef.current?.focus());
                     }}
