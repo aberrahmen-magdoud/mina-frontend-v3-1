@@ -5371,10 +5371,11 @@ const styleHeroUrls = (stylePresetKeys || [])
 
   // --------------------------------------------------------------------------
   // Header CTA contrast (Animate / Love it / Download)
-  // - Always white text with a subtle shadow
+  // - White text with a subtle shadow during generations
+  // - Default dark text at rest
   // - No canvas sampling (avoids CORS)
   // --------------------------------------------------------------------------
-  const headerOverlayClass = "header-on-dark";
+  const headerOverlayClass = topBarActive ? "header-on-dark" : "header-on-light";
 
   const appUi = (
     <div

@@ -273,6 +273,11 @@
   transition: opacity 120ms ease, transform 120ms ease !important;
 }
 
+.studio-header-overlay.header-on-light .studio-header-cta {
+  color: var(--mina-ink) !important;
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.2) !important;
+}
+
 .studio-header-overlay.header-on-dark .studio-header-cta {
   color: var(--mina-paper) !important;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.22) !important;
