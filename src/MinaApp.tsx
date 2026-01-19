@@ -1980,7 +1980,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
     opts?: { timeoutMs?: number; intervalMs?: number; refreshEveryMs?: number },
     onTick?: (snapshot: any) => void
   ): Promise<MmaGenerationResponse> {
-    const timeoutMs = Math.max(5_000, Number(opts?.timeoutMs ?? 600_000)); // 10 minutes
+    const timeoutMs = Math.max(5_000, Number(opts?.timeoutMs ?? 1_200_000)); // 20 minutes
     const intervalMs = Math.max(400, Number(opts?.intervalMs ?? 900));
 
     const started = Date.now();
@@ -3531,14 +3531,10 @@ const styleHeroUrls = (stylePresetKeys || [])
 
       );
 
-      const result = await mmaWaitForFinal(
-        generationId,
-        { timeoutMs: 120_000 },
-        (snap) => {
-          const errText = extractMmaErrorTextFromResult(snap);
-          if (errText) showMinaError(snap);
-        }
-      );
+      const result = await mmaWaitForFinal(generationId, undefined, (snap) => {
+        const errText = extractMmaErrorTextFromResult(snap);
+        if (errText) showMinaError(snap);
+      });
 
       const status = String(result?.status || "").toLowerCase().trim();
       const earlyErr = extractMmaErrorTextFromResult(result);
@@ -3976,14 +3972,10 @@ const styleHeroUrls = (stylePresetKeys || [])
       );
 
 
-      const result = await mmaWaitForFinal(
-        generationId,
-        { timeoutMs: 120_000 },
-        (snap) => {
-          const errText = extractMmaErrorTextFromResult(snap);
-          if (errText) showMinaError(snap);
-        }
-      );
+      const result = await mmaWaitForFinal(generationId, undefined, (snap) => {
+        const errText = extractMmaErrorTextFromResult(snap);
+        if (errText) showMinaError(snap);
+      });
 
       const status = String(result?.status || "").toLowerCase().trim();
       const earlyErr = extractMmaErrorTextFromResult(result);
