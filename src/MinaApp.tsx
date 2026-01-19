@@ -2374,10 +2374,9 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
     // "audio/ogg", // only if supported by your provider
   ]);
 
-  // When we decide to “optimize”, we re-encode to JPEG (most compatible)
-  const OPT_OUT_TYPE = "image/jpeg";
-  const OPT_MAX_DIM = 3072; // keeps quality high but avoids giant inputs
-  const OPT_START_QUALITY = 0.92;
+  // When we decide to “optimize”, we re-encode to JPEG/PNG (depending on panel)
+  const OPT_MAX_DIM = 1080; // keep inputs small for faster uploads
+  const OPT_INITIAL_QUALITY = 0.8;
 
   // Transient UX: flash + message for 5s, then clear
   const [uploadFlashPanel, setUploadFlashPanel] = useState<UploadPanelKey | null>(null);
@@ -2420,13 +2419,13 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
     return m ? m[1] : "";
   }
 
-  function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
+  function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number) {
     return new Promise<Blob>((resolve, reject) => {
       try {
         canvas.toBlob(
           (b) => (b ? resolve(b) : reject(new Error("toBlob failed"))),
           type,
-          quality
+          quality as any
         );
       } catch (e) {
         reject(e);
@@ -2475,6 +2474,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
 
   async function normalizeImageForUpload(
     file: File,
+    panel: UploadPanelKey,
     opts?: { forceJpeg?: boolean; maxDim?: number; maxBytes?: number }
   ): Promise<{ file: File; previewUrl?: string; changed: boolean }> {
     const ext = getFileExt(file.name);
@@ -2534,12 +2534,21 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
       (bmp as any).close?.();
     } catch {}
 
-    // Always output JPEG when optimizing (most compatible)
-    let q = OPT_START_QUALITY;
+    // Keep PNG for logos (transparency); everything else -> JPEG for speed
+    const outType = forceJpeg
+      ? "image/jpeg"
+      : panel === "logo" || file.type === "image/png"
+        ? "image/png"
+        : "image/jpeg";
+
+    const quality = outType === "image/jpeg" ? OPT_INITIAL_QUALITY : undefined;
+
+    // Always output optimized image when optimizing
+    let q = quality ?? OPT_INITIAL_QUALITY;
     let blob: Blob | null = null;
 
     for (let i = 0; i < 8; i++) {
-      blob = await canvasToBlob(canvas, OPT_OUT_TYPE, q).catch(() => null);
+      blob = await canvasToBlob(canvas, outType, q).catch(() => null);
       if (blob && blob.size <= maxBytes) break;
       q = Math.max(0.5, q - 0.08);
     }
@@ -2548,8 +2557,9 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
     if (blob.size > maxBytes) throw new Error("TOO_BIG");
 
     const baseName = file.name.replace(/\.[^.]+$/i, "") || "upload";
-    const newName = `${baseName}.jpg`;
-    const newFile = new File([blob], newName, { type: OPT_OUT_TYPE });
+    const newExt = outType === "image/png" ? "png" : "jpg";
+    const newName = `${baseName}.${newExt}`;
+    const newFile = new File([blob], newName, { type: outType });
 
     const previewUrl = URL.createObjectURL(newFile);
     return { file: newFile, previewUrl, changed: true };
@@ -3207,6 +3217,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
         try {
           const norm = await normalizeImageForUpload(
             file,
+            panel,
             isAnimateFrame1
               ? { forceJpeg: true, maxDim: MOTION_FRAME1_MAX_DIM, maxBytes: MOTION_FRAME1_MAX_BYTES }
               : undefined
@@ -3769,21 +3780,14 @@ const styleHeroUrls = (stylePresetKeys || [])
       const startFrameRaw = String((klingBaseBody.assets as any)?.kling_start_image_url || "").trim();
       const endFrame = String((klingBaseBody.assets as any)?.kling_end_image_url || "").trim();
 
-      const startIsMinaGenerated = animateMode && isMinaGeneratedAssetsUrl(startFrameRaw);
       const endIsMinaGenerated = animateMode && isMinaGeneratedAssetsUrl(endFrame);
 
-      let startFrameForModel = startFrameRaw;
-
-      // ✅ Animate rule: if Mina-generated => FULL (no resize)
-      if (!startIsMinaGenerated) {
-        // ✅ ref video/audio needs motion spec (2048)
-        if (hasFrame2Video || hasFrame2Audio) {
-          startFrameForModel = await ensureMotionFrame1SpecUrl(startFrameRaw);
-        } else {
-          // ✅ normal motion rule: 1080/80 for speed
-          startFrameForModel = await ensureOptimizedInputUrl(startFrameRaw, "product");
-        }
-      }
+      // ✅ Rule:
+      // - ONLY video ref uses optimized (1080px, q=85)
+      // - 1img / 2img / audio ref => FULL
+      const startFrameForModel = hasFrame2Video
+        ? await ensureOptimizedInputUrl(startFrameRaw, "product")
+        : startFrameRaw;
 
       // Optional: if you want end frame optimized too (2-image motion) unless Mina-generated:
       const endFrameForModel =
