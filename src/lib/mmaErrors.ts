@@ -169,7 +169,7 @@ export function humanizeMmaError(err: MmaErrorLike): string {
     s.includes("no_output_url") ||
     s.includes("no output url")
   ) {
-    return "That was too complicated for niche mode use main.";
+    return "Niche mode is in high demand. Please use Main mode.";
   }
 
   // Fallback: keep it short and clean
