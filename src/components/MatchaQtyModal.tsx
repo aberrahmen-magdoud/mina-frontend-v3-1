@@ -45,8 +45,8 @@ const MatchaQtyModal: React.FC<Props> = ({
   onClose,
   onConfirm,
 
-  subtitle = "Mina uses matchas to create and animate your stills.",
-  rulesLine = `1 Still = 1 or 2 Matchas (Main/Niche) – 10s Animation = 10 Matchas`,
+  subtitle = "Mina uses matchas to create and animate your images.",
+  rulesLine = `1 Image = 1 Matcha – 5s Animation = 5 Matchas`,
 
   baseCredits = 50,
   basePrice = 15,
