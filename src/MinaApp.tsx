@@ -19,6 +19,13 @@ import { useAuthContext, usePassId } from "./components/AuthGate";
 import Profile from "./Profile";
 import TopLoadingBar from "./components/TopLoadingBar";
 import { downloadMinaAsset } from "./lib/minaDownload";
+import {
+  extractMmaErrorTextFromResult,
+  humanizeUploadError,
+  humanizeMmaError,
+  isTimeoutLikeStatus,
+  UI_ERROR_MESSAGES,
+} from "./lib/mmaErrors";
 
 // ============================================================================
 // [PART 1 START] Imports & environment
@@ -367,37 +374,6 @@ function extractFirstHttpUrl(text: string) {
   return m ? m[0] : null;
 }
 
-function humanizeMmaError(err: any): string {
-  const raw = String(err?.message || err || "").trim();
-  if (!raw) return "I couldn't make it. Please try again.";
-
-  const s = raw.toLowerCase();
-
-  if (
-    s.includes("no url") ||
-    s.includes("mma_no_url") ||
-    s.includes("seedream_no_url") ||
-    s.includes("nanobanana_no_url")
-  ) {
-    return "That was too complicated, try simpler task.";
-  }
-
-  if (s.includes("timeout")) return "Oops I run out of time. Try better images.";
-  if (s.includes("credit")) return "You don’t have enough matchas to do that.";
-  if (s.includes("failed to fetch") || s.includes("network"))
-    return "Connection issue. Please check your internet and try again.";
-
-  const cleaned = raw
-    .replace(/replicate/gi, "the generator")
-    .replace(/seedream/gi, "the generator")
-    .replace(/nanobanana/gi, "the generator")
-    .replace(/kling/gi, "the generator");
-
-  if (/[A-Z_]{6,}/.test(raw)) return "Something went wrong. Please try again.";
-
-  return cleaned;
-}
-
 function aspectRatioToNumber(ratio: string) {
   const [w, h] = ratio.split(":").map((n) => Number(n) || 0);
   if (!h || !w) return 1;
@@ -655,6 +631,36 @@ const MinaApp: React.FC<MinaAppProps> = () => {
   const [minaMessage, setMinaMessage] = useState("");
   const [minaTalking, setMinaTalking] = useState(false);
   const [minaOverrideText, setMinaOverrideText] = useState<string | null>(null);
+  type MinaNoticeTone = "thinking" | "error" | "info";
+  const [minaTone, setMinaTone] = useState<MinaNoticeTone>("thinking");
+
+  const dismissMinaNotice = useCallback(() => {
+    if (minaTone === "thinking") return;
+    setMinaTalking(false);
+    setMinaMessage("");
+    setMinaOverrideText(null);
+    setMinaTone("thinking");
+  }, [minaTone]);
+
+  const showMinaError = useCallback((err: any) => {
+    const msg = humanizeMmaError(err);
+    setMinaTone("error");
+    setMinaTalking(true);
+    setMinaOverrideText(null);
+    setMinaMessage(msg);
+  }, []);
+
+  const showMinaInfo = useCallback((msg: string) => {
+    setMinaTone("info");
+    setMinaTalking(true);
+    setMinaOverrideText(null);
+    setMinaMessage(msg);
+  }, []);
+
+  const clearMinaError = useCallback(() => {
+    if (minaTone !== "error") return;
+    dismissMinaNotice();
+  }, [dismissMinaNotice, minaTone]);
 
   // Motion
   const [motionItems, setMotionItems] = useState<MotionItem[]>([]);
@@ -1319,6 +1325,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
   // MINA “thinking out loud” UI
   // ========================================================================
   useEffect(() => {
+    if (minaTone !== "thinking") return;
     if (!minaBusy) return;
     if (minaOverrideText) return;
 
@@ -1351,9 +1358,10 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
     return () => {
       if (t !== null) window.clearTimeout(t);
     };
-  }, [minaBusy, minaOverrideText, personalityThinking, personalityFiller]);
+  }, [minaBusy, minaOverrideText, minaTone, personalityThinking, personalityFiller]);
 
   useEffect(() => {
+    if (minaTone !== "thinking") return;
     if (!minaOverrideText) return;
 
     setMinaTalking(true);
@@ -1379,23 +1387,18 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
       cancelled = true;
       if (t !== null) window.clearTimeout(t);
     };
-  }, [minaOverrideText]);
+  }, [minaOverrideText, minaTone]);
 
   useEffect(() => {
     if (minaBusy) return;
+    if (minaOverrideText) return;
 
-    if (minaOverrideText) {
-      const hold = window.setTimeout(() => {
-        setMinaTalking(false);
-        setMinaMessage("");
-        setMinaOverrideText(null);
-      }, 2200);
-      return () => window.clearTimeout(hold);
-    }
+    // Keep error/info sticky until user dismisses
+    if (minaTone !== "thinking") return;
 
     setMinaTalking(false);
     setMinaMessage("");
-  }, [minaBusy, minaOverrideText]);
+  }, [minaBusy, minaOverrideText, minaTone]);
 
   // ========================================================================
   // [PART 7 START] API helpers (MMA + history/credits/R2)
@@ -1413,7 +1416,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
   const apiFetch = async (path: string, init: RequestInit = {}) => {
     setPendingRequests((n) => n + 1);
     try {
-      if (!API_BASE_URL) throw new Error("Missing API base URL");
+      if (!API_BASE_URL) throw new Error(UI_ERROR_MESSAGES.missingApiBaseUrl);
 
       const headers = new Headers(init.headers || {});
       const token = await getSupabaseAccessToken(authContext?.accessToken || null);
@@ -1933,7 +1936,8 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
 
   async function mmaWaitForFinal(
     generationId: string,
-    opts?: { timeoutMs?: number; intervalMs?: number }
+    opts?: { timeoutMs?: number; intervalMs?: number; refreshEveryMs?: number },
+    onTick?: (snapshot: any) => void
   ): Promise<MmaGenerationResponse> {
     const timeoutMs = Math.max(5_000, Number(opts?.timeoutMs ?? 600_000)); // 10 minutes
     const intervalMs = Math.max(400, Number(opts?.intervalMs ?? 900));
@@ -1945,6 +1949,12 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
 
     while (Date.now() - started < timeoutMs) {
       last = await mmaFetchResult(generationId);
+      try {
+        onTick?.(last);
+      } catch {}
+
+      const earlyErr = extractMmaErrorTextFromResult(last);
+      if (earlyErr) return last;
 
       const st = String(last?.status || "").toLowerCase().trim();
 
@@ -2372,21 +2382,6 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
   function getFileExt(name: string) {
     const m = String(name || "").toLowerCase().match(/\.([a-z0-9]+)$/i);
     return m ? m[1] : "";
-  }
-
-  function friendlyUploadError(reason: "unsupported" | "too_big" | "broken" | "link_broken") {
-    switch (reason) {
-      case "unsupported":
-        return "That file type isn’t supported. Please upload a JPG, PNG, or WebP.";
-      case "too_big":
-        return "That image is too large. Please choose one under 25MB.";
-      case "broken":
-        return "We couldn’t read that image. Please try a different file.";
-      case "link_broken":
-        return "That link didn’t load as an image. Please paste a direct image link.";
-      default:
-        return "Upload failed. Please try again.";
-    }
   }
 
   function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
@@ -2989,8 +2984,13 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
         const maxSec = mediaType === "video" ? 30 : 60;
         const d = await getMediaDurationSec(previewUrl, mediaType === "video" ? "video" : "audio");
         if (typeof d === "number" && d > maxSec) {
-          setMinaOverrideText(mediaType === "video" ? "videos max 30s please" : "audios max 60s please");
-          showUploadNotice("product", mediaType === "video" ? "Videos max 30s please." : "Audios max 60s please.");
+          setMinaOverrideText(
+            mediaType === "video" ? UI_ERROR_MESSAGES.videoTooLong : UI_ERROR_MESSAGES.audioTooLong
+          );
+          showUploadNotice(
+            "product",
+            mediaType === "video" ? UI_ERROR_MESSAGES.videoTooLongNotice : UI_ERROR_MESSAGES.audioTooLongNotice
+          );
           removeUploadItem("product", id);
           return;
         }
@@ -3041,7 +3041,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
                 ? "unsupported"
                 : "broken";
 
-          const msg = friendlyUploadError(reason as any);
+          const msg = humanizeUploadError(reason as any);
           showUploadNotice(panel, msg);
 
           // Remove bad item immediately so user can upload again right away
@@ -3056,7 +3056,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
       // 3) Verify the uploaded URL actually loads as media (catches “broken upload”)
       const ok = await probeMediaUrl(remoteUrl, mediaType, 8000);
       if (!ok) {
-        showUploadNotice(panel, friendlyUploadError("broken"));
+        showUploadNotice(panel, humanizeUploadError("broken"));
         removeUploadItem(panel, id);
         return;
       }
@@ -3069,8 +3069,13 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
 
         const maxSec = mediaType === "video" ? 30 : 60;
         if (typeof d === "number" && d > maxSec) {
-          setMinaOverrideText(mediaType === "video" ? "videos max 30s please" : "audios max 60s please");
-          showUploadNotice(panel, mediaType === "video" ? "Videos max 30s please." : "Audios max 60s please.");
+          setMinaOverrideText(
+            mediaType === "video" ? UI_ERROR_MESSAGES.videoTooLong : UI_ERROR_MESSAGES.audioTooLong
+          );
+          showUploadNotice(
+            panel,
+            mediaType === "video" ? UI_ERROR_MESSAGES.videoTooLongNotice : UI_ERROR_MESSAGES.audioTooLongNotice
+          );
           removeUploadItem(panel, id);
           return;
         }
@@ -3078,7 +3083,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
 
       patchUploadItem(panel, id, { remoteUrl, uploading: false, error: undefined, durationSec, mediaType });
     } catch {
-      showUploadNotice(panel, "Upload failed. Please try again.");
+      showUploadNotice(panel, UI_ERROR_MESSAGES.uploadFailed);
       removeUploadItem(panel, id);
     }
   }
@@ -3091,7 +3096,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
       const kind = inferMediaTypeFromUrl(url) || "image";
       const ok = await probeMediaUrl(url, kind, 7000);
       if (!ok) {
-        showUploadNotice(panel, friendlyUploadError("link_broken"));
+        showUploadNotice(panel, humanizeUploadError("link_broken"));
         removeUploadItem(panel, id);
         return;
       }
@@ -3102,7 +3107,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
       const kind2 = inferMediaTypeFromUrl(remoteUrl) || kind;
       const ok2 = await probeMediaUrl(remoteUrl, kind2, 8000);
       if (!ok2) {
-        showUploadNotice(panel, friendlyUploadError("broken"));
+        showUploadNotice(panel, humanizeUploadError("broken"));
         removeUploadItem(panel, id);
         return;
       }
@@ -3115,8 +3120,13 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
         if (typeof d === "number" && d > 0) durationSec = d;
 
         if (typeof d === "number" && d > maxSec) {
-          setMinaOverrideText(kind2 === "video" ? "videos max 30s please" : "audios max 60s please");
-          showUploadNotice(panel, kind2 === "video" ? "Videos max 30s please." : "Audios max 60s please.");
+          setMinaOverrideText(
+            kind2 === "video" ? UI_ERROR_MESSAGES.videoTooLong : UI_ERROR_MESSAGES.audioTooLong
+          );
+          showUploadNotice(
+            panel,
+            kind2 === "video" ? UI_ERROR_MESSAGES.videoTooLongNotice : UI_ERROR_MESSAGES.audioTooLongNotice
+          );
           removeUploadItem(panel, id);
           return;
         }
@@ -3124,7 +3134,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
 
       patchUploadItem(panel, id, { remoteUrl, uploading: false, error: undefined, mediaType: kind2, durationSec });
     } catch {
-      showUploadNotice(panel, "Upload failed. Please try again.");
+      showUploadNotice(panel, UI_ERROR_MESSAGES.uploadFailed);
       removeUploadItem(panel, id);
     }
   }
@@ -3137,16 +3147,19 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
     if (trimmed.length < 20) return;
 
     if (!API_BASE_URL) {
-      setStillError("Missing API base URL (VITE_MINA_API_BASE_URL).");
+      setStillError(UI_ERROR_MESSAGES.missingApiBaseUrlEnv);
       return;
     }
     if (!currentPassId) {
-      setStillError("Missing Pass ID for MEGA session.");
+      setStillError(UI_ERROR_MESSAGES.missingPassIdMega);
       return;
     }
 
     setStillGenerating(true);
     setStillError(null);
+    dismissMinaNotice();
+    setMinaTone("thinking");
+    setMinaOverrideText(null);
 
     try {
       const safeAspectRatio =
@@ -3232,11 +3245,23 @@ const styleHeroUrls = (stylePresetKeys || [])
 
       );
 
-      const result = await mmaWaitForFinal(generationId);
+      const result = await mmaWaitForFinal(
+        generationId,
+        { timeoutMs: 120_000 },
+        (snap) => {
+          const errText = extractMmaErrorTextFromResult(snap);
+          if (errText) showMinaError(errText);
+        }
+      );
 
-      if (result?.status === "error") {
-        const msg = result?.error?.message || result?.error?.code || "MMA pipeline failed.";
-        throw new Error(String(msg));
+      const status = String(result?.status || "").toLowerCase().trim();
+      const earlyErr = extractMmaErrorTextFromResult(result);
+      if (earlyErr) throw new Error(String(earlyErr));
+
+      if (isTimeoutLikeStatus(status) || status === "queued" || status === "processing") {
+        showMinaInfo("Still generating in the background — open Profile and refresh in a minute.");
+        stopAllMmaUiNow();
+        return;
       }
 
       const rawUrl = pickMmaImageUrl(result);
@@ -3282,7 +3307,9 @@ const styleHeroUrls = (stylePresetKeys || [])
       setLastStillPrompt(item.prompt);
     } catch (err: any) {
       stopAllMmaUiNow();
-      setStillError(humanizeMmaError(err));
+      const msg = humanizeMmaError(err);
+      setStillError(msg);
+      showMinaError(msg);
     } finally {
       setStillGenerating(false);
     }
@@ -3448,12 +3475,15 @@ const styleHeroUrls = (stylePresetKeys || [])
     if (!motionTextTrimmed && !hasFrame2Video && !hasFrame2Audio) return;
 
     if (!currentPassId) {
-      setMotionError("Missing Pass ID for MEGA session.");
+      setMotionError(UI_ERROR_MESSAGES.missingPassIdMega);
       return;
     }
 
     setMotionGenerating(true);
     setMotionError(null);
+    dismissMinaNotice();
+    setMinaTone("thinking");
+    setMinaOverrideText(null);
 
     try {
       const sid = await ensureSession();
@@ -3613,11 +3643,23 @@ const styleHeroUrls = (stylePresetKeys || [])
       );
 
 
-      const result = await mmaWaitForFinal(generationId);
+      const result = await mmaWaitForFinal(
+        generationId,
+        { timeoutMs: 120_000 },
+        (snap) => {
+          const errText = extractMmaErrorTextFromResult(snap);
+          if (errText) showMinaError(errText);
+        }
+      );
 
-      if (result?.status === "error") {
-        const msg = result?.error?.message || result?.error?.code || "MMA pipeline failed.";
-        throw new Error(String(msg));
+      const status = String(result?.status || "").toLowerCase().trim();
+      const earlyErr = extractMmaErrorTextFromResult(result);
+      if (earlyErr) throw new Error(String(earlyErr));
+
+      if (isTimeoutLikeStatus(status) || status === "queued" || status === "processing") {
+        showMinaInfo("Still generating in the background — open Profile and refresh in a minute.");
+        stopAllMmaUiNow();
+        return;
       }
 
       const rawUrl = pickMmaVideoUrl(result);
@@ -3661,7 +3703,9 @@ const styleHeroUrls = (stylePresetKeys || [])
       setActiveMediaKind("motion");
     } catch (err: any) {
       stopAllMmaUiNow();
-      setMotionError(humanizeMmaError(err));
+      const msg = humanizeMmaError(err);
+      setMotionError(msg);
+      showMinaError(msg);
     } finally {
       setMotionGenerating(false);
     }
@@ -3674,7 +3718,7 @@ const styleHeroUrls = (stylePresetKeys || [])
     async (rawText: string) => {
       const tweak = String(rawText || "").trim();
       if (!tweak) {
-        setFeedbackError("Type a tweak first.");
+        setFeedbackError(UI_ERROR_MESSAGES.tweakMissingText);
         return;
       }
       
@@ -3682,17 +3726,17 @@ const styleHeroUrls = (stylePresetKeys || [])
       const parentId = isMotion ? String(currentMotion?.id || "") : String(currentStill?.id || "");
       
       if (!parentId) {
-        setFeedbackError("Create an image/video first, then tweak it.");
+        setFeedbackError(UI_ERROR_MESSAGES.tweakMissingMedia);
         return;
       }
       
       if (!API_BASE_URL) {
-        setFeedbackError("Missing API base URL.");
+        setFeedbackError(UI_ERROR_MESSAGES.missingApiBaseUrl);
         return;
       }
       
       if (!currentPassId) {
-        setFeedbackError("Missing Pass ID.");
+        setFeedbackError(UI_ERROR_MESSAGES.missingPassId);
         return;
       }
 
@@ -3764,7 +3808,7 @@ const styleHeroUrls = (stylePresetKeys || [])
 
           const result = await mmaWaitForFinal(generationId);
           if (result?.status === "error") {
-            const msg = result?.error?.message || result?.error?.code || "MMA tweak failed.";
+            const msg = result?.error?.message || result?.error?.code || UI_ERROR_MESSAGES.mmaTweakFailed;
             throw new Error(String(msg));
           }
 
@@ -3855,7 +3899,7 @@ const styleHeroUrls = (stylePresetKeys || [])
 
           const result = await mmaWaitForFinal(generationId);
           if (result?.status === "error") {
-            const msg = result?.error?.message || result?.error?.code || "MMA tweak failed.";
+            const msg = result?.error?.message || result?.error?.code || UI_ERROR_MESSAGES.mmaTweakFailed;
             throw new Error(String(msg));
           }
 
@@ -4786,8 +4830,8 @@ const styleHeroUrls = (stylePresetKeys || [])
     setCustomStyleTraining(true);
     setCustomStyleError(null);
 
-    if (!API_BASE_URL) throw new Error("Missing API base URL.");
-    if (!currentPassId) throw new Error("Missing Pass ID.");
+    if (!API_BASE_URL) throw new Error(UI_ERROR_MESSAGES.missingApiBaseUrl);
+    if (!currentPassId) throw new Error(UI_ERROR_MESSAGES.missingPassId);
 
     // 1) pick hero + two others (from the 10 uploads)
     const hero = customStyleImages.find((x) => x.id === customStyleHeroId);
@@ -5319,6 +5363,10 @@ const headerOverlayClass =
               matchaUrl={MATCHA_URL}
               minaMessage={minaMessage}
               minaTalking={minaTalking}
+              minaTone={minaTone}
+              onDismissMinaNotice={dismissMinaNotice}
+              minaError={minaTone === "error" ? minaMessage : null}
+              onClearMinaError={clearMinaError}
               stillLane={stillLane}
               onToggleStillLane={toggleStillLane}
               stillLaneDisabled={minaBusy}
