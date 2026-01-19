@@ -164,6 +164,10 @@ type StudioLeftProps = {
 
   minaMessage?: string;
   minaTalking?: boolean;
+  minaTone?: "thinking" | "error" | "info";
+  onDismissMinaNotice?: () => void;
+  minaError?: string | null;
+  onClearMinaError?: () => void;
 
   stillLane: "main" | "niche";
   onToggleStillLane: () => void;
@@ -440,6 +444,10 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
 
     minaMessage,
     minaTalking,
+    minaTone,
+    onDismissMinaNotice,
+    minaError,
+    onClearMinaError,
 
     stillLane,
     onToggleStillLane,
@@ -1681,6 +1689,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                 }
                 value={brief}
                 onChange={(e) => onBriefChange(e.target.value)}
+                onFocus={() => onDismissMinaNotice?.()}
                 rows={4}
                 onPaste={(e) => {
                   const text = e.clipboardData?.getData("text/plain") || "";
@@ -1697,9 +1706,32 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                   }
                 }}
               />
-              <div className={classNames("studio-brief-overlay", minaTalking && "is-visible")} aria-hidden="true">
-                {minaTalking ? minaMessage : ""}
-              </div>
+              {(() => {
+                const hasError = !!(minaError && minaError.trim());
+                const isInfo = !hasError && minaTone === "info";
+
+                const overlayText = hasError ? minaError! : minaTalking ? minaMessage || "" : "";
+                const overlayVisible = !!overlayText;
+
+                return (
+                  <div
+                    className={classNames(
+                      "studio-brief-overlay",
+                      overlayVisible && "is-visible",
+                      hasError && "is-error",
+                      isInfo && "is-info"
+                    )}
+                    onClick={() => {
+                      if (!hasError && !isInfo) return;
+                      onDismissMinaNotice?.();
+                      requestAnimationFrame(() => briefInputRef.current?.focus());
+                    }}
+                    aria-hidden="true"
+                  >
+                    {overlayText}
+                  </div>
+                );
+              })()}
               {briefHintVisible && <div className="studio-brief-hint">Describe more</div>}
             </div>
           </div>
@@ -2064,8 +2096,12 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                 </button>
               </div>
 
-              {!isMotion && stillError && <div className="error-text">{stillError}</div>}
-              {isMotion && motionError && <div className="error-text">{motionError}</div>}
+              {!isMotion && stillError && !(minaError && minaError.trim()) && (
+                <div className="error-text">{stillError}</div>
+              )}
+              {isMotion && motionError && !(minaError && minaError.trim()) && (
+                <div className="error-text">{motionError}</div>
+              )}
             </div>
           )}
         </div>
