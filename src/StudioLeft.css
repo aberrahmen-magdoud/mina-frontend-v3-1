@@ -874,3 +874,15 @@ margin-bottom: 6px;
 .profile-card-recreate:active {
   opacity: 0.6;
 }
+
+/* ✅ Let user type even if Mina message is visible */
+.studio-brief-overlay {
+  pointer-events: none;
+}
+
+/* ✅ Only clickable for error/info */
+.studio-brief-overlay.is-error,
+.studio-brief-overlay.is-info {
+  pointer-events: auto;
+  cursor: pointer;
+}
