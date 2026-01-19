@@ -43,7 +43,6 @@ export default function StudioRight(props: StudioRightProps) {
     tweakText,
     setTweakText,
     onSendTweak,
-    onRecreate,
     onSetScene,
     sending,
     error,
@@ -376,21 +375,9 @@ export default function StudioRight(props: StudioRightProps) {
               Set Scene
             </button>
 
-            <button
-              type="button"
-              className="studio-action-btn"
-              onClick={() => {
-                if (!media) return;
-                onRecreate?.({
-                  kind: media.type === "video" ? "motion" : "still",
-                  stillIndex,
-                });
-              }}
-              disabled={isEmpty || !!sending || !onRecreate}
-              title={!onRecreate ? "Re-create not available" : undefined}
-            >
-              Re-create
-            </button>
+            <span className="studio-action-separator" aria-hidden="true">
+              |
+            </span>
 
             <button
               type="button"
