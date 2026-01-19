@@ -878,14 +878,11 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
 
   const isMotion = animateMode;
 
-  // ✅ Frame2 can be: image (mute lock), video (sound lock), audio (sound lock)
+  // ✅ Frame2 can be: image, video (sound lock), audio (sound lock)
   const frame2Item = isMotion ? uploads?.product?.[1] : null;
   const frame2Kind = inferMediaTypeFromItem(frame2Item); // "image" | "video" | "audio" | null
-  const hasFrame2 = isMotion && !!frame2Item;
-
-  const hasFrame2Image = hasFrame2 && frame2Kind === "image";
-  const hasFrame2Video = hasFrame2 && frame2Kind === "video";
-  const hasFrame2Audio = hasFrame2 && frame2Kind === "audio";
+  const hasFrame2Video = isMotion && !!frame2Item && frame2Kind === "video";
+  const hasFrame2Audio = isMotion && !!frame2Item && frame2Kind === "audio";
   const hasRefMedia = hasFrame2Video || hasFrame2Audio;
 
   // ✅ Auto-fix ordering in Animate mode:
@@ -905,15 +902,12 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
     }
   }, [animateMode, uploads.product, moveUploadItem]);
 
-  // Any second reference locks audio behavior (but lock direction depends on type)
-  const motionAudioLocked = hasFrame2;
+  // Any reference video/audio locks audio behavior (forced on)
+  const motionAudioLocked = hasRefMedia;
 
-  const effectiveMotionAudioEnabled =
-    hasFrame2Image ? false : hasRefMedia ? true : motionAudioEnabled !== false;
+  const effectiveMotionAudioEnabled = hasRefMedia ? true : motionAudioEnabled !== false;
 
-  const motionAudioLockHint = hasFrame2Image
-    ? "End frame forces mute"
-    : hasFrame2Video
+  const motionAudioLockHint = hasFrame2Video
     ? "Reference video keeps sound"
     : hasFrame2Audio
     ? "Audio drives sound"
@@ -930,13 +924,6 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
 
     if (typeof onToggleMotionAudio !== "function") return;
 
-    // frame2 image => must be OFF
-    if (hasFrame2Image && motionAudioEnabled !== false) {
-      forcedAudioSyncRef.current = true;
-      onToggleMotionAudio();
-      return;
-    }
-
     // frame2 video/audio => must be ON
     if (hasRefMedia && motionAudioEnabled === false) {
       forcedAudioSyncRef.current = true;
@@ -945,7 +932,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
     }
 
     forcedAudioSyncRef.current = true;
-  }, [motionAudioLocked, hasFrame2Image, hasRefMedia, motionAudioEnabled, onToggleMotionAudio]);
+  }, [motionAudioLocked, hasRefMedia, motionAudioEnabled, onToggleMotionAudio]);
 
   // ✅ Motion cost (5s blocks when video/audio is used)
   const MOTION_COST_BASE = motionDurationSec === 10 ? 10 : 5;
@@ -1632,23 +1619,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                     <span className="studio-pill-main">Frames</span>
                   </button>
 
-                  {/* Movement style */}
-                  <button
-                    type="button"
-                    className={classNames(
-                      "studio-pill",
-                      effectivePanel === "style" && "active",
-                      !motionStyleThumb && "studio-pill--solo-plus"
-                    )}
-                    style={pillBaseStyle(1)}
-                    onClick={() => openPanel("style")}
-                    onMouseEnter={() => openPanel("style")}
-                  >
-                    {renderPillIcon(motionStyleThumb, "+", true)}
-                    <span className="studio-pill-main">{motionStyleLabel}</span>
-                  </button>
-
-                  {/* ✅ Sound / Mute (now always visible) */}
+                  {/* ✅ Sound / Muted (now always visible) */}
                   <button
                     type="button"
                     className={classNames(
@@ -1657,7 +1628,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                       effectiveMotionAudioEnabled ? "is-sound" : "is-mute",
                       motionAudioLocked && "studio-pill--ghost"
                     )}
-                    style={pillBaseStyle(2)}
+                    style={pillBaseStyle(1)}
                     onClick={() => {
                       if (motionAudioLocked) return;
                       onToggleMotionAudio?.();
@@ -1665,14 +1636,14 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                     disabled={motionAudioLocked || !onToggleMotionAudio}
                     title={motionAudioLockHint}
                   >
-                    <span className="studio-pill-main">{effectiveMotionAudioEnabled ? "Sound" : "Mute"}</span>
+                    <span className="studio-pill-main">{effectiveMotionAudioEnabled ? "Sound" : "Muted"}</span>
                   </button>
 
                   {/* ✅ Duration (disabled when video/audio is used) */}
                   <button
                     type="button"
                     className={classNames("studio-pill", "pill-duration-toggle", hasRefMedia && "studio-pill--ghost")}
-                    style={pillBaseStyle(3)}
+                    style={pillBaseStyle(2)}
                     onClick={() => {
                       if (hasRefMedia) return;
                       onToggleMotionDuration?.();
@@ -1683,6 +1654,22 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                     <span className="studio-pill-main">
                       {hasRefMedia ? `${MOTION_COST}s` : motionDurationSec === 10 ? "10s" : "5s"}
                     </span>
+                  </button>
+
+                  {/* Movement style */}
+                  <button
+                    type="button"
+                    className={classNames(
+                      "studio-pill",
+                      effectivePanel === "style" && "active",
+                      !motionStyleThumb && "studio-pill--solo-plus"
+                    )}
+                    style={pillBaseStyle(3)}
+                    onClick={() => openPanel("style")}
+                    onMouseEnter={() => openPanel("style")}
+                  >
+                    {renderPillIcon(motionStyleThumb, "+", true)}
+                    <span className="studio-pill-main">{motionStyleLabel}</span>
                   </button>
 
                   {/* ✅ Ratio (fixed) */}
