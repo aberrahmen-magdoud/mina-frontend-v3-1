@@ -365,10 +365,6 @@ function isReplicateUrl(url: string) {
   }
 }
 
-function safeIsHttpUrl(url: string) {
-  return /^https?:\/\//i.test(url);
-}
-
 function isHttpUrl(url: string) {
   return /^https?:\/\//i.test(url);
 }
@@ -376,6 +372,60 @@ function isHttpUrl(url: string) {
 function extractFirstHttpUrl(text: string) {
   const m = text.match(/https?:\/\/[^\s)]+/i);
   return m ? m[0] : null;
+}
+
+const ASSETS_HOST = "assets.faltastudio.com";
+
+function isAssetsUrl(url: string) {
+  try {
+    const h = new URL(url).hostname.toLowerCase();
+    return h === ASSETS_HOST || h.endsWith(`.${ASSETS_HOST}`);
+  } catch {
+    return false;
+  }
+}
+
+function isMinaGeneratedAssetsUrl(url: string) {
+  try {
+    const u = new URL(stripSignedQuery(String(url || "")));
+    if (!isAssetsUrl(u.toString())) return false;
+    return u.pathname.includes("/mma/");
+  } catch {
+    return false;
+  }
+}
+
+function isVideoUrl(url: string) {
+  const base = (url || "").split("?")[0].split("#")[0].toLowerCase();
+  return base.endsWith(".mp4") || base.endsWith(".webm") || base.endsWith(".mov") || base.endsWith(".m4v");
+}
+
+function isAudioUrl(url: string) {
+  const base = (url || "").split("?")[0].split("#")[0].toLowerCase();
+  return (
+    base.endsWith(".mp3") ||
+    base.endsWith(".wav") ||
+    base.endsWith(".m4a") ||
+    base.endsWith(".aac") ||
+    base.endsWith(".ogg")
+  );
+}
+
+function inferMediaTypeFromFile(file: File): "image" | "video" | "audio" | null {
+  const t = String(file?.type || "").toLowerCase();
+  if (t.startsWith("image/")) return "image";
+  if (t.startsWith("video/")) return "video";
+  if (t.startsWith("audio/")) return "audio";
+  return null;
+}
+
+function inferMediaTypeFromUrl(url: string): "image" | "video" | "audio" | null {
+  const u = String(url || "").toLowerCase();
+  if (!/^https?:\/\//i.test(u) && !u.startsWith("blob:")) return null;
+  if (isVideoUrl(u)) return "video";
+  if (isAudioUrl(u)) return "audio";
+  // default "image" for http(s) that isn't video/audio (matches current behavior)
+  return "image";
 }
 
 function aspectRatioToNumber(ratio: string) {
@@ -610,7 +660,6 @@ const MinaApp: React.FC<MinaAppProps> = () => {
     }
   }, [stillLane]);
 
-  const [, setPlatform] = useState("tiktok");
   const [aspectIndex, setAspectIndex] = useState(() => {
     // ✅ Mobile default ratio = 9:16
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches) {
@@ -2923,62 +2972,6 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
     return stable;
   }
 
-  const ASSETS_HOST = "assets.faltastudio.com";
-
-  function isAssetsUrl(url: string) {
-    try {
-      const h = new URL(url).hostname.toLowerCase();
-      return h === ASSETS_HOST || h.endsWith(`.${ASSETS_HOST}`);
-    } catch {
-      return false;
-    }
-  }
-
-  function isMinaGeneratedAssetsUrl(url: string) {
-    try {
-      const u = new URL(stripSignedQuery(String(url || "")));
-      if (!isAssetsUrl(u.toString())) return false;
-      // Mina-generated outputs live under /mma/...
-      if (u.pathname.includes("/mma/")) return true;
-      return false;
-    } catch {
-      return false;
-    }
-  }
-
-  function isVideoUrl(url: string) {
-    const base = (url || "").split("?")[0].split("#")[0].toLowerCase();
-    return base.endsWith(".mp4") || base.endsWith(".webm") || base.endsWith(".mov") || base.endsWith(".m4v");
-  }
-
-  function isAudioUrl(url: string) {
-    const base = (url || "").split("?")[0].split("#")[0].toLowerCase();
-    return (
-      base.endsWith(".mp3") ||
-      base.endsWith(".wav") ||
-      base.endsWith(".m4a") ||
-      base.endsWith(".aac") ||
-      base.endsWith(".ogg")
-    );
-  }
-
-  function inferMediaTypeFromFile(file: File): "image" | "video" | "audio" | null {
-    const t = String(file?.type || "").toLowerCase();
-    if (t.startsWith("image/")) return "image";
-    if (t.startsWith("video/")) return "video";
-    if (t.startsWith("audio/")) return "audio";
-    return null;
-  }
-
-  function inferMediaTypeFromUrl(url: string): "image" | "video" | "audio" | null {
-    const u = String(url || "").toLowerCase();
-    if (!/^https?:\/\//i.test(u) && !u.startsWith("blob:")) return null;
-    if (isVideoUrl(u)) return "video";
-    if (isAudioUrl(u)) return "audio";
-    // default “image” for http(s) that isn’t video/audio (matches your current behavior)
-    return "image";
-  }
-
   function buildMmaMotionBody({
     brief,
     uploadsProduct,
@@ -4411,7 +4404,6 @@ const styleHeroUrls = (stylePresetKeys || [])
   const handleCycleAspect = () => {
     setAspectIndex((prev) => {
       const next = (prev + 1) % ASPECT_OPTIONS.length;
-      setPlatform(ASPECT_OPTIONS[next].platformKey);
       return next;
     });
   };
