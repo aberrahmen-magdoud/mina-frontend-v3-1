@@ -11,21 +11,22 @@
 // ============================================================================
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "./lib/supabaseClient";
-import StudioLeft from "./StudioLeft";
-import StudioRight from "./StudioRight";
-import { isAdmin as checkIsAdmin, loadAdminConfig } from "./lib/adminConfig";
-import { useAuthContext, usePassId } from "./components/AuthGate";
-import Profile from "./Profile";
-import TopLoadingBar from "./components/TopLoadingBar";
-import { downloadMinaAsset } from "./lib/minaDownload";
 import {
+  supabase,
+  isAdmin as checkIsAdmin,
+  loadAdminConfig,
+  downloadMinaAsset,
   extractMmaErrorTextFromResult,
   humanizeUploadError,
   humanizeMmaError,
   isTimeoutLikeStatus,
   UI_ERROR_MESSAGES,
-} from "./lib/mmaErrors";
+} from "./services";
+import StudioLeft from "./StudioLeft";
+import StudioRight from "./StudioRight";
+import { useAuthContext, usePassId } from "./AuthGate";
+import Profile from "./Profile";
+import { TopLoadingBar } from "./ui";
 
 // ============================================================================
 // [PART 1 START] Imports & environment

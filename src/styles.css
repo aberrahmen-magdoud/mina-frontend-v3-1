@@ -1,0 +1,4410 @@
+
+/* ---- src/index.css ---- */
+
+/* src/index.css
+/* ===========================================================
+   0. Root + resets
+   =========================================================== */
+
+:root {
+  --mina-bg: #FCFAF4; /* paper */
+  --mina-text: #080a00; /* black */
+  --mina-border-soft: rgba(8, 10, 0, 0.16);
+  --mina-border-strong: rgba(8, 10, 0, 0.32);
+  --mina-muted: rgba(8, 10, 0, 0.6);
+  --mina-anim-fade: 0.3s;
+  --mina-anim-slide: 0.45s;
+}
+
+/* Safari / iOS friendly viewport */
+html,
+body {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: auto;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--mina-bg);
+  color: var(--mina-text);
+  font-family: "Schibsted Grotesk", system-ui, -apple-system, BlinkMacSystemFont,
+    "SF Pro Text", sans-serif;
+  letter-spacing: -0.02em;
+}
+
+a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+
+button {
+  transition: opacity 0.08s ease-out, transform 0.08s ease-out,
+    background 0.08s ease-out;
+}
+
+button:not(:disabled):hover {
+  opacity: 0.8;
+}
+
+button:active {
+  opacity: 0.6;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border-radius: 0;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  background: none;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+img,
+video {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* ===========================================================
+   1. Generic buttons / helpers
+   =========================================================== */
+
+.link-button,
+.primary-button,
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  font-size: 12px;
+}
+
+.primary-button {
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.primary-button:hover {
+  opacity: 1;
+}
+
+.primary-button:active {
+  opacity: 0.6;
+}
+
+.link-button,
+.secondary-button {
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+.link-button:hover,
+.secondary-button:hover {
+  opacity: 0.9;
+}
+
+.link-button:active,
+.secondary-button:active {
+  opacity: 0.5;
+}
+
+.link-button.subtle {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.link-button.subtle:hover {
+  opacity: 0.85;
+}
+
+.error-text {
+  font-size: 11px;
+  color: rgba(8, 10, 0, 0.8);
+}
+
+/* ===========================================================
+   GLOBAL: hide scrollbars (still scrollable)
+   =========================================================== */
+
+* {
+  scrollbar-width: none; /* Firefox */
+}
+
+*::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* ===========================================================
+   fade / slide helpers
+   =========================================================== */
+
+.mina-fade,
+.fade-block {
+  transition: opacity var(--mina-anim-fade) ease-out;
+  opacity: 1;
+}
+
+.mina-fade.hidden,
+.fade-block.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mina-fade.delay,
+.fade-block.delay {
+  transition-delay: 0.12s;
+}
+
+.mina-slide {
+  transition: opacity var(--mina-anim-slide) ease-out,
+    transform var(--mina-anim-slide) ease-out;
+  opacity: 1;
+  transform: translateY(0);
+  will-change: opacity, transform;
+}
+
+.mina-slide.hidden {
+  opacity: 0;
+  transform: translateY(-12px);
+  pointer-events: none;
+}
+
+/* ===========================================================
+   2. LOGIN LAYOUT  (UNCHANGED)
+   =========================================================== */
+
+.mina-auth-shell {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  background: var(--mina-bg);
+  color: var(--mina-text);
+  overflow: hidden;
+}
+
+.mina-auth-left,
+.mina-auth-right {
+  flex: 1;
+  min-width: 0;
+}
+
+.mina-auth-left {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 40px;
+  border-right: 1px solid var(--mina-border-soft);
+}
+
+.mina-auth-right {
+  background-image: url("https://cdn.shopify.com/s/files/1/0678/9254/3571/files/g-form-121277-appearance.imageUrl-mijzwt6a-cropped.jpg?v=1764402871");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Tiny inline loader that stays put while Supabase session + passId finish booting */
+.mina-inline-auth-loader {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--mina-border-soft);
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  font-size: 12px;
+  color: rgba(8, 10, 0, 0.7);
+  z-index: 10;
+}
+
+.mina-inline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(8, 10, 0, 0.6);
+  animation: mina-inline-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes mina-inline-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+}
+
+/* brand + card + footer */
+
+.mina-auth-card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(-40px);
+}
+
+.mina-auth-brand {
+  position: absolute;
+  top: 16px;
+  left: 40px;
+}
+
+.mina-auth-brand img {
+  height: 26px;
+  width: auto;
+  display: block;
+}
+
+.mina-auth-footer {
+  position: absolute;
+  left: 40px;
+  bottom: 16px;
+  font-size: 11px;
+  color: rgba(8, 10, 0, 0.4);
+}
+
+.mina-auth-help {
+  margin-left: 10px;
+  font-weight: 400;
+  color: rgba(8, 10, 0, 0.6);
+  text-decoration: none;
+}
+
+.mina-auth-help:hover {
+  opacity: 0.85;
+}
+
+/* auth copy */
+
+.mina-auth-title {
+  font-size: 18px;
+  margin: 0 0 4px;
+}
+
+.mina-auth-text {
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0;
+  max-width: 340px;
+  color: rgba(8, 10, 0, 0.3);
+}
+
+/* top back button */
+
+.mina-auth-back-wrapper {
+  margin-bottom: 4px;
+}
+
+.mina-auth-back {
+  display: inline-flex;
+  padding: 4px 0 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.mina-auth-back img {
+  width: 22px;
+  height: 22px;
+  display: block;
+  opacity: 0.5;
+  transition: opacity 0.2s ease-out;
+}
+
+.mina-auth-back:hover img {
+  opacity: 0.8;
+}
+
+.mina-auth-back:active img {
+  opacity: 0.4;
+}
+
+/* hero links */
+
+.mina-auth-actions {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mina-auth-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.mina-auth-main {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  opacity: 0.9;
+  text-decoration: underline;
+}
+
+.mina-auth-main:hover {
+  opacity: 1;
+}
+
+.mina-auth-main:active {
+  opacity: 0.6;
+}
+
+.mina-auth-main.small {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  opacity: 0.85;
+}
+
+.mina-auth-main.small:hover {
+  opacity: 1;
+}
+
+.mina-auth-main.small:active {
+  opacity: 0.6;
+}
+
+.mina-auth-link.secondary {
+  text-decoration: none;
+  font-weight: 400;
+  opacity: 0.75;
+  font-size: 14px;
+}
+
+.mina-auth-link.secondary:hover {
+  opacity: 0.9;
+}
+
+.mina-auth-link.secondary:active {
+  opacity: 0.5;
+}
+
+/* stacked hero states */
+
+.mina-auth-stack {
+  margin-top: 4px;
+  position: relative;
+  height: 72px;
+}
+
+.fade-overlay.auth-panel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* base transition */
+
+.auth-panel {
+  transition: opacity var(--mina-anim-fade) ease-out,
+    transform var(--mina-anim-slide) ease-out;
+}
+
+/* google panel */
+
+.auth-panel--google.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.auth-panel--google.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-12px);
+}
+
+/* email panel */
+
+.auth-panel--email.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(12px);
+}
+
+.auth-panel--email.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+  transition-delay: var(--mina-anim-fade);
+}
+
+/* check-email panel */
+
+.auth-panel--check.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+/* email form */
+
+.mina-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mina-auth-label {
+  display: flex;
+  flex-direction: column;
+}
+
+.mina-auth-input {
+  border: none;
+  padding: 8px 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  background: transparent;
+  outline: none;
+  color: var(--mina-text);
+}
+
+.mina-auth-input::placeholder {
+  color: rgba(8, 10, 0, 0.3);
+  font-weight: 600;
+}
+
+.mina-auth-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: rgba(8, 10, 0, 0.3);
+  max-width: 340px;
+}
+
+.mina-auth-error {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--mina-text);
+}
+
+/* responsive auth */
+
+@media (max-width: 960px) {
+  .mina-auth-shell {
+    flex-direction: column;
+  }
+
+  .mina-auth-left {
+    border-right: none;
+    border-bottom: 1px solid var(--mina-border-soft);
+  }
+
+  .mina-auth-right {
+    height: 260px;
+  }
+
+  .mina-auth-card {
+    max-width: 360px;
+    transform: translateY(-24px);
+  }
+
+  .mina-auth-brand {
+    left: 20px;
+    top: 16px;
+  }
+
+  .mina-auth-brand img {
+    height: 22px;
+  }
+
+  .mina-auth-footer {
+    left: 20px;
+    bottom: 16px;
+  }
+}
+
+/* ===========================================================
+   3. STUDIO LAYOUT (50/50)
+   =========================================================== */
+
+.mina-studio-root {
+  background: var(--mina-bg);
+  color: var(--mina-text);
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+/* 5s soft pink flash on the upload area */
+.mina-upload-flash {
+  --mina-upload-flash-bg: rgba(255, 90, 150, 0.12);
+  --mina-upload-flash-border: rgba(255, 90, 150, 0.35);
+}
+
+/* This tries to catch your upload squares without changing layout.
+   If one selector doesn’t hit your element, keep the one that does. */
+.mina-upload-flash .mina-modal-drop,
+.mina-upload-flash .upload-drop,
+.mina-upload-flash .upload-square,
+.mina-upload-flash .mina-upload-drop,
+.mina-upload-flash .studio-upload-drop,
+.mina-upload-flash .panel-drop {
+  background: var(--mina-upload-flash-bg) !important;
+  outline: 2px solid var(--mina-upload-flash-border) !important;
+  outline-offset: 2px;
+  transition: background 180ms ease, outline-color 180ms ease;
+}
+
+.studio-frame {
+  position: relative;
+  width: 100%;
+  max-width: none;
+}
+
+/* header overlay over both columns */
+
+.studio-header-overlay {
+  position: absolute;
+  top: 24px;
+  left: 40px;
+  right: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  font-size: 14px;
+}
+
+.studio-header-left,
+.studio-header-center,
+.studio-header-right {
+  pointer-events: auto;
+}
+
+.studio-logo-link {
+  font-size: 18px;
+  font-weight: 600;
+  text-decoration: none;
+  color: #cccccc;
+}
+
+.studio-header-center {
+  text-align: center;
+  opacity: 0.7;
+}
+
+.studio-header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* main two-column body */
+
+.studio-body--two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.studio-mobile-footer {
+  display: none;
+}
+
+/* left / right columns */
+
+.studio-left,
+.studio-right {
+  position: relative;
+  padding: 96px 64px 40px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ? Whole-page drag highlight: NO outline, subtle darken */
+.studio-left.drag-active {
+  background: rgba(8, 10, 0, 0.02);
+}
+
+/* ? When dragging: plusbox becomes darker (10%) */
+.studio-left.drag-active .studio-plusbox {
+  background: rgba(8, 10, 0, 0.1);
+}
+
+/* center Input 1 + later blocks on the left */
+
+.studio-left-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.studio-input1-block {
+  margin-bottom: 10px;
+}
+
+/* Pills slot – keeps constant height so textarea never jumps */
+.studio-pills-slot {
+  min-height: 30px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+}
+
+/* ===========================================================
+   3.2.b CUSTOM STYLE MODAL  (single source of truth)
+   =========================================================== */
+
+.mina-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 10, 0, 0.18);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+}
+
+.mina-modal {
+  width: 100%;
+  max-width: 640px;
+  max-height: 80vh;
+  background: var(--mina-bg);
+  border: 1px solid rgba(8, 10, 0, 0.16);
+  padding: 16px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mina-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.mina-modal-close {
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+.mina-modal-drop {
+  border: 1px dashed rgba(8, 10, 0, 0.4);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mina-modal-drop-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.mina-modal-drop-help {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.mina-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.mina-modal-thumb {
+  position: relative;
+  border: none;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.mina-modal-thumb img {
+  width: 100%;
+  height: 80px;
+  object-fit: cover;
+  display: block;
+}
+
+.mina-modal-thumb.hero {
+  outline: 2px solid rgba(8, 10, 0, 0.8);
+}
+
+.mina-modal-thumb-tag {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 2px 4px;
+  font-size: 10px;
+  background: rgba(8, 10, 0, 0.9);
+  color: #fdfdf6;
+}
+
+.mina-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.mina-modal-train {
+  border: none;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ===========================================================
+   3.3 PROFILE
+   =========================================================== */
+
+.profile-editorial-shell {
+  min-height: 100vh;
+  background: #fdfdf6;
+  color: #0b0c08;
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
+  padding: 64px 64px 72px;
+}
+
+.profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  border-bottom: 1px solid rgba(8, 10, 0, 0.08);
+  padding-bottom: 20px;
+}
+
+.profile-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.profile-header-label {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: rgba(8, 10, 0, 0.55);
+}
+
+.profile-meta-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.profile-meta-block {
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-meta-title {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(8, 10, 0, 0.55);
+}
+
+.profile-meta-value {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.profile-cta {
+  border: 1px solid rgba(8, 10, 0, 0.85);
+  background: transparent;
+  padding: 10px 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease;
+}
+
+.profile-cta:hover {
+  background: rgba(8, 10, 0, 0.9);
+  color: #fdfdf6;
+}
+
+.profile-cta.ghost {
+  border-color: rgba(8, 10, 0, 0.2);
+  color: rgba(8, 10, 0, 0.72);
+}
+
+.profile-editorial {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 40px;
+  align-items: flex-start;
+}
+
+.profile-editorial-block {
+  position: relative;
+  background: #FCFAF4;
+  border: 1px solid rgba(8, 10, 0, 0.08);
+  box-shadow: 0 24px 42px rgba(0, 0, 0, 0.04);
+  padding: 28px;
+  min-height: 220px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  cursor: text;
+}
+
+.profile-editorial-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-editorial-text.align-right {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.profile-editorial-kicker {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(8, 10, 0, 0.58);
+}
+
+.profile-editorial-title {
+  font-size: 56px;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.profile-editorial-accent {
+  font-size: 42px;
+  line-height: 1.1;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.profile-editorial-note {
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.profile-editorial-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.profile-editorial-input {
+  border: 1px solid rgba(8, 10, 0, 0.18);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+}
+
+.profile-editorial-input.big {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.profile-editorial-block--right {
+  background: linear-gradient(180deg, #0b0c08 0%, #1d2017 100%);
+  color: #fdfdf6;
+  border: none;
+}
+
+.profile-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.profile-gallery-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.profile-gallery-title {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.profile-gallery-sub {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(8, 10, 0, 0.6);
+}
+
+.profile-gallery-status {
+  font-size: 13px;
+  color: rgba(8, 10, 0, 0.7);
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 18px;
+  position: relative;
+}
+
+.profile-grid-sentinel {
+  height: 4px;
+}
+
+.profile-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+}
+
+.profile-card-number {
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(8, 10, 0, 0.62);
+  cursor: default;
+}
+
+.profile-card-number-input {
+  border: none;
+  border-bottom: 1px solid rgba(8, 10, 0, 0.4);
+  background: transparent;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  padding: 2px 0;
+  width: 100%;
+}
+
+.profile-card-media {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(8, 10, 0, 0.08);
+  background: linear-gradient(90deg, #f7f7ef, #f0f0e6);
+  min-height: 160px;
+  cursor: pointer;
+}
+
+.profile-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 220ms ease;
+}
+
+.profile-card-media:hover img {
+  transform: scale(1.02);
+}
+
+.profile-card-actions {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.35));
+}
+
+.profile-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-card-prompt {
+  font-size: 10px;
+  line-height: 1.4;
+  color: rgba(8, 10, 0, 0.65);
+}
+
+.profile-card-submeta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(8, 10, 0, 0.6);
+}
+
+.profile-card--hero {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+.profile-card--wide {
+  grid-column: span 2;
+}
+
+.profile-card--tall {
+  grid-row: span 2;
+}
+
+.profile-card--mini {
+  grid-row: span 1;
+}
+
+.profile-bottom-nav {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid rgba(8, 10, 0, 0.08);
+}
+
+/* ===========================================================
+   4. Responsive studio
+   =========================================================== */
+
+@media (max-width: 1200px) {
+  .profile-editorial-shell {
+    padding: 48px 32px 64px;
+  }
+
+  .profile-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .profile-card--hero,
+  .profile-card--wide,
+  .profile-card--tall {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 960px) {
+  .studio-header-overlay {
+    position: sticky;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 16px 20px;
+    background: var(--mina-bg);
+    z-index: 12;
+    box-shadow: 0 1px 0 rgba(8, 10, 0, 0.06);
+  }
+
+  .studio-body--two-col {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    grid-auto-flow: row;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .studio-left,
+  .studio-right {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 80px 20px 40px;
+  }
+
+  .profile-editorial-shell {
+    padding: 88px 20px 56px;
+    gap: 32px;
+  }
+
+  .profile-header {
+    flex-direction: column;
+  }
+
+  .profile-editorial {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .profile-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-card--hero,
+  .profile-card--wide,
+  .profile-card--tall {
+    grid-column: span 2;
+  }
+
+  .profile-cta {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+/* ===========================================================
+   OPTIONAL: in case any old dropzone remains in TSX, hide it
+   =========================================================== */
+.studio-dropzone {
+  display: none !important;
+}
+/* ===========================================================
+   PATCH — Premium motion (studio only)
+   =========================================================== */
+
+.mina-studio-root .studio-pill,
+.mina-studio-root .studio-plusbox,
+.mina-studio-root .studio-thumb,
+.mina-studio-root .studio-style-card,
+.mina-studio-root .studio-output-click,
+.mina-studio-root .mina-slide {
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+/* ===========================================================
+   FINAL OVERRIDE — pills animation speed (single source of truth)
+   Put this at the very end of the file.
+   =========================================================== */
+
+.mina-studio-root .studio-pill {
+  transition:
+    background 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 360ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ===========================================================
+   PATCH: Pills same height + panels always feel visible + drag overlay
+   =========================================================== */
+
+/* Make the pills row align perfectly */
+.studio-row--pills {
+  align-items: center;
+}
+
+/* Force identical pill height (including the aspect pill) */
+.studio-pill {
+  height: 34px;
+  min-height: 34px;
+  white-space: nowrap;
+}
+
+/* The aspect pill was wrapping and becoming tall */
+.studio-pill--aspect {
+  height: 34px;
+  min-height: 34px;
+  white-space: nowrap;
+}
+
+/* Keep subtitle inline and small so it never wraps to a new line */
+.studio-pill--aspect .studio-pill-sub {
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Whole-screen drag overlay (5% black) */
+.mina-drag-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.05);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease-out;
+  z-index: 9999;
+}
+
+.mina-drag-overlay.show {
+  opacity: 1;
+}
+
+/* === PATCH: push left column content inward + stop bottom/left cropping === */
+.studio-left-main{
+  /* nudge content away from the viewport edges */
+padding-left: 56px;
+  padding-bottom: 72px;
+
+  /* safety: if content grows, scroll instead of clipping */
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+/* extra safety: prevents the + tile from being clipped by parent wrappers */
+.studio-panel-row,
+.studio-thumbs--inline{
+  padding-left: 0px;
+  padding-bottom: 6px;
+  box-sizing: border-box;
+}
+/* === PATCH: Style selector not clipped + labels visible/clickable === */
+
+/* prevent Collapse/slide wrappers from clipping the label area */
+.mina-slide,
+.studio-panel{
+  overflow: visible !important;
+}
+
+/* nudge the whole panel content a bit so nothing is cut on the left */
+.studio-panel{
+  padding-left: 0px;
+  box-sizing: border-box;
+}
+
+/* style cards row: allow wrapping + no clipping */
+.studio-style-row{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  overflow: visible !important;
+  padding-bottom: 12px;
+}
+
+/* card must be allowed to grow to fit the label */
+.studio-style-card{
+  overflow: visible !important;
+  height: auto !important;
+}
+
+/* label must take space + be clickable */
+.studio-style-label{
+  display: block;
+  margin-top: 8px;
+  width: 80%;
+  max-width: 48px;          /* keep label aligned with thumb width */
+  white-space: normal;
+  word-break: break-word;
+  cursor: text;
+  pointer-events: auto;
+  position: relative;
+  z-index: 5;
+}
+
+/* rename input should match thumbnail width */
+.studio-style-label input{
+  width: 80% !important;
+  max-width: 48px !important;
+  box-sizing: border-box;
+}
+
+
+/* ===== STUDIO LAYOUT: 60/40 ===== */
+.studio-header-overlay {
+  z-index: 50; /* keep header buttons above the full-bleed right surface */
+}
+
+.studio-body--two-col {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.studio-left {
+  flex: 0 0 60%;
+  max-width: 60%;
+  min-width: 0;
+}
+
+.studio-right {
+  flex: 0 0 40%;
+  max-width: 40%;
+  min-width: 0;
+  padding: 0;
+}
+
+@media (max-width: 900px) {
+  .mina-studio-root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .studio-body--two-col {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+    flex: 1;
+    display: flex;
+  }
+
+  .studio-left,
+  .studio-right {
+    flex: 0 0 auto;
+    max-width: 100%;
+    width: 100%;
+    padding: 72px 20px 32px;
+  }
+
+  .studio-right {
+    padding: 0;
+  }
+
+  .studio-right-surface {
+    min-height: 0;
+    height: auto;
+  }
+
+  .studio-right {
+    min-height: 0;
+  }
+
+  .studio-footer-links {
+    display: none;
+  }
+
+  .studio-header-overlay {
+    position: sticky;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 16px 20px;
+    background: var(--mina-bg);
+    box-shadow: 0 1px 0 rgba(8, 10, 0, 0.06);
+  }
+
+  .studio-mobile-footer {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    padding: 16px 20px 24px;
+    background: var(--mina-bg);
+  }
+}
+
+@media (max-width: 480px) {
+  .studio-left {
+    padding: 10px;
+  }
+}
+
+/* ===========================================================
+   HEADER CTAs — auto-contrast (text-only, transparent)
+   =========================================================== */
+
+/* Auto invert the right header text based on what's behind it */
+.studio-header-right {
+  mix-blend-mode: difference;
+  color: #000; /* on light bg -> becomes dark, on dark bg -> becomes light */
+}
+
+/* Buttons inherit the blended color (so they adapt automatically) */
+.studio-header-cta {
+  border: 0;
+  background: transparent;
+  padding: 0;
+
+  font-weight: 700;
+  font-size: 13px;
+
+  color: inherit;
+
+  text-decoration: none !important;
+  text-underline-offset: 0;
+  text-decoration-thickness: 0;
+
+  cursor: pointer;
+}
+
+.studio-header-cta:hover {
+  opacity: 0.9;
+}
+
+.studio-header-cta:active {
+  opacity: 0.6;
+}
+
+.studio-header-cta:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+/* =====================================================================
+   PATCH: Profile design – match the minimalist left side (no shadows,
+   tinted backgrounds, minimal color). These overrides adjust the
+   editorial profile page to feel cohesive with the Studio left column.
+   ===================================================================== */
+
+/* Use the global paper tone and text colour for the entire profile page */
+.profile-editorial-shell {
+  background: var(--mina-bg);
+  color: var(--mina-text);
+}
+
+/* Lightly tinted panel instead of bright white card */
+.profile-editorial-block {
+  background: rgba(8, 10, 0, 0.00);
+  border: 0px solid rgba(8, 10, 0, 0.08);
+  box-shadow: none;
+}
+
+/* Right editorial card – tinted a bit darker but still minimal */
+.profile-editorial-block--right {
+  background: rgba(8, 10, 0, 0.00);
+  color: var(--mina-text);
+  border: none;
+  box-shadow: none;
+}
+
+/* Cards in the history gallery: remove strong gradients and use subtle tints */
+.profile-card-media {
+  border: 0px solid rgba(8, 10, 0, 0.00);
+  background: rgba(8, 10, 0, 0.05);
+}
+
+/* Soften the overlay gradient on actions */
+.profile-card-actions {
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.1));
+}
+
+/* Refine CTAs to match Studio pills */
+.profile-cta {
+  border-color: rgba(8, 10, 0, 0.0);
+  color: rgba(8, 10, 0, 0.9);
+}
+.profile-cta:hover {
+  background: rgba(8, 10, 0, 0.05);
+  color: var(--mina-text);
+}
+.profile-cta.ghost {
+  border-color: rgba(8, 10, 0, 0.0);
+  color: rgba(8, 10, 0, 0.6);
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .studio-left-main {
+    padding-left: 0;
+  }
+}
+/* Mobile */
+@media (max-width: 768px) {
+  .studio-footer-link {
+    font-size: 11px;
+  }
+}
+
+/* ---- src/styles/minaPanels.css ---- */
+
+/* ============================================================= */
+/* FILE: src/styles/minaPanels.css                                */
+/* Mina panels / modals (your exact HTML classes)                 */
+/* ============================================================= */
+
+:root {
+  --mina-ink: #080a00;
+  --mina-paper: #FCFAF4;
+  --mina-line: rgba(8, 10, 0, 0.10);
+  --mina-soft: rgba(8, 10, 0, 0.04);
+  --mina-soft2: rgba(8, 10, 0, 0.06);
+  --mina-shadow: rgba(0, 0, 0, 0.25);
+  --mina-accent: #BED796; /* your green */
+}
+
+/* Backdrop */
+.mina-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 12px;
+  background: rgba(8, 10, 0, 0.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  animation: minaBackdropIn 140ms ease-out;
+}
+
+@keyframes minaBackdropIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Card */
+.mina-modal {
+  width: min(520px, 92vw);
+  max-height: min(720px, 86vh);
+  overflow: hidden;
+
+  background: var(--mina-paper);
+  color: var(--mina-ink);
+
+  border-radius: 0px;
+  border: 0px solid var(--mina-line);
+  box-shadow: 0px 16px 50px var(--mina-shadow);
+
+  transform: translateY(6px) scale(0.985);
+  opacity: 0;
+  animation: minaModalIn 160ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes minaModalIn {
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Header */
+.mina-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 4px 8px;
+  border-bottom: 0px solid var(--mina-line);
+
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Close button */
+.mina-modal-close {
+  border: 0;
+  background: transparent;
+  padding: 10px 0px 10px 10px;
+
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+  opacity: 0.75;
+  border-radius: 0px;
+}
+
+.mina-modal-close:hover { opacity: 0.95; background: var(--mina-soft); }
+.mina-modal-close:active { opacity: 0.6; }
+
+/* Content blocks */
+.mina-modal-body {
+  padding: 14px 16px;
+}
+
+/* Drop zone */
+.mina-modal-drop {
+  padding: 14px 16px;
+}
+
+.mina-modal-drop-main {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+
+  border: 1px dashed rgba(8, 10, 0, 0.18);
+  background: var(--mina-soft);
+  border-radius: 14px;
+
+  padding: 14px 14px;
+}
+
+.mina-modal-drop-help {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  opacity: 0.55;
+}
+
+/* “Upload images” link-style button */
+.link-button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+
+  cursor: pointer;
+  opacity: 0.9;
+}
+
+.link-button:hover { opacity: 1; }
+.link-button:active { opacity: 0.6; }
+
+/* Footer */
+.mina-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+
+  padding: 14px 16px;
+  border-top: 1px solid var(--mina-line);
+}
+
+/* Primary action (Create style / Yes / etc) */
+.mina-modal-train,
+.mina-btn-primary {
+  border: 1px solid rgba(8, 10, 0, 0.95);
+  background: rgba(8, 10, 0, 0.95);
+  color: #fff;
+
+  padding: 10px 14px;
+  border-radius: 12px;
+
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+
+  cursor: pointer;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.mina-modal-train:active,
+.mina-btn-primary:active {
+  transform: scale(0.99);
+  opacity: 0.85;
+}
+
+.mina-modal-train:disabled,
+.mina-btn-primary:disabled {
+  opacity: 0.35;
+  cursor: default;
+  transform: none;
+}
+
+/* Secondary action (No / Cancel) */
+.mina-btn-secondary {
+  border: 1px solid rgba(8, 10, 0, 0.18);
+  background: #fff;
+  color: rgba(8, 10, 0, 0.9);
+
+  padding: 10px 14px;
+  border-radius: 12px;
+
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+
+  cursor: pointer;
+  transition: opacity 120ms ease, transform 120ms ease, background 120ms ease;
+}
+
+.mina-btn-secondary:hover { background: var(--mina-soft); }
+.mina-btn-secondary:active { transform: scale(0.99); opacity: 0.85; }
+
+/* Accessibility */
+.mina-modal :focus-visible {
+  outline: 2px solid var(--mina-accent);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
+/* ============================================================= */
+/* HEADER CTA (Animate / Love it / Download)                      */
+/* - Must stay transparent                                        */
+/* - Auto-contrast on light/dark backgrounds                       */
+/* ============================================================= */
+
+/* Let blend-mode see what's behind (if another CSS set isolation/background) */
+.studio-header-overlay {
+  background: transparent !important;
+  isolation: auto !important;
+}
+
+/* The 3 header buttons */
+.studio-header-cta {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+
+  /* This is the “source color” for mix-blend-mode */
+  color: var(--mina-paper) !important;
+
+  /* Auto-contrast */
+  mix-blend-mode: difference !important;
+  -webkit-mix-blend-mode: difference !important;
+
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+
+  padding: 10px 12px;
+  border-radius: 12px;
+
+  cursor: pointer;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.studio-header-cta:hover { opacity: 0.92; }
+.studio-header-cta:active { opacity: 0.72; transform: translateY(1px); }
+
+.studio-header-cta:disabled {
+  opacity: 0.35;
+  cursor: default;
+  transform: none;
+}
+/* ============================================================= */
+/* Header CTA contrast classes (driven by MinaApp.tsx sampling)    */
+/* ============================================================= */
+
+.studio-header-cta {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 10px 12px !important;
+  border-radius: 0px !important;
+
+  font: inherit !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.01em !important;
+
+  cursor: pointer !important;
+  transition: opacity 120ms ease, transform 120ms ease !important;
+}
+
+.studio-header-overlay.header-on-light .studio-header-cta {
+  color: var(--mina-ink) !important;
+  text-shadow: 0 0px 0 rgba(252, 250, 244, 0.55) !important;
+}
+
+.studio-header-overlay.header-on-dark .studio-header-cta {
+  color: var(--mina-paper) !important;
+  text-shadow: 0 0px 0 rgba(8, 10, 0, 0.35) !important;
+}
+
+.studio-header-cta:hover { opacity: 0.92 !important; }
+.studio-header-cta:active { opacity: 0.72 !important; transform: translateY(1px) !important; }
+.studio-header-cta:disabled { opacity: 0.35 !important; cursor: default !important; transform: none !important; }
+
+/* ============================================================
+   Matcha modal (EXACT behavior you asked)
+   - NO rounded corners
+   - ONE progress bar
+   - Big circles as nodes
+   - Fill line grows to selected node
+   - Labels are NOT clickable
+   - Grey + Black only (no transparency)
+   - No hover dim
+   ============================================================ */
+
+.mina-modal.mina-matcha-modal {
+  width: min(1100px, calc(100vw - 28px));
+  max-height: min(780px, 86vh);
+  overflow: hidden;
+
+  border-radius: 0 !important;   /* NO round radius ever */
+  background: var(--mina-paper);
+  color: var(--mina-ink);
+}
+
+/* topbar */
+.mina-matcha-topbar {
+  display: flex;
+  align-items: center;            /* better vertical alignment */
+  justify-content: space-between;
+  padding: 10px 0px 0px 6px ;
+}
+
+.mina-matcha-topbar-left {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  opacity: 1;
+}
+
+.mina-matcha-close {
+  border-radius: 0 !important;
+  opacity: 0.85;
+  padding: 0px 8px !important;
+}
+
+.mina-matcha-close:hover { opacity: 0.85; background: transparent !important; }
+.mina-matcha-close:active { opacity: 0.85; }
+
+/* body */
+.mina-matcha-body {
+  padding: 0px 0px 10px 0px ;
+}
+
+/* If any old markup still renders a body title, hide it */
+.mina-matcha-title { display: none !important; }
+
+.mina-matcha-subtitle {
+  margin-top: 0px;
+  padding:0px 6px 6px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.mina-matcha-rules {
+  padding: 6px 6px 16px 6px;
+
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.65;
+}
+
+/* SCALE */
+.mina-matcha-scale {
+  margin-top: 28px;
+  padding: 0px 16px;
+}
+
+/* absolute label/price rows that align exactly with nodes */
+.mina-matcha-scale-top,
+.mina-matcha-scale-bottom {
+  position: relative;
+  height: 18px;
+
+  padding: 0 6px;                /* ? left/right breathing room */
+  box-sizing: border-box;
+
+  overflow: visible;
+  user-select: none;
+  pointer-events: none;          /* ? never block clicking */
+}
+
+/* Each label/price item is positioned by inline left:% */
+.mina-matcha-scale-item {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  text-align: center;
+
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* edges should not overflow */
+.mina-matcha-scale-item.is-first {
+  left: 0% !important;
+  transform: translate(0, -50%);
+  text-align: left;
+}
+
+.mina-matcha-scale-item.is-last {
+  left: 100% !important;
+  transform: translate(-100%, -50%);
+  text-align: right;
+}
+
+/* labels + prices (grey by default) */
+.mina-matcha-label,
+.mina-matcha-price {
+  font-size: 12px;
+  color: #BDBDBD;                /* solid grey */
+}
+
+/* on (<= selected) becomes black */
+.mina-matcha-label.is-on,
+.mina-matcha-price.is-on {
+  color: #080a00;                /* solid black */
+}
+
+/* bar */
+.mina-matcha-bar {
+  position: relative;
+  height: 32px;
+  margin: 10px 6px;
+
+  padding: 0px 0px;                /* ? inset bar + nodes */
+  box-sizing: border-box;
+
+  cursor: pointer;
+  touch-action: manipulation;
+
+  opacity: 1 !important;         /* ? prevent dim */
+}
+
+.mina-matcha-bar:hover { opacity: 1 !important; } /* ? no dim */
+
+/* track + fill perfectly centered vertically */
+.mina-matcha-track,
+.mina-matcha-fill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+}
+
+/* full track */
+.mina-matcha-track {
+  right: 0;
+  background: #BDBDBD;           /* solid grey */
+}
+
+/* fill */
+.mina-matcha-fill {
+  width: var(--fillPct, 0%);
+  background: #080a00;           /* solid black */
+}
+
+/* nodes centered vertically; dot masks line behind it */
+.mina-matcha-node {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+
+  border: 0;
+  background: transparent;
+  padding: 10px;                 /* big click target */
+  cursor: pointer;
+
+  border-radius: 0 !important;
+  z-index: 3;
+
+  opacity: 1 !important;         /* ? prevent dim */
+}
+
+.mina-matcha-node:hover { opacity: 1 !important; }
+.mina-matcha-node:active { opacity: 1 !important; }
+
+.mina-matcha-node .mina-matcha-dot {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+
+  background: #BDBDBD;           /* solid grey */
+  box-shadow: 0 0 0 6px var(--mina-paper); /* ? hides line behind circle */
+  position: relative;
+  z-index: 4;
+}
+
+/* nodes up to selected are black */
+.mina-matcha-node.is-on .mina-matcha-dot {
+  background: #080a00;           /* solid black */
+}
+
+/* footer (no separator line) */
+.mina-matcha-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding: 16px 6px;
+  border-top: 0 !important;      /* ? remove separator line */
+}
+
+/* left side takes remaining space, so Purchase stays on the right */
+.mina-matcha-transparency {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  max-width: none;               /* ? do not break footer */
+}
+
+/* Price Transparency look readable */
+.mina-matcha-transparency-toggle {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  border-radius: 0 !important;
+
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: +0.01em;
+
+  cursor: pointer;
+  opacity: 0.3;
+  text-align: left;
+}
+
+.mina-matcha-transparency-toggle:hover { opacity: 0.85; }
+.mina-matcha-transparency-toggle:active { opacity: 0.85; }
+
+.mina-matcha-transparency-details {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  opacity: 0.3;
+}
+
+/* Purchase on the right, bold + underline */
+.mina-matcha-purchase {
+  margin-left: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
+
+  border: 0;
+  background: transparent;
+  padding: 0;
+  border-radius: 0 !important;
+
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  padding: 12px 4px 12px 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 6px;
+
+  opacity: 1;
+}
+
+.mina-matcha-purchase:hover { opacity: 1; }
+.mina-matcha-purchase:active { opacity: 1; }
+.mina-matcha-modal button,
+.mina-matcha-modal .mina-matcha-close {
+  text-decoration: none !important;
+}
+
+
+/* ---- src/StudioLeft.css ---- */
+
+/* ============================================================= */
+/* FILE: src/StudioLeft.css                                      */
+/* ============================================================= */
+/* ==========================================================================
+   Mina Studio — LEFT SIDE ONLY
+   - NO rounded corners
+   - minimal color: black opacity + bg paper from :root
+   ========================================================================== */
+
+.studio-left {
+  position: relative;
+  padding: 96px 64px 64px 40px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+
+  --pill-slide-duration: 320ms;
+  --group-fade-duration: 320ms;
+  --textarea-float-distance: 4px;
+}
+
+.studio-left-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+}
+
+/* ? NEW: topbar toggle row */
+.studio-left-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 10px;
+}
+
+.studio-left-cta {
+  border: 0;
+  background: transparent;
+  padding: 0;
+
+  font-weight: 700;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.9);
+
+  text-decoration: none !important;
+  cursor: pointer;
+}
+
+.studio-left-cta-state {
+  margin-left: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.studio-left-cta-state.on {
+  color: #BED796; /* ? green accent */
+}
+
+/* Drag subtle darken (no outline) */
+.studio-left.drag-active {
+  background: rgba(8, 10, 0, 0.02);
+}
+.studio-left.drag-active .studio-plusbox {
+  background: rgba(8, 10, 0, 0.1);
+}
+
+/* ------------------------------------------
+   Pills
+------------------------------------------ */
+.studio-pills-slot {
+  min-height: 26px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.studio-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.studio-row--pills {
+  transition: opacity var(--group-fade-duration, 320ms) ease-in-out,
+    transform var(--group-fade-duration, 320ms) ease-in-out;
+  transform: translateY(0);
+}
+
+.studio-row--pills.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-6px);
+}
+
+.mina-left-block,
+.studio-controls {
+  transition: opacity var(--group-fade-duration, 320ms) ease-in-out,
+    transform var(--group-fade-duration, 320ms) ease-in-out;
+  transform: translateY(0);
+}
+
+.studio-left.is-typing-hidden .studio-row--pills,
+.studio-left.is-typing-hidden .mina-left-block,
+.studio-left.is-typing-hidden .studio-controls {
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+}
+
+.studio-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 6px 6px;
+
+  background: rgba(8, 10, 0, 0.02);
+  cursor: pointer;
+
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+
+  height: 34px;
+  min-height: 34px;
+  white-space: nowrap;
+
+  border-radius: 0;
+  border: none;
+  outline: none;
+
+  /* REPLACE the transition inside .studio-pill */
+transition:
+background-color 0s ease 0s,
+  opacity var(--pill-slide-duration, 10ms) cubic-bezier(0.16, 1, 0.3, 1),
+  transform var(--pill-slide-duration, 320ms) cubic-bezier(0.16, 1, 0.3, 1);
+
+}
+
+/* Text-only lane toggle pill (behaves like other pills) */
+.pill-infinite-toggle {
+  padding-left: 14px;
+  padding-right: 14px; /* equal padding */
+  justify-content: center;
+  gap: 0;
+  font-size: 10px; /* ? requested */
+  line-height: 1; /* keeps it compact like a filter toggle */
+}
+
+/* Optional: tiny visual cue (remove if you want identical look) */
+.pill-infinite-toggle.is-niche {
+}
+
+.pill-infinite-toggle.is-main {
+}
+
+.studio-pill.active,
+.studio-pill:hover {
+  background: rgba(8, 10, 0, 0.05);
+}
+
+.studio-pill--ghost {
+  background: transparent;
+  border: 1px dashed rgba(8, 10, 0, 0.08);
+}
+
+.studio-pill--ghost.active,
+.studio-pill--ghost:hover {
+  background: rgba(8, 10, 0, 0.03);
+  border-color: rgba(8, 10, 0, 0.18);
+}
+/* Ghost = visibly disabled/faded */
+.studio-pill--ghost {
+  opacity: 0.6;
+}
+
+.studio-pill--ghost:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+/* Kill hover pop on disabled ghost (some browsers still apply hover styles) */
+.studio-pill--ghost:disabled:hover {
+  background: transparent;
+  border-color: rgba(8, 10, 0, 0.08);
+}
+
+.studio-pill--ghost:disabled .studio-pill-main,
+.studio-pill--ghost:disabled .studio-pill-sub {
+  opacity: 0.7;
+}
+
+
+
+
+.studio-pill-icon {
+  min-width: 18px;
+  min-height: 18px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.studio-pill-icon-thumb {
+  border-radius: 0px;
+  overflow: hidden;
+  background: rgba(8, 10, 0, 0.06);
+}
+
+.studio-pill-icon-plain {
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.studio-pill-icon-mark {
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 1;
+  width: 20px;
+  height: 20px;
+  margin-right: 2px;
+}
+
+.studio-pill-icon img {
+  width: 12px;
+  height: 12px;
+  display: block;
+  object-fit: contain;
+}
+
+.studio-pill-icon-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.studio-pill-icon-plain img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.studio-pill-icon--plus {
+  min-width: 18px;
+}
+
+.studio-pill--solo-plus {
+  padding-left: 8px;
+}
+
+.studio-pill-main,
+.studio-pill-sub {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.studio-pill-sub {
+  opacity: 0.6;
+}
+
+.studio-pill-note {
+  font-size: 8px;
+  color: rgba(8, 10, 0, 0.7);
+  margin-top: 4px;
+  margin-left: 4px;
+}
+
+/* keep aspect pill same height */
+.studio-pill--aspect {
+  height: 28px;
+  min-height: 28px;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------
+   Brief
+------------------------------------------ */
+.studio-brief-block {
+  margin-top: 8px;
+}
+
+.studio-brief-shell {
+  position: relative;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 calc(100% - 60px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 calc(100% - 60px),
+    transparent 100%
+  );
+}
+
+.studio-brief-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+
+  font-size: 32px;
+  line-height: 1.08;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+
+  background: transparent;
+  color: var(--mina-text, #080a00);
+
+  border-radius: 0;
+
+  transition: opacity var(--group-fade-duration, 320ms) ease-in-out,
+    transform var(--group-fade-duration, 320ms) ease-in-out;
+}
+
+.studio-left.is-typing-hidden .studio-brief-input {
+  transform: translateY(var(--textarea-float-distance, 4px));
+}
+
+.studio-left.is-thinking .studio-brief-input {
+  opacity: 0;
+  transform: translateY(var(--textarea-float-distance, 4px));
+}
+
+.studio-brief-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* keep thinking overlay non-clickable */
+  font-size: 32px;
+  line-height: 1.08;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #BED796;
+  opacity: 0;
+  transform: translateY(var(--textarea-float-distance, 4px));
+  transition: opacity var(--group-fade-duration, 320ms) ease-in-out,
+    transform var(--group-fade-duration, 320ms) ease-in-out;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  white-space: pre-wrap;
+}
+
+.studio-brief-overlay.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.studio-brief-overlay.is-error {
+  background: rgba(234, 87, 143, 0.05);
+  border: none;
+  color: rgba(234, 87, 143, 0.4);
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 10px 12px; /* ? space around the text */
+
+}
+
+.studio-brief-overlay.is-info {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.studio-brief-input::placeholder {
+  color: rgba(8, 10, 0, 0.2);
+}
+
+.studio-brief-hint {
+  position: absolute;
+  right: 0;
+  bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: rgba(8, 10, 0, 0.45);
+  pointer-events: none;
+}
+
+/* ------------------------------------------
+   Panels
+------------------------------------------ */
+.mina-left-block {
+  overflow: visible;
+}
+
+.studio-panel {
+  margin-top: 14px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(8, 10, 0, 0.08);
+  overflow: visible;
+}
+
+.studio-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: 10px;
+  opacity: 0.9;
+}
+
+.studio-panel-row {
+  display: flex;
+  align-items: center;
+}
+
+.studio-thumbs {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.studio-thumbs--inline {
+  margin-top: 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.studio-empty-inline {
+  font-size: 11px;
+  color: rgba(8, 10, 0, 0.35);
+  padding: 6px 0;
+}
+
+/* plus box — black 5%, NO border, NO round */
+.studio-plusbox {
+  width: 72px;
+  height: 72px;
+  background: rgba(8, 10, 0, 0.05);
+  border: none;
+  outline: none;
+  border-radius: 0;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+
+  transition: background 220ms ease, transform 220ms ease, opacity 220ms ease;
+}
+
+.studio-plusbox--inline {
+  width: 72px;
+  height: 72px;
+}
+
+.studio-plusbox:active {
+  transform: scale(0.98);
+  opacity: 0.85;
+}
+
+.studio-librarybox {
+  width: 72px;
+  height: 72px;
+  border-radius: 0;
+  border: 0px dashed rgba(8, 10, 0, 0.25);
+  background: rgba(247, 245, 239, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.studio-librarybox:hover {
+  background: rgba(8, 10, 0, 0.03);
+}
+
+/* uploaded photo — NO border, NO round */
+.studio-thumb {
+  position: relative; /* ? needed for spinner overlay */
+  width: 72px;
+  height: 72px;
+  border: none;
+  outline: none;
+  border-radius: 0;
+
+  background: rgba(8, 10, 0, 0.05);
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+
+  transition: transform 220ms ease, opacity 220ms ease;
+}
+
+.studio-thumb:active {
+  transform: scale(0.98);
+  opacity: 0.85;
+}
+
+.studio-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ? NEW: selected thumb in animate mode uses green (not black) */
+.studio-thumb.is-selected {
+  outline: 1px solid #BED796;
+}
+
+/* ------------------------------------------
+   Thumb spinner (replaces "Uploading…")
+------------------------------------------ */
+.studio-thumb-spinner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.studio-thumb-spinner::after {
+  content: "";
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(8, 10, 0, 0.18);
+  border-top-color: rgba(8, 10, 0, 0.6);
+  animation: studioSpin 0.8s linear infinite;
+}
+
+@keyframes studioSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ------------------------------------------
+   Style cards
+------------------------------------------ */
+.studio-style-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  overflow: visible;
+  padding: 6px 0 14px;
+}
+
+.studio-style-card {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+
+  border-radius: 0;
+}
+
+/* ------------------------------------------
+   Style cards selected scale
+------------------------------------------ */
+.studio-style-card {
+  transform-origin: center;
+  transition: transform 140ms ease;
+}
+
+.studio-style-card.active {
+  transform: scale(0.85);
+}
+
+.studio-style-card:hover .studio-style-thumb,
+.studio-style-card:focus-visible .studio-style-thumb {
+  outline: 0px solid #BAA37A;
+  outline-offset: -1px;
+}
+
+.studio-style-thumb {
+  width: 72px;
+  height: 72px;
+  background: rgba(8, 10, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+
+  border-radius: 0;
+}
+
+.studio-style-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.studio-style-card.add .studio-style-thumb span {
+  font-size: 18px;
+}
+
+
+.studio-style-label {
+  margin-top: 6px;
+margin-bottom: 6px;
+
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: text;
+}
+
+.studio-style-label input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  padding: 0;
+  width: 110px;
+}
+
+.studio-motion-style-card .studio-motion-style-thumb {
+  background: rgba(8, 10, 0, 0.1);
+}
+
+/* ------------------------------------------
+   Controls
+------------------------------------------ */
+.studio-controls {
+  margin-top: 0;
+}
+
+.studio-controls-divider {
+  border-top: 1px solid rgba(8, 10, 0, 0.08);
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.studio-vision-toggle {
+  margin-top: 12px;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+
+  text-decoration: none;
+  cursor: pointer;
+
+  opacity: 0.9;
+}
+
+.studio-create-block {
+  margin-top: 28px;
+}
+
+.studio-create-link {
+  border: none;
+  padding: 0;
+  font-family: inherit;
+
+  font-size: 32px;
+  font-weight: 600;
+  text-decoration: underline;
+
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.studio-create-link.disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* “Describe more” state (same palette, no new colors) */
+.studio-create-link.state-describe {
+  opacity: 0.6;
+}
+.studio-create-link.state-describe:hover {
+  opacity: 0.8;
+}
+.studio-create-link.state-describe:active {
+  opacity: 0.5;
+}
+
+/* ------------------------------------------
+   Footer links
+------------------------------------------ */
+.studio-footer-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.studio-footer-link {
+  color: inherit;
+  opacity: 0.75;
+  text-decoration: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.studio-footer-link:hover {
+  opacity: 0.95;
+}
+
+.studio-footer-link:active {
+  opacity: 0.6;
+}
+
+.studio-footer-link--disabled {
+  opacity: 0.2;
+  pointer-events: none;
+  cursor: default;
+}
+
+@media (max-width: 900px) {
+  .studio-row--pills {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
+}
+
+/* ------------------------------------------
+   Responsive
+------------------------------------------ */
+/* ------------------------------------------------------------------
+   Mobile: keep enough TOP padding to clear the fixed header overlay
+   (plus iOS safe-area inset). This prevents pills being "cut".
+------------------------------------------------------------------ */
+@media (max-width: 960px) {
+  .studio-left {
+    padding: calc(40px + env(safe-area-inset-top)) 20px 20px !important;
+  }
+
+  .studio-footer-links {
+    display: none;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .studio-left {
+    padding: calc(40px + env(safe-area-inset-top)) 20px 20px !important;
+  }
+
+  .studio-plusbox,
+  .studio-plusbox--inline,
+  .studio-thumb,
+  .studio-style-thumb {
+    width: 64px;
+    height: 64px;
+  }
+
+  .studio-brief-input {
+    font-size: 26px;
+    line-height: 1.08;
+  }
+}
+
+/* force motion style labels to a single line with ellipsis */
+.studio-motion-style-label {
+  padding-top: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  max-width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* =============================================================
+   Mobile layout fix: stack columns + prevent horizontal overflow
+   ============================================================= */
+
+@media (max-width: 960px) {
+  /* If your studio body is flex row, stack it */
+  .studio-body--two-col {
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+
+  /* Make both panes full width */
+  .studio-left,
+  .studio-right {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  /* Prevent children from forcing wider-than-screen layouts */
+  .studio-left * {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Pills row: keep scrolling inside the row, not the page */
+  .studio-row--pills {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+/* Styles only: prevent drag ghost image + selection */
+.studio-style-thumb img,
+.studio-motion-style-thumb img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* ? Re-create button: no shadow, bold, clean, with margins */
+.profile-card-actions {
+  margin-top: 10px;
+}
+
+.profile-card-recreate {
+  margin: 10px 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+
+  font-weight: 700;
+  font-size: 13px;
+
+  text-decoration: underline;
+  cursor: pointer;
+
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Hide the Moodboard (Style) pill in the top pills row */
+.studio-row--pills .studio-pill--moodboard {
+  display: none !important;
+}
+
+.profile-card-recreate:active {
+  opacity: 0.6;
+}
+
+/* ? Let user type even if Mina message is visible */
+.studio-brief-overlay {
+  pointer-events: none;
+}
+
+/* ? Only clickable for error/info */
+.studio-brief-overlay.is-error,
+.studio-brief-overlay.is-info {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* ---- src/StudioRight.css ---- */
+
+/* src/StudioRight.css */
+
+/* Right side NEVER scrolls */
+.studio-right {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+
+  padding: 0;
+  margin: 0;
+}
+
+/* FULL BLEED surface (NO radius) */
+.studio-right-surface {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+
+  width: 100%;
+  height: 100%;
+
+  overflow: hidden;
+  border-radius: 0;
+
+  background: #F2F2E9;
+}
+
+/* Stage 0 center text */
+.studio-empty-text {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Click surface (zones + zoom) */
+.studio-output-click {
+  width: 100%;
+  height: 100%;
+  display: block;
+
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+
+  /* ? swipe/drag support without killing vertical scroll */
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.studio-output-click:not(:disabled):hover,
+.studio-output-click:active {
+  opacity: 1;
+}
+
+/* Frame is full size, NO radius */
+.studio-output-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+
+  overflow: hidden;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* Media fills surface (luxury cover) */
+.studio-output-media {
+  width: 100%;
+  height: 100%;
+  display: block;
+
+  -webkit-user-drag: none;
+  user-drag: none;
+  object-fit: cover;
+  transform: scale(1);
+  transform-origin: center;
+  transition: transform 520ms cubic-bezier(0.16, 1, 0.3, 1), object-fit 0ms linear 0ms;
+}
+
+/* Click toggles to contain (keep full-size surface) */
+.studio-output-frame.is-contain .studio-output-media {
+  object-fit: contain;
+  transform: scale(1);
+}
+
+/* Dots overlay inside the image surface */
+.studio-dots-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 22px;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+
+  z-index: 30;        /* ? ensure above media */
+  pointer-events: auto;
+}
+
+.studio-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+}
+
+.studio-dot.active {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+/* =========================================================
+   ? RESTORED: Feedback/Tweak bar (original look)
+   ========================================================= */
+
+/* Feedback bar (beige) — NO radius, full width */
+.studio-feedback-bar {
+  position: relative;
+  flex: 0 0 auto;
+
+  width: 100%;
+  padding: 18px 18px;
+
+  background: #EEEEE2; /* ? original beige */
+  border-radius: 0;
+
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Compact input (looks like old) */
+.studio-feedback-input--compact {
+  flex: 1 1 auto;
+  height: 26px;
+  min-width: 0;
+
+  border: 0;
+  outline: none;
+  background: transparent;
+
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(8, 10, 0, 0.9);
+}
+
+.studio-feedback-input--compact::placeholder {
+  color: rgba(0, 0, 0, 0.2);
+  font-weight: 700;
+}
+
+/* actions aligned right */
+.studio-feedback-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  flex: 0 0 auto;
+}
+
+/* Old CTA style (now used for Tweak) */
+.studio-action-btn {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+
+  font-weight: 700;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.9);
+
+  text-decoration: none;
+}
+
+.studio-action-btn:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.studio-action-btn.is-on {
+  color: var(--mina-accent, #858e47);
+}
+
+.studio-action-separator {
+  color: rgba(0, 0, 0, 0.35);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* Error floats above bar without changing layout */
+.studio-feedback-error {
+  position: absolute;
+  left: 18px;
+  top: -18px;
+
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.35);
+}
+
+@media (max-width: 900px) {
+  .studio-right {
+    overflow: visible;
+  }
+
+  .studio-right-surface {
+    flex: 0 0 auto;
+    height: auto;
+  }
+
+  .studio-output-click {
+    height: auto;
+  }
+
+  .studio-output-frame {
+    height: auto;
+  }
+
+  .studio-output-media {
+    height: auto;
+    object-fit: contain;
+  }
+
+  .studio-dots-row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 10px;
+    padding: 0;
+    z-index: 30;
+  }
+
+  /* keep same bar feel on mobile too */
+  .studio-feedback-bar {
+    position: sticky;
+    bottom: 0;
+
+    align-items: center;
+    gap: 10px;
+    padding: 16px 20px 18px;
+
+    background: #EEEEE2; /* ? same beige */
+    box-shadow: none; /* ? original had no shadow */
+  }
+
+  .studio-feedback-input--compact {
+    width: auto;
+    height: auto;
+  }
+
+  .studio-feedback-actions {
+    width: auto;
+    justify-content: flex-end;
+    flex-shrink: 0;
+  }
+}
+@media (max-width: 900px) {
+  /* Make the right panel fill the viewport on idle */
+  .studio-right {
+    min-height: 100dvh; /* modern mobile-safe viewport */
+  }
+
+  .studio-right-surface {
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Idle text fills the whole screen */
+  .studio-empty-text {
+    position: static;
+    transform: none;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 100%;
+    height: 100%;
+
+    padding: 24px;
+    text-align: center;
+    white-space: normal;
+  }
+}
+
+/* ---- src/Profile.css ---- */
+
+/* =============================================================
+   FILE: src/Profile.css
+   Mina Profile — minimal archive
+   - no radius
+   - paper bg, black opacity system
+   - 7 columns on desktop
+   ============================================================= */
+
+.profile-shell {
+  min-height: 100vh;
+  background: var(--mina-bg);
+  color: var(--mina-text);
+  padding: 24px 40px 64px;
+}
+
+.profile-header-fixed {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--mina-bg);
+  padding-bottom: 10px;
+}
+
+/* Top bar */
+.profile-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.profile-logo-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.profile-logo {
+  height: 18px;
+  width: auto;
+  display: block;
+}
+
+.profile-topbar-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.profile-logout {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+
+/* Meta strip (small, plain, like toggle vision) */
+.profile-meta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 18px;
+  padding: 10px 0 16px;
+  border-bottom: 1px solid rgba(8, 10, 0, 0.08);
+  margin-bottom: 18px;
+}
+
+.profile-kv {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.profile-k {
+  font-weight: 700;
+  color: rgba(8, 10, 0, 0.9);
+}
+
+.profile-v {
+  font-weight: 400;
+  color: rgba(8, 10, 0, 0.6);
+}
+
+.profile-archive-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 10px;
+  margin-bottom: 12px;
+}
+
+.profile-archive-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.profile-archive-sub {
+  font-size: 11px;
+  color: rgba(8, 10, 0, 0.45);
+  margin-top: 4px;
+}
+
+.profile-filters {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Filter select (minimal) */
+.profile-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.profile-filter-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(8, 10, 0, 0.55);
+}
+
+.profile-filter-select {
+  border: none;
+  border-bottom: 1px solid rgba(8, 10, 0, 0.18);
+  background: transparent;
+  padding: 2px 0;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 0;
+  outline: none;
+}
+
+/* Filter pills */
+.profile-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+
+  background: rgba(8, 10, 0, 0.02);
+  cursor: pointer;
+
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+
+  height: 30px;
+  min-height: 30px;
+  white-space: nowrap;
+
+  border-radius: 0;
+  border: none;
+  outline: none;
+}
+
+.profile-filter-pill:hover {
+  background: rgba(8, 10, 0, 0.05);
+}
+
+.profile-filter-pill.active {
+  background: rgba(8, 10, 0, 0.06);
+}
+
+/* Error */
+.profile-error {
+  margin-top: 8px;
+  margin-bottom: 10px;
+}
+
+/* =============================================================
+   Archive grid — 7 columns
+   ============================================================= */
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 10px;
+}
+
+.profile-grid-sentinel {
+  height: 2px;
+}
+
+/* Cards */
+.profile-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  opacity: 1;
+  transition: opacity 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.profile-card:hover {
+  opacity: 1;
+}
+
+.profile-card.is-dim {
+  opacity: 0.1;
+}
+
+.profile-card-top {
+  display: flex;
+  align-items: center;            /* was baseline */
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 28px;               /* keep header height stable */
+}
+
+
+.profile-card-show {
+  border: 0;
+  background: transparent;
+  padding: 0;
+
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(8, 10, 0, 0.85);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.profile-card-show:hover {
+  opacity: 0.9;
+}
+
+.profile-card-show:active {
+  opacity: 0.6;
+}
+
+.profile-card-liked {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(8, 10, 0, 0.5);
+}
+
+.profile-card-liked.ghost {
+  opacity: 0;
+}
+
+/* Media (no border, no radius, subtle tint) */
+.profile-card-media {
+  width: 100%;
+  border: 0;
+  background: rgba(8, 10, 0, 0.05);
+  padding: 0;
+  overflow: hidden;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.profile-card-media img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Different “sizes” (big/small mix) */
+.profile-card--mini .profile-card-media {
+  aspect-ratio: 1 / 1;
+}
+
+.profile-card--wide {
+  grid-column: span 2;
+}
+.profile-card--wide .profile-card-media {
+  aspect-ratio: 16 / 9;
+}
+
+.profile-card--tall .profile-card-media {
+  aspect-ratio: 3 / 4;
+}
+
+.profile-card--hero {
+  grid-column: span 2;
+}
+.profile-card--hero .profile-card-media {
+  aspect-ratio: 1 / 1;
+}
+
+/* Prompt line */
+.profile-card-promptline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.profile-card-prompt {
+  font-size: 10px;
+  color: rgba(8, 10, 0, 0.65);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+}
+
+.profile-card-prompt.expanded {
+  white-space: normal;
+}
+
+.profile-card-viewmore {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(8, 10, 0, 0.45);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.profile-card-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1;                 /* reduces baseline weirdness */
+}
+
+
+.profile-card-confirm-yes {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 400; /* normal */
+  color: rgba(8, 10, 0, 0.65);
+  cursor: pointer;
+}
+
+.profile-card-confirm-no {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 700; /* bold keep */
+  color: rgba(8, 10, 0, 0.85);
+  cursor: pointer;
+}
+
+/* Footer hint */
+.profile-foot {
+  margin-top: 18px;
+  display: flex;
+  justify-content: center;
+}
+
+.profile-foot-note {
+  font-size: 11px;
+  color: rgba(8, 10, 0, 0.35);
+}
+
+/* =============================================================
+   Responsive columns
+   ============================================================= */
+
+@media (max-width: 1200px) {
+  .profile-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .profile-shell {
+    padding: 18px 20px 56px;
+  }
+
+  .profile-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .profile-card--wide,
+  .profile-card--hero {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 560px) {
+  .profile-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* --- additions (do not change existing styles) --- */
+
+.profile-toplink {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  color: inherit;
+}
+
+.profile-topsep {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(8, 10, 0, 0.45);
+}
+
+.profile-logout-meta {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none; /* ? NOT underlined */
+  color: rgba(8, 10, 0, 0.85);
+  cursor: pointer;
+}
+
+.profile-card-media video {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.profile-card-media video,
+.profile-card-media img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.profile-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mina-bg);
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+.profile-lightbox-media {
+  max-width: min(96vw, 1400px);
+  max-height: 96vh;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.profile-lightbox-media video,
+.profile-lightbox-media img,
+.profile-lightbox-video,
+.profile-lightbox-img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Prevent tap on video from showing native playback UI */
+.profile-lightbox-video {
+  pointer-events: none;
+}
+
+@media (hover: hover) {
+  .profile-lightbox,
+  .profile-lightbox-media {
+    cursor: zoom-out;
+  }
+}
+
+/* --- Profile: delete + expanded inputs + recreate --- */
+
+.profile-card-top-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 140px;               /* reserve space so swap doesn't reflow */
+  justify-content: flex-end;
+}
+
+
+.profile-card-delete {
+  font-weight: 800;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+  opacity: 0.85;
+}
+
+.profile-card-delete:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.profile-card-delete:hover:not(:disabled) {
+  opacity: 1;
+}
+
+.profile-card-deleteerr {
+  margin: 8px 10px 0 10px;
+}
+
+.profile-card-details {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.profile-card-detailrow {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.profile-card-detailrow .k {
+  opacity: 0.65;
+}
+
+.profile-card-detailrow .v {
+  text-align: right;
+}
+
+.profile-card-mini {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.profile-card-miniNote {
+  margin-left: 6px;
+  opacity: 0.7;
+}
+
+.profile-card-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.profile-card-recreate {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+/* =============================================================
+   Profile fixes (append-only)
+   - remove any “fade/gradient” overlay when expanded
+   - make Re-create + Animate look like Download
+   - reduce layout shift when toggling delete confirm
+   ============================================================= */
+
+/* 1) Kill any prompt fade/gradient (common culprit when clicking “more”) */
+.profile-card-prompt::before,
+.profile-card-prompt::after {
+  content: "" !important;
+  display: none !important;
+}
+.profile-card-prompt {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
+
+/* 2) Make actions row clean and spaced like your screenshot expectation */
+.profile-card-actions {
+  justify-content: space-between; /* left Re-create, right Animate */
+  align-items: baseline;
+  gap: 14px;
+}
+
+/* 3) Re-create + Animate should look exactly like Download (text-only) */
+.profile-card-recreate,
+.profile-card-animate {
+  border: 0;
+  background: transparent;
+  padding: 0;
+
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(8, 10, 0, 0.85);
+  cursor: pointer;
+  line-height: 1.1;
+}
+
+.profile-card-recreate:hover,
+.profile-card-animate:hover {
+  opacity: 0.9;
+}
+.profile-card-recreate:active,
+.profile-card-animate:active {
+  opacity: 0.6;
+}
+
+/* 4) “Card moves up” fix:
+   When you click - we swap it for “delete / cancel”.
+   That changes row width/height -> grid reflows.
+   Reserve space so it doesn’t jump. */
+.profile-card-top {
+  min-height: 22px;
+}
+.profile-card-top-right {
+  min-width: 120px; /* keeps swap stable */
+  justify-content: flex-end;
+}
+.profile-card-confirm {
+  min-width: 120px;
+  justify-content: flex-end;
+}
+
+/* =============================================================
+   HARD KILL: any fade/gradient in the expanded prompt area
+   (append-only)
+   ============================================================= */
+
+.profile-card-promptline,
+.profile-card-prompt,
+.profile-card-prompt.expanded,
+.profile-card-details,
+.profile-card-actions {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
+
+/* kill any overlay pseudo-elements on ANY of these containers */
+.profile-card-promptline::before,
+.profile-card-promptline::after,
+.profile-card-prompt::before,
+.profile-card-prompt::after,
+.profile-card-details::before,
+.profile-card-details::after,
+.profile-card-actions::before,
+.profile-card-actions::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* =============================================================
+   Profile fixes (append-only)
+   1) Kill any "fade/gradient" overlay when expanded
+   2) Make Re-create / Animate match Download (not underlined)
+   3) Prevent "delete moves card up" (no layout shift during fade)
+   ============================================================= */
+
+
+/* 2) Actions layout: Re-create left, Animate right */
+.profile-card-actions {
+  justify-content: space-between !important;
+  align-items: baseline;
+  gap: 12px;
+}
+
+/* Re-create + Animate should look like Download (text button, no underline) */
+.profile-card-recreate,
+.profile-card-animate {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: rgba(8, 10, 0, 0.85) !important;
+
+  text-decoration: none !important;
+  cursor: pointer;
+}
+
+.profile-card-recreate:hover,
+.profile-card-animate:hover {
+  opacity: 0.9;
+}
+
+.profile-card-recreate:active,
+.profile-card-animate:active {
+  opacity: 0.6;
+}
+/* Base state */
+.profile-card {
+  transition: opacity 220ms ease-out;
+}
+/* 3) When deleting, fade only (don’t collapse height / move grid) */
+.profile-card.is-removing {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+}
+/* --- PATCH: Re-create / Animate look like Download (no underline, no padding bleed) --- */
+.profile-card-details .profile-card-recreate,
+.profile-card-details .profile-card-animate {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  text-decoration: none !important;
+
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: rgba(8, 10, 0, 0.85) !important;
+
+  cursor: pointer;
+}
+
+.profile-card-details .profile-card-recreate:hover,
+.profile-card-details .profile-card-animate:hover {
+  opacity: 0.9;
+}
+
+.profile-card-details .profile-card-recreate:active,
+.profile-card-details .profile-card-animate:active {
+  opacity: 0.6;
+}
+
+/* Align both buttons nicely */
+.profile-card-details .profile-card-detailrow {
+  align-items: baseline;
+}
+
+/* Kill the duplicate row (from your HTML: <div class="profile-card-actions">...) */
+.profile-card-actions {
+  display: none !important;
+}
+
+/* ?? Ghost placeholder: keeps grid space but hides card */
+.profile-card.is-ghost {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+/* Fix text cursor on video hover (no zoom, no scale) */
+.profile-card-media,
+.profile-card-media video,
+.profile-card-media img {
+  cursor: pointer;
+}
+/* ================================
+   Media hover zoom (image + video)
+   gentle, no layout shift
+   ================================ */
+
+.profile-card-media {
+  overflow: hidden; /* important: keeps zoom inside card */
+}
+
+.profile-card-media img,
+.profile-card-media video {
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+/* zoom on hover */
+.profile-card:hover .profile-card-media img,
+.profile-card:hover .profile-card-media video {
+  transform: scale(1.04);
+}
+.profile-card-recreate { display: none !important; }
+
+/* Keep ONLY the first filter pill (motion/still/show all). Hide the rest 
+.profile-filters .profile-filter-pill:nth-child(n + 2) {
+  display: none !important;
+}*/
+
+/* =============================================================
+   Profile: input thumbs + compact details
+   ============================================================= */
+
+.profile-card-details {
+  font-size: 10px !important; /* same as prompt text */
+  line-height: 1.2;
+  opacity: 0.9;
+}
+
+.profile-card-detailrow .k,
+.profile-card-detailrow .v {
+  font-size: 10px !important;
+}
+
+/* Small square thumbnails (no button) */
+.profile-input-thumb {
+  width: 26px;
+  height: 26px;
+  object-fit: cover;
+  display: block;
+  background: rgba(8, 10, 0, 0.06);
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+/* Thumbs layout helpers */
+.profile-thumbstack,
+.profile-thumbrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.profile-thumbbadge {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(8, 10, 0, 0.55);
+}
+
+/* Actions row: right aligned, Animate then Re-create */
+.profile-card-detailrow--actions .v.profile-card-actionwrap {
+  display: inline-flex;
+  gap: 14px;
+  justify-content: flex-end;
+  align-items: baseline;
+}
+
+/* You had a hard hide somewhere: `.profile-card-recreate { display: none !important; }`
+   Force show inside details */
+.profile-card-details .profile-card-recreate,
+.profile-card-details .profile-card-animate {
+  display: inline-flex !important;
+}
+
+.profile-card--skeleton {
+  pointer-events: none;
+}
+
+.profile-skel-media {
+  width: 100%;
+  height: 100%;
+  min-height: 220px;
+  border-radius: 0px;
+  background: #F0EEE8;
+  position: relative;
+  overflow: hidden;
+}
+
+.profile-skel-line {
+  height: 12px;
+  border-radius: 0px;
+  background: #F0EEE8;
+  position: relative;
+  overflow: hidden;
+}
+
+.profile-input-thumb--video {
+  background: #000;
+  object-fit: cover;
+}
+
+.profile-input-thumb--audio {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #111;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+.profile-input-thumb--audio img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ---- src/components/SceneLibraryModal.css ---- */
+
+/* Scene Library — compact grid like Mina */
+.scene-lib-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(8,10,0,0.18);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 9999;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.scene-lib-modal{
+  width: 90vw;
+  height: 86vh;
+  background: var(--mina-bg, #FCFAF4);
+  border-radius: 0;
+  display:flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.scene-lib-head{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(8,10,0,0.08);
+}
+
+.scene-lib-title{
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.scene-lib-close{
+  width: 28px;
+  height: 28px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.scene-lib-toolbar{
+  display:flex;
+  align-items:center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(8,10,0,0.08);
+}
+
+.scene-lib-search{
+  flex: 1;
+  border: 0;
+  outline: none;
+  padding: 6px 0;
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+}
+
+.scene-lib-count{
+  font-size: 11px;
+  opacity: 0.6;
+  font-weight: 600;
+}
+
+.scene-lib-body{
+  flex: 1;
+  min-height: 0;
+  display:grid;
+  grid-template-columns: 70% 30%;
+}
+
+/* LEFT */
+.scene-lib-left{
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 1px solid rgba(8,10,0,0.08);
+  padding: 14px 16px 18px;
+}
+
+/* RIGHT */
+.scene-lib-right{
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.scene-lib-grid{
+  display:grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 1200px){
+  .scene-lib-grid{ grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 900px){
+  .scene-lib-body{ grid-template-columns: 1fr; }
+  .scene-lib-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .scene-lib-right{ display:none; }
+}
+
+.scene-lib-card{
+  display:flex;
+  flex-direction: column;
+  gap: 8px;
+  outline: none;
+}
+
+/* ? clean thumb (no overlay “boxes”) */
+.scene-lib-thumb{
+  background: rgba(8,10,0,0.05);
+  overflow: hidden;
+  cursor: pointer;
+  border-radius: 0;
+  aspect-ratio: 3 / 4;
+  position: relative;
+}
+
+.scene-lib-thumb img{
+  width:100%;
+  height:100%;
+  object-fit: cover;
+  display:block;              /* ? kills ghost “boxes” in some browsers */
+  background: transparent;
+  transform: translateZ(0);
+}
+
+.scene-lib-meta{
+  display:flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.scene-lib-set{
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.scene-lib-set:hover{ opacity: 1; }
+
+.scene-lib-preview-img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display:block;
+  cursor: pointer;
+}
+
+.scene-lib-empty{
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+/* ---- src/components/TopLoadingBar.css ---- */
+
+/* Tiny top-of-page loading line (progressive) */
+.mina-top-loading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+
+  height: 1px;
+  z-index: 9999;
+
+  background: rgba(218, 226, 205, 0.08);
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.mina-top-loading__bar {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(218, 226, 205, 0.7), rgba(186, 163, 122, 0.95));
+  width: 0;
+  transition: width 80ms ease, opacity 10ms ease;
+  opacity: 0.95;
+}

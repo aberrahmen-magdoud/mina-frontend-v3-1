@@ -1,4 +1,4 @@
-// src/components/AuthGate.tsx
+// src/AuthGate.tsx
 // -----------------------------------------------------------------------------
 // File map
 // 1) Imports: React + Supabase types/client.
@@ -15,8 +15,8 @@
 // [PART 1] Imports
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { supabase } from "../lib/supabaseClient";
-import TopLoadingBar from "./TopLoadingBar";
+import { supabase } from "./services";
+import { TopLoadingBar } from "./ui";
 
 type AuthGateProps = {
   children: React.ReactNode;

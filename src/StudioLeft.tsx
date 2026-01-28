@@ -13,9 +13,7 @@
 
 // [PART 1] Imports
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import MatchaQtyModal from "./components/MatchaQtyModal";
-import SceneLibraryModal from "./components/SceneLibraryModal";
-import "./StudioLeft.css";
+import { MatchaQtyModal, SceneLibraryModal } from "./ui";
 
 // ------------------------------------
 // Types (kept local so StudioLeft is standalone)

@@ -11,10 +11,8 @@
 // =============================================================
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import "./Profile.css";
-import TopLoadingBar from "./components/TopLoadingBar";
-import MatchaQtyModal from "./components/MatchaQtyModal";
-import { downloadMinaAsset } from "./lib/minaDownload";
+import { TopLoadingBar, MatchaQtyModal } from "./ui";
+import { downloadMinaAsset } from "./services";
 
 type Row = Record<string, any>;
 

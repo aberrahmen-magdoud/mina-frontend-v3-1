@@ -1,18 +1,18 @@
 // src/main.tsx
 // -----------------------------------------------------------------------------
 // File map
-// 1) Imports: React runtime, root renderer, App shell, base styles.
+// 1) Imports: React runtime, root renderer, AuthGate + MinaApp, base styles.
 // 2) Bootstrap: attach global error handlers and mount the app under StrictMode
 //    + ErrorBoundary wrapper.
 // -----------------------------------------------------------------------------
 // [PART 1] Imports
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
-import "./index.css";
-import "./styles/minaPanels.css"; // ✅ add this
-import { ErrorBoundary } from "./components/ErrorBoundary";
-import { installGlobalErrorHandlers } from "./lib/installGlobalErrorHandlers";
+import MinaApp from "./MinaApp";
+import "./styles.css";
+import { ErrorBoundary } from "./ui";
+import { installGlobalErrorHandlers } from "./services";
+import { AuthGate } from "./AuthGate";
 
 // [PART 2] Application bootstrap
 installGlobalErrorHandlers();
@@ -20,7 +20,9 @@ installGlobalErrorHandlers();
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      <AuthGate>
+        <MinaApp />
+      </AuthGate>
     </ErrorBoundary>
   </React.StrictMode>
 );

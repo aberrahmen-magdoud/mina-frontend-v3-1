@@ -1,6 +1,5 @@
 // src/StudioRight.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import "./StudioRight.css";
 
 type StillItem = { id: string; url: string };
 type MotionItem = { id: string; url: string };
