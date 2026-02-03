@@ -959,6 +959,25 @@ const MinaApp: React.FC<MinaAppProps> = () => {
     };
   }, [authContext]);
 
+  // Reset per-user caches/state when auth user changes
+  useEffect(() => {
+    setSessionId(null);
+    setHistoryGenerations([]);
+    setHistoryFeedbacks([]);
+    setHistoryNextCursor(null);
+    setHistoryHasMore(false);
+    setHistoryLoading(false);
+    setHistoryLoadingMore(false);
+    setHistoryError(null);
+    historyCacheRef.current = {};
+    historyDirtyRef.current = true;
+
+    setCredits(null);
+    creditsCacheRef.current = {};
+    creditsCacheAtRef.current = {};
+    creditsDirtyRef.current = true;
+  }, [authContext?.session?.user?.id]);
+
   // Motion keywords from config
   useEffect(() => {
     const allowedMotionKeys: MotionStyleKey[] = [

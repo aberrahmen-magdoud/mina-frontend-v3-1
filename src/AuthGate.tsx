@@ -419,8 +419,11 @@ export function AuthGate({ children }: AuthGateProps) {
       const uid = (userId || "").trim() || null;
       const uemail = normalizeEmail(userEmail);
 
-      // 1) local
+      // 1) local or user-scoped
       let candidate = readStoredPassId();
+      if (uid) {
+        candidate = normalizePassId(`pass:user:${uid}`);
+      }
 
       // 2) backend canonicalize/link ONLY if logged in and allowed
       const shouldCallBackend = !!uid && !opts?.skipBackend;
