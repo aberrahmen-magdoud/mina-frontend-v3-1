@@ -2476,6 +2476,22 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
 
   async function decodeToBitmap(file: Blob): Promise<ImageBitmap | null> {
     try {
+      // Extra path: ImageDecoder can decode some formats that createImageBitmap may reject
+      // in certain browser builds (including some HEIC/HEIF-capable environments).
+      const AnyImageDecoder = (window as any).ImageDecoder;
+      if (typeof AnyImageDecoder === "function") {
+        const type = (file as any).type || "";
+        if (!type || (await AnyImageDecoder.isTypeSupported?.(type))) {
+          const data = await file.arrayBuffer();
+          const decoder = new AnyImageDecoder({ data, type: type || undefined });
+          const frame = await decoder.decode({ frameIndex: 0 });
+          const bmp = frame?.image;
+          if (bmp) return bmp as ImageBitmap;
+        }
+      }
+    } catch {}
+
+    try {
       // Fast path
       // @ts-ignore
       if (typeof createImageBitmap === "function") return await createImageBitmap(file);
@@ -2521,6 +2537,14 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
     const ext = getFileExt(file.name);
     const mime = String(file.type || "").toLowerCase();
 
+    const isHeicLike =
+      ext === "heic" ||
+      ext === "heif" ||
+      mime === "image/heic" ||
+      mime === "image/heif" ||
+      mime === "image/heic-sequence" ||
+      mime === "image/heif-sequence";
+
     const extAllowed = ext ? ALLOWED_EXTS.has(ext) : false;
     const mimeAllowed = mime ? ALLOWED_MIMES.has(mime) : false;
     const isAllowed = extAllowed || mimeAllowed;
@@ -2542,7 +2566,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
 
     const bmp = await decodeToBitmap(file);
     if (!bmp) {
-      throw new Error(!isAllowed ? "UNSUPPORTED" : "BROKEN");
+      throw new Error(!isAllowed || isHeicLike ? "UNSUPPORTED" : "BROKEN");
     }
 
     const srcW = (bmp as any).width || 0;
