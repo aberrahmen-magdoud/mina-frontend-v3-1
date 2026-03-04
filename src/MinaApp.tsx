@@ -2521,6 +2521,14 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
     const ext = getFileExt(file.name);
     const mime = String(file.type || "").toLowerCase();
 
+    const isHeicLike =
+      ext === "heic" ||
+      ext === "heif" ||
+      mime === "image/heic" ||
+      mime === "image/heif" ||
+      mime === "image/heic-sequence" ||
+      mime === "image/heif-sequence";
+
     const extAllowed = ext ? ALLOWED_EXTS.has(ext) : false;
     const mimeAllowed = mime ? ALLOWED_MIMES.has(mime) : false;
     const isAllowed = extAllowed || mimeAllowed;
@@ -2542,7 +2550,7 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
 
     const bmp = await decodeToBitmap(file);
     if (!bmp) {
-      throw new Error(!isAllowed ? "UNSUPPORTED" : "BROKEN");
+      throw new Error(!isAllowed || isHeicLike ? "UNSUPPORTED" : "BROKEN");
     }
 
     const srcW = (bmp as any).width || 0;
