@@ -3913,23 +3913,34 @@ const styleHeroUrls = (stylePresetKeys || [])
         endFrame && !endIsMinaGenerated ? await ensureOptimizedInputUrl(endFrame, "product") : endFrame;
 
       // ✅ Build your normal/default motion body first (your existing kling frames logic)
+      const wantAudio = effectiveMotionAudioEnabled === true;
+
       const baseBody = {
         passId: currentPassId,
         assets: {
           start_image_url: startFrameForModel,
           end_image_url: endFrameForModel || "",
           kling_image_urls: endFrameForModel ? [startFrameForModel, endFrameForModel] : [startFrameForModel],
-          inspiration_image_urls: inspirationUrls, // ✅ keeps recreate consistent
+          inspiration_image_urls: inspirationUrls,
         },
         inputs: {
           motionDescription: usedMotionPrompt,
-          prompt: usedMotionPrompt, // ✅ helps history/profile store it
-          
+          prompt: usedMotionPrompt,
+
           tone,
           platform: animateAspectOption.platformKey,
           aspect_ratio: animateEffectiveAspectRatio,
           duration: motionDurationSec,
-          generate_audio: effectiveMotionAudioEnabled,
+
+          // HARD AUDIO FLAGS
+          generate_audio: wantAudio,
+          generateAudio: wantAudio,
+          audio_enabled: wantAudio,
+          audioEnabled: wantAudio,
+          with_audio: wantAudio,
+          withAudio: wantAudio,
+          mute: !wantAudio,
+          muted: !wantAudio,
 
           stylePresetKeys: stylePresetKeysForApi,
           stylePresetKey: primaryStyleKeyForApi,
