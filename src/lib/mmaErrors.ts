@@ -170,16 +170,16 @@ export function humanizeMmaError(err: MmaErrorLike, mode?: "create" | "animate")
 
   // Generic “no URL” / pipeline failure → niche overload message only in create mode
   if (
-    s.includes(“video_no_url”) ||
-    s.includes(“mma_no_url”) ||
-    s.includes(“pipeline_error”) ||
-    s.includes(“no_output_url”) ||
-    s.includes(“no output url”)
+    s.includes("video_no_url") ||
+    s.includes("mma_no_url") ||
+    s.includes("pipeline_error") ||
+    s.includes("no_output_url") ||
+    s.includes("no output url")
   ) {
-    if (mode === “create”) {
-      return “Mina Animate mode is currently under high demand. Please wait a bit then try again.”;
+    if (mode === "create") {
+      return "Mina Animate mode is currently under high demand. Please wait a bit then try again.";
     }
-    return “Something went wrong. Please try again.”;
+    return "Something went wrong. Please try again.";
   }
 
   // Fallback: keep it short and clean
