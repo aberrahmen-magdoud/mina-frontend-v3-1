@@ -5476,6 +5476,18 @@ const styleHeroUrls = (stylePresetKeys || [])
   const displayedMotion = mediaKindForDisplay === "motion" ? currentMotion : null;
   const displayedStill = mediaKindForDisplay === "motion" ? null : currentStill;
 
+  const handleRightPanelUpload = async (file: File) => {
+    try {
+      const remoteUrl = await uploadFileToR2("product", file);
+      if (!remoteUrl) return;
+      const id = `drop_${Date.now()}`;
+      setStillItems((prev) => [{ id, url: remoteUrl }, ...prev]);
+      setStillIndex(0);
+    } catch (err) {
+      console.warn("[StudioRight] drop upload failed:", err);
+    }
+  };
+
   const renderStudioRight = () => {
     return (
       <StudioRight
@@ -5514,6 +5526,8 @@ const styleHeroUrls = (stylePresetKeys || [])
           stillGenerating ||
           motionGenerating
         }
+        animateMode={animateMode}
+        onDropUpload={handleRightPanelUpload}
       />
     );
   };
