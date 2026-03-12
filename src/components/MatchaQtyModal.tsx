@@ -183,7 +183,7 @@ const MatchaQtyModal: React.FC<Props> = ({
                     className={`mina-matcha-scale-item mina-matcha-label ${on ? "is-on" : "is-off"} ${edge}`}
                     style={{ left: `${pct}%` }}
                   >
-                    {creditsFor(p.units)}
+                    {creditsFor(p.units).toLocaleString()}
                   </div>
                 );
               })}
@@ -215,7 +215,7 @@ const MatchaQtyModal: React.FC<Props> = ({
                       e.stopPropagation(); // IMPORTANT: don't let the bar click snap override this
                       setQty(p.units);
                     }}
-                    aria-label={`${creditsFor(p.units)} Matchas`}
+                    aria-label={`${creditsFor(p.units).toLocaleString()} Matchas`}
                   >
                     <span className="mina-matcha-dot" aria-hidden="true" />
                   </button>
