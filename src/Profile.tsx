@@ -1677,11 +1677,8 @@ const openPrompt = useCallback((id: string) => {
                 const sceneImageUrl = canonicalAssetUrl(it.url);
                 const canScene = !!onRecreate && !it.isMotion && isImageUrl(sceneImageUrl);
 
-                const canAnimate = !!it.draft && !it.isMotion && isImageUrl(sceneImageUrl);
-                const canAnimateBtn = !!onRecreate && canAnimate && !!it.draft;
-
                 const canRecreateBtn = !!onRecreate && !!it.draft && it.canRecreate;
-                const showActionsRow = !!inputs && (canScene || canAnimateBtn || canRecreateBtn);
+                const showActionsRow = !!inputs && (canScene || canRecreateBtn);
 
                 return (
                   <div
@@ -1857,28 +1854,6 @@ const openPrompt = useCallback((id: string) => {
                                       }}
                                     >
                                       Set scene
-                                    </button>
-                                  ) : null}
-
-                                  {canAnimateBtn ? (
-                                    <button
-                                      type="button"
-                                      className="profile-card-show profile-card-animate"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        const motionDraft: RecreateDraft = {
-                                          ...it.draft!,
-                                          mode: "motion",
-                                          assets: {
-                                            ...it.draft!.assets,
-                                          kling_start_image_url: sceneImageUrl,
-                                          },
-                                        };
-                                        onRecreate?.(motionDraft);
-                                        onBackToStudio?.();
-                                      }}
-                                    >
-                                      Animate
                                     </button>
                                   ) : null}
 

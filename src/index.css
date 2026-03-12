@@ -651,7 +651,7 @@ video {
   gap: 16px;
 }
 
-/* Animate / Create toggle in header */
+/* Animate / Create toggle in header — auto-contrast like other header CTAs */
 .studio-animate-toggle {
   border: none;
   padding: 0;
@@ -662,15 +662,26 @@ video {
   color: rgba(0, 0, 0, 0.9);
   cursor: pointer;
   text-decoration: none;
+  transition: opacity 120ms ease;
 }
 
 .studio-animate-toggle:hover {
-  color: #000;
+  opacity: 0.8;
 }
 
 .studio-animate-toggle:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+/* Light background → black text */
+.studio-header-overlay.header-on-light .studio-animate-toggle {
+  color: var(--mina-ink, #080a00);
+}
+
+/* Dark background → white text */
+.studio-header-overlay.header-on-dark .studio-animate-toggle {
+  color: var(--mina-paper, #fcfaf4);
 }
 
 /* main two-column body */
