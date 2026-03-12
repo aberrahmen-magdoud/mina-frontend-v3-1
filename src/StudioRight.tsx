@@ -63,6 +63,10 @@ type StudioRightProps = {
   likeDisabled?: boolean;
   onDownload?: () => void;
   downloadDisabled?: boolean;
+
+  // ✅ Create-mode drop zone (state 0)
+  animateMode?: boolean;
+  onDropUpload?: (file: File) => void;
 };
 
 // ============================================================================
@@ -94,6 +98,8 @@ export default function StudioRight(props: StudioRightProps) {
     likeDisabled,
     onDownload,
     downloadDisabled,
+    animateMode,
+    onDropUpload,
   } = props;
 
   const isEmpty = !currentStill && !currentMotion;
@@ -624,13 +630,89 @@ export default function StudioRight(props: StudioRightProps) {
   const isBusy = !!sending || !!fingertipsSending || ftProcessing;
 
   // ============================================================================
+  // DROP ZONE (Create mode, state 0)
+  // ============================================================================
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleDropZoneFile = useCallback(
+    (file: File) => {
+      const t = (file.type || "").toLowerCase();
+      if (!t.startsWith("image/")) return;
+      onDropUpload?.(file);
+    },
+    [onDropUpload]
+  );
+
+  const onDropZoneDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragOver(false);
+      const file = e.dataTransfer?.files?.[0];
+      if (file) handleDropZoneFile(file);
+    },
+    [handleDropZoneFile]
+  );
+
+  const onDropZoneDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+  }, []);
+
+  const onDropZoneDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+  }, []);
+
+  const onDropZoneClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const onFileInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) handleDropZoneFile(file);
+      // reset so same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    },
+    [handleDropZoneFile]
+  );
+
+  const showDropZone = isEmpty && !animateMode && !!onDropUpload;
+
+  // ============================================================================
   // RENDER
   // ============================================================================
   return (
     <div className="studio-right">
       <div className="studio-right-surface">
         {isEmpty ? (
-          <div className="studio-empty-text">New ideas don't exist, just recycle.</div>
+          showDropZone ? (
+            <div
+              className={`studio-dropzone${dragOver ? " is-dragover" : ""}`}
+              onDrop={onDropZoneDrop}
+              onDragOver={onDropZoneDragOver}
+              onDragLeave={onDropZoneDragLeave}
+              onClick={onDropZoneClick}
+              role="button"
+              tabIndex={0}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={onFileInputChange}
+              />
+              <div className="studio-dropzone-label">
+                Drop an image here or click to upload
+              </div>
+            </div>
+          ) : (
+            <div className="studio-empty-text">New ideas don't exist, just recycle.</div>
+          )
         ) : (
           <>
             <button
