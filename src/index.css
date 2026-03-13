@@ -1585,3 +1585,29 @@ padding-left: 56px;
     font-size: 11px;
   }
 }
+
+/* =============================================================
+   Undo/Redo toast
+   ============================================================= */
+.mina-undo-toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+
+  padding: 8px 18px;
+  background: rgba(8, 10, 0, 0.85);
+  color: #FCFAF4;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 6px;
+
+  pointer-events: none;
+  animation: mina-toast-in 200ms ease-out;
+}
+
+@keyframes mina-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}

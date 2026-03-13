@@ -20,6 +20,7 @@ import Profile from "./Profile";
 import TopLoadingBar from "./components/TopLoadingBar";
 import WelcomeMatchaModal from "./components/WelcomeMatchaModal";
 import { downloadMinaAsset } from "./lib/minaDownload";
+import { useUndoRedo } from "./lib/useUndoRedo";
 import {
   extractMmaErrorTextFromResult,
   humanizeUploadError,
@@ -501,6 +502,7 @@ const MinaApp: React.FC<MinaAppProps> = () => {
   // =====================
   const passId = usePassId();
   const authContext = useAuthContext();
+  const undoRedo = useUndoRedo();
 
   // =====================
   // Admin / config
@@ -4836,8 +4838,11 @@ const styleHeroUrls = (stylePresetKeys || [])
   };
 
   const removeUploadItem = (panel: UploadPanelKey, id: string) => {
+    // Snapshot for undo (grab the item before removing)
+    let removedItem: any = null;
     setUploads((prev) => {
       const item = prev[panel].find((x) => x.id === id);
+      removedItem = item ? { ...item } : null;
       if (item?.kind === "file" && item.url.startsWith("blob:")) {
         try {
           URL.revokeObjectURL(item.url);
@@ -4850,6 +4855,17 @@ const styleHeroUrls = (stylePresetKeys || [])
         [panel]: prev[panel].filter((x) => x.id !== id),
       };
     });
+
+    // Defer push so removedItem is captured after setState callback
+    setTimeout(() => {
+      if (!removedItem) return;
+      const snap = removedItem;
+      undoRedo.push({
+        label: "Remove upload",
+        undo: () => setUploads((prev) => ({ ...prev, [panel]: [...prev[panel], snap] })),
+        redo: () => setUploads((prev) => ({ ...prev, [panel]: prev[panel].filter((x) => x.id !== id) })),
+      });
+    }, 0);
   };
 
   const moveUploadItem = (panel: UploadPanelKey, from: number, to: number) => {
@@ -5021,13 +5037,45 @@ const styleHeroUrls = (stylePresetKeys || [])
   };
 
   const deleteCustomStyle = (key: string) => {
-    setCustomStyles((prev) => prev.filter((s) => s.key !== key));
+    // Snapshot for undo
+    let snapStyle: any = null;
+    let snapLabel: string | undefined;
+    let wasSelected = false;
+
+    setCustomStyles((prev) => {
+      snapStyle = prev.find((s) => s.key === key) || null;
+      return prev.filter((s) => s.key !== key);
+    });
     setStyleLabelOverrides((prev) => {
+      snapLabel = prev[key];
       const copy = { ...prev };
       delete copy[key];
       return copy;
     });
-    setStylePresetKeys((prev) => prev.filter((k) => k !== key));
+    setStylePresetKeys((prev) => {
+      wasSelected = prev.includes(key);
+      return prev.filter((k) => k !== key);
+    });
+
+    setTimeout(() => {
+      if (!snapStyle) return;
+      const ss = snapStyle;
+      const sl = snapLabel;
+      const ws = wasSelected;
+      undoRedo.push({
+        label: "Delete style",
+        undo: () => {
+          setCustomStyles((prev) => [...prev, ss]);
+          if (sl !== undefined) setStyleLabelOverrides((prev) => ({ ...prev, [key]: sl }));
+          if (ws) setStylePresetKeys((prev) => [...prev, key]);
+        },
+        redo: () => {
+          setCustomStyles((prev) => prev.filter((s) => s.key !== key));
+          setStyleLabelOverrides((prev) => { const c = { ...prev }; delete c[key]; return c; });
+          setStylePresetKeys((prev) => prev.filter((k) => k !== key));
+        },
+      });
+    }, 0);
   };
 
   const handleSignOut = async () => {
@@ -6002,6 +6050,10 @@ const headerOverlayClass =
               void fetchHistory();
             }}
             onDelete={async (id) => {
+              // Snapshot before delete for undo
+              const deletedGen = historyGenerations.find((g: any) => g.id === id) || null;
+              const deletedFb = historyFeedbacks.filter((f: any) => f.id === id);
+
               const res = await apiFetch(`/history/${encodeURIComponent(id)}`, { method: "DELETE" });
               if (!res.ok) {
                 const txt = await res.text().catch(() => "");
@@ -6019,6 +6071,29 @@ const headerOverlayClass =
                   page: cached.page,
                 };
               }
+
+              // Push undo entry — restore the item to state (client-side only)
+              undoRedo.push({
+                label: "Delete creation",
+                undo: () => {
+                  if (deletedGen) setHistoryGenerations((prev) => [deletedGen as any, ...prev]);
+                  if (deletedFb.length) setHistoryFeedbacks((prev) => [...deletedFb, ...prev]);
+                  if (currentPassId && historyCacheRef.current[currentPassId]) {
+                    const c = historyCacheRef.current[currentPassId];
+                    if (deletedGen) c.generations = [deletedGen as any, ...c.generations];
+                    if (deletedFb.length) c.feedbacks = [...deletedFb, ...c.feedbacks];
+                  }
+                },
+                redo: () => {
+                  setHistoryGenerations((prev) => prev.filter((g) => g.id !== id));
+                  setHistoryFeedbacks((prev) => prev.filter((f) => f.id !== id));
+                  if (currentPassId && historyCacheRef.current[currentPassId]) {
+                    const c = historyCacheRef.current[currentPassId];
+                    c.generations = c.generations.filter((g) => g.id !== id);
+                    c.feedbacks = c.feedbacks.filter((f) => f.id !== id);
+                  }
+                },
+              });
             }}
             onRecreate={(draft) => {
               try {
@@ -6049,6 +6124,9 @@ const headerOverlayClass =
           try { window.localStorage.setItem(WELCOME_CLAIMED_KEY, "1"); } catch {}
         }}
       />
+      {undoRedo.toast && (
+        <div className="mina-undo-toast">{undoRedo.toast}</div>
+      )}
     </>
   );
 };
