@@ -4481,11 +4481,27 @@ const styleHeroUrls = (stylePresetKeys || [])
   // ========================================================================
   const [fingertipsSending, setFingertipsSending] = useState(false);
 
+  const FT_LABELS: Record<string, string> = {
+    remove_bg: "removing background",
+    upscale: "enhancing image",
+    expand: "expanding canvas",
+    vectorize: "vectorizing",
+    flux_fill: "generating fill",
+    eraser: "erasing selection",
+  };
+
   const onFingertipsGenerate = useCallback(
     async (args: { modelKey: string; inputs: Record<string, any> }) => {
       if (!API_BASE_URL || !currentPassId) return null;
 
+      const label = FT_LABELS[args.modelKey] || "processing";
+
+      // Show green thought + lock UI (same as create/animate/tweak)
       setFingertipsSending(true);
+      setStillGenerating(true);
+      setMinaOverrideText(label + "…");
+      setMinaTone("thinking");
+
       try {
         const res = await apiFetch("/fingertips/generate", {
           method: "POST",
@@ -4499,7 +4515,10 @@ const styleHeroUrls = (stylePresetKeys || [])
         const json = await res.json();
 
         if (!res.ok) {
-          return { generation_id: "", status: "error", error: json?.message || json?.error || "Fingertips failed" } as any;
+          // Show pink error (same as create/animate/tweak)
+          const errMsg = json?.details?.userMessage || json?.message || json?.error || "Fingertips failed";
+          showMinaError({ message: errMsg });
+          return { generation_id: "", status: "error", error: errMsg } as any;
         }
 
         // If we got an output, add it to the still carousel
@@ -4529,6 +4548,10 @@ const styleHeroUrls = (stylePresetKeys || [])
           }
         }
 
+        // Clear green thought on success
+        setMinaOverrideText(null);
+        dismissMinaNotice();
+
         // Refresh credits
         creditsDirtyRef.current = true;
         historyDirtyRef.current = true;
@@ -4536,12 +4559,14 @@ const styleHeroUrls = (stylePresetKeys || [])
 
         return json;
       } catch (err: any) {
+        showMinaError({ message: err?.message || "Fingertips failed" });
         return { generation_id: "", status: "error", error: err?.message || "Fingertips failed" } as any;
       } finally {
         setFingertipsSending(false);
+        setStillGenerating(false);
       }
     },
-    [API_BASE_URL, currentPassId, apiFetch, ensureAssetsUrl, fetchCredits]
+    [API_BASE_URL, currentPassId, apiFetch, ensureAssetsUrl, fetchCredits, showMinaError, dismissMinaNotice]
   );
 
   // ========================================================================

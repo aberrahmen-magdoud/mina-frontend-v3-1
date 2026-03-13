@@ -407,23 +407,39 @@ export default function StudioRight(props: StudioRightProps) {
   // ============================================================================
   // MASK DRAWING (for eraser + flux_fill)
   // ============================================================================
+  // Store real image dimensions so the mask matches the source image pixel-for-pixel
+  const maskImgDimsRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+
   const initMaskCanvas = useCallback(() => {
     const canvas = maskCanvasRef.current;
     if (!canvas) return;
-    const parent = canvas.parentElement;
-    if (!parent) return;
 
-    canvas.width = parent.clientWidth;
-    canvas.height = parent.clientHeight;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Load real image dimensions — mask MUST match the source image's pixel size
+    // for Replicate eraser/flux_fill to work correctly
+    if (safeStillUrl) {
+      const img = new Image();
+      img.onload = () => {
+        maskImgDimsRef.current = { w: img.naturalWidth, h: img.naturalHeight };
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d");
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      };
+      img.onerror = () => {
+        // Fallback to container size
+        const parent = canvas.parentElement;
+        if (!parent) return;
+        canvas.width = parent.clientWidth;
+        canvas.height = parent.clientHeight;
+        maskImgDimsRef.current = { w: canvas.width, h: canvas.height };
+      };
+      img.src = safeStillUrl;
+    }
 
     // Reset zoom
     maskZoomRef.current = { scale: 1, x: 0, y: 0 };
     applyMaskZoom();
-  }, []);
+  }, [safeStillUrl]);
 
   const applyMaskZoom = useCallback(() => {
     const { scale, x, y } = maskZoomRef.current;
@@ -453,22 +469,19 @@ export default function StudioRight(props: StudioRightProps) {
     if (!overlay) return;
     const rect = overlay.getBoundingClientRect();
     const z = maskZoomRef.current;
-    // Convert screen coords to unscaled canvas coords
+    // Convert screen coords to unscaled canvas coords (maps CSS pixels → image pixels)
     const cx = ((x - rect.left - z.x) / z.scale / overlay.clientWidth) * canvas.width;
     const cy = ((y - rect.top - z.y) / z.scale / overlay.clientHeight) * canvas.height;
 
-    const radius = 20 / z.scale; // Scale-independent brush size
+    // Brush radius proportional to image size (≈3% of shortest dimension)
+    const minDim = Math.min(canvas.width, canvas.height) || 512;
+    const radius = Math.max(8, (minDim * 0.03) / z.scale);
 
     if (isStart) {
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(80, 130, 255, 0.35)";
       ctx.fill();
-      ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = "rgba(80, 130, 255, 0.6)";
-      ctx.lineWidth = 1.5 / z.scale;
-      ctx.stroke();
-      ctx.setLineDash([]);
     } else {
       const last = maskLastPosRef.current;
       if (last) {
@@ -479,14 +492,6 @@ export default function StudioRight(props: StudioRightProps) {
         ctx.lineWidth = radius * 2;
         ctx.lineCap = "round";
         ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-        ctx.setLineDash([4, 4]);
-        ctx.strokeStyle = "rgba(80, 130, 255, 0.6)";
-        ctx.lineWidth = 1.5 / z.scale;
-        ctx.stroke();
-        ctx.setLineDash([]);
       }
     }
 
@@ -814,7 +819,7 @@ export default function StudioRight(props: StudioRightProps) {
               </div>
             </button>
 
-            {/* MASK OVERLAY — Canva-style: full opacity image, scroll/pinch to zoom, click to draw */}
+            {/* MASK OVERLAY — scroll to zoom, hold Space/middle-click to pan, click to draw */}
             {ftMode === "mask" && safeStillUrl && (
               <div
                 className="ft-mask-overlay"
@@ -822,7 +827,16 @@ export default function StudioRight(props: StudioRightProps) {
                 onWheel={(e) => {
                   e.preventDefault();
                   const z = maskZoomRef.current;
-                  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+
+                  // Shift+scroll or two-finger horizontal = pan
+                  if (e.shiftKey || (Math.abs(e.deltaX) > Math.abs(e.deltaY) * 0.5 && Math.abs(e.deltaX) > 2)) {
+                    z.x -= e.deltaX || e.deltaY;
+                    z.y -= e.shiftKey ? 0 : e.deltaY;
+                    applyMaskZoom();
+                    return;
+                  }
+
+                  const delta = e.deltaY > 0 ? 0.92 : 1.08;
                   const newScale = Math.max(0.5, Math.min(5, z.scale * delta));
 
                   // Zoom toward cursor position
@@ -834,6 +848,7 @@ export default function StudioRight(props: StudioRightProps) {
                   z.scale = newScale;
                   applyMaskZoom();
                 }}
+                onContextMenu={(e) => e.preventDefault()}
               >
                 <img
                   className="ft-mask-underlay"
@@ -844,7 +859,31 @@ export default function StudioRight(props: StudioRightProps) {
                 <canvas
                   ref={maskCanvasRef}
                   className="ft-mask-canvas"
-                  onPointerDown={handleMaskPointerDown}
+                  onPointerDown={(e) => {
+                    // Right-click or middle-click = pan mode
+                    if (e.button === 1 || e.button === 2) {
+                      e.preventDefault();
+                      const startX = e.clientX;
+                      const startY = e.clientY;
+                      const z = maskZoomRef.current;
+                      const startZx = z.x;
+                      const startZy = z.y;
+
+                      const onMove = (me: PointerEvent) => {
+                        z.x = startZx + (me.clientX - startX);
+                        z.y = startZy + (me.clientY - startY);
+                        applyMaskZoom();
+                      };
+                      const onUp = () => {
+                        window.removeEventListener("pointermove", onMove);
+                        window.removeEventListener("pointerup", onUp);
+                      };
+                      window.addEventListener("pointermove", onMove);
+                      window.addEventListener("pointerup", onUp);
+                      return;
+                    }
+                    handleMaskPointerDown(e);
+                  }}
                   onPointerMove={handleMaskPointerMove}
                   onPointerUp={handleMaskPointerUp}
                   onPointerCancel={handleMaskPointerUp}
@@ -1086,12 +1125,40 @@ export default function StudioRight(props: StudioRightProps) {
             Draw on the area to {ftActiveModel === "eraser" ? "erase" : "fill"}
           </span>
 
+          <button
+            type="button"
+            className={`ft-btn ${ftBtnVisible ? "is-visible" : ""}`}
+            style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 2 * FT_STAGGER}ms` : "0ms" }}
+            onClick={() => {
+              // Clear the drawn mask
+              const canvas = maskCanvasRef.current;
+              if (canvas) {
+                const ctx = canvas.getContext("2d");
+                if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+              }
+            }}
+          >
+            Clear
+          </button>
+
+          <button
+            type="button"
+            className={`ft-btn ${ftBtnVisible ? "is-visible" : ""}`}
+            style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 2 * FT_STAGGER}ms` : "0ms" }}
+            onClick={() => {
+              maskZoomRef.current = { scale: 1, x: 0, y: 0 };
+              applyMaskZoom();
+            }}
+          >
+            Reset view
+          </button>
+
           <span style={{ flex: "1 1 auto" }} />
 
           <button
             type="button"
             className={`ft-btn is-underline ${ftBtnVisible ? "is-visible" : ""}`}
-            style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 2 * FT_STAGGER}ms` : "0ms" }}
+            style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 3 * FT_STAGGER}ms` : "0ms" }}
             onClick={handleMaskSubmit}
             disabled={isBusy}
           >

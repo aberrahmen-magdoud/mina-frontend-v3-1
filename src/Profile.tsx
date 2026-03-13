@@ -1499,6 +1499,10 @@ export default function Profile({
 
         const prompt = (inputs.brief || "").trim();
 
+        // Detect fingertips generations (they have no prompt but can be used as scene / animated)
+        const mmaMode = String(pick(g, ["mg_mma_mode"], "")).toLowerCase();
+        const isFingertips = mmaMode === "fingertips";
+
         // ✅ For video/audio "reference-only" runs, prompt can be empty.
         // Still allow recreate if we have ref media or frames.
         const hasRefMedia =
@@ -1508,7 +1512,8 @@ export default function Profile({
           !!inputs.endImageUrl ||
           (Array.isArray(inputs.klingFrameUrls) && inputs.klingFrameUrls.length > 0);
 
-        const canRecreate = source === "generation" && !!onRecreate && (!!prompt || hasRefMedia);
+        // Fingertips items can always be used as scene / animated even without a prompt
+        const canRecreate = source === "generation" && !!onRecreate && (!!prompt || hasRefMedia || isFingertips);
 
         const draft: RecreateDraft | null = canRecreate
           ? {
@@ -1532,7 +1537,8 @@ export default function Profile({
                   : {}),
               },
               assets: {
-                productImageUrl: inputs.productImageUrl || undefined,
+                // For fingertips, use the output image as the scene/product image
+                productImageUrl: inputs.productImageUrl || (isFingertips && url ? url : undefined),
                 logoImageUrl: inputs.logoImageUrl || undefined,
                 styleImageUrls: inputs.styleImageUrls.length ? inputs.styleImageUrls : undefined,
                 ...(isMotion && inputs.startImageUrl ? { kling_start_image_url: inputs.startImageUrl } : {}),

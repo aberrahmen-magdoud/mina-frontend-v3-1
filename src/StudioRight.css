@@ -364,14 +364,19 @@
   font-weight: 700;
 }
 
-/* Fingertips error line */
+/* Fingertips error line — pink like studio errors */
 .ft-error {
   position: absolute;
   left: 18px;
-  top: -18px;
+  right: 18px;
+  top: -24px;
 
   font-size: 11px;
-  color: rgba(0, 0, 0, 0.35);
+  font-weight: 600;
+  color: #c0392b;
+  background: rgba(192, 57, 43, 0.08);
+  padding: 4px 10px;
+  border-radius: 6px;
 }
 
 /* =========================================================
