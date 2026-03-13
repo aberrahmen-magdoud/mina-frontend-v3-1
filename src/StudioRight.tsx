@@ -77,6 +77,52 @@ type StudioRightProps = {
 const FT_INITIAL_DELAY = 260;
 const FT_STAGGER = 90;
 
+/**
+ * StillImage — preloads the image fully before displaying it.
+ * The browser decodes the entire image off-screen, then we set the src
+ * so it paints in one frame (no progressive top-to-bottom scan).
+ */
+function StillImage({ url }: { url: string }) {
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setReady(false);
+    if (!url) return;
+
+    const img = new Image();
+    img.src = url;
+
+    // decode() ensures the image is fully rasterized before we reveal it
+    const show = () => {
+      if (imgRef.current) {
+        imgRef.current.src = url;
+        imgRef.current.classList.remove("studio-output-media--loading");
+      }
+      setReady(true);
+    };
+
+    if (typeof img.decode === "function") {
+      img.decode().then(show).catch(show);
+    } else {
+      img.onload = show;
+      img.onerror = show;
+    }
+  }, [url]);
+
+  return (
+    <img
+      ref={imgRef}
+      className={`studio-output-media${ready ? "" : " studio-output-media--loading"}`}
+      // Start with empty src — no progressive rendering. Set by useEffect once decoded.
+      src={ready ? url : ""}
+      alt=""
+      draggable={false}
+      onDragStart={(e) => e.preventDefault()}
+    />
+  );
+}
+
 export default function StudioRight(props: StudioRightProps) {
   const {
     currentStill,
@@ -763,15 +809,7 @@ export default function StudioRight(props: StudioRightProps) {
                     onDragStart={(e) => e.preventDefault()}
                   />
                 ) : (
-                  <img
-                    key={media.url}
-                    className="studio-output-media studio-output-media--loading"
-                    src={media?.url || ""}
-                    alt=""
-                    draggable={false}
-                    onDragStart={(e) => e.preventDefault()}
-                    onLoad={(e) => e.currentTarget.classList.remove("studio-output-media--loading")}
-                  />
+                  <StillImage key={media.url} url={media?.url || ""} />
                 )}
               </div>
             </button>
