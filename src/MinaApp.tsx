@@ -4503,7 +4503,14 @@ const styleHeroUrls = (stylePresetKeys || [])
         }
 
         // If we got an output, add it to the still carousel
-        const outputUrl = json?.output_url || (Array.isArray(json?.output) ? json.output[0] : json?.output) || null;
+        const rawOut = json?.output;
+        const outputUrl =
+          json?.output_url ||
+          (typeof rawOut === "string" ? rawOut : null) ||
+          (Array.isArray(rawOut) && typeof rawOut[0] === "string" ? rawOut[0] : null) ||
+          (rawOut && typeof rawOut === "object" && typeof rawOut.url === "string" ? rawOut.url : null) ||
+          (rawOut && typeof rawOut === "object" && typeof rawOut.image === "string" ? rawOut.image : null) ||
+          null;
         if (outputUrl && typeof outputUrl === "string") {
           const finalUrl = await ensureAssetsUrl(outputUrl, "generations");
           if (finalUrl) {
