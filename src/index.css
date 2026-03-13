@@ -655,7 +655,7 @@ video {
   .studio-animate-toggle--header {
     position: absolute;
     left: calc(60% - 72px);
-    top: 0;
+    top: 4px;
   }
 }
 
