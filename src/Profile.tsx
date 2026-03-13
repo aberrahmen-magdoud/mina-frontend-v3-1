@@ -150,8 +150,10 @@ async function downloadMedia(url: string, prompt: string, isMotion: boolean) {
       kind: isMotion ? "motion" : "still",
       prompt: prompt || "",
     });
-  } catch (err) {
+  } catch (err: any) {
+    const msg = err?.message || "Download failed";
     console.warn("Download failed:", err);
+    alert(msg);
   }
 }
 

@@ -208,17 +208,28 @@ export async function downloadMinaAsset(opts: DownloadOpts): Promise<void> {
     await downloadWithBlob(opts, blob, contentType);
     return;
   } catch (e1) {
-    // 2) Optional: try backend proxy (if you add it)
-    // This avoids CORS issues on third-party image hosts.
+    // 2) Try backend proxy to bypass CORS / expired URL issues
     if (API_BASE_URL) {
       try {
         const proxy = `${API_BASE_URL}/public/download?url=${encodeURIComponent(url)}`;
         const { blob, contentType } = await fetchAsBlob(proxy);
         await downloadWithBlob(opts, blob, contentType);
         return;
-      } catch (e2) {
-        throw e1 instanceof Error ? e1 : new Error("Download failed");
+      } catch {
+        // proxy also failed — fall through to throw
       }
+    }
+
+    // If URL looks like a temporary provider URL, give a clear message
+    const looksExpired =
+      url.includes("replicate.delivery") ||
+      url.includes("replicate.com") ||
+      url.includes("klingai") ||
+      url.includes("kling.") ||
+      !url.includes("r2.dev");
+
+    if (looksExpired) {
+      throw new Error("This file's link has expired. Please regenerate to get a new download.");
     }
 
     throw e1 instanceof Error ? e1 : new Error("Download failed");
