@@ -667,14 +667,14 @@ video {
   font-family: inherit;
   font-size: 13px;
   font-weight: 700;
-  color: #fff;
+  color: #000;
   cursor: pointer;
   text-decoration: none;
   transition: opacity 120ms ease;
 }
 
 .studio-animate-toggle--header {
-  mix-blend-mode: difference;
+  color: #000;
 }
 
 .studio-animate-toggle:hover {
