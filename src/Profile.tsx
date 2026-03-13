@@ -860,6 +860,9 @@ export default function Profile({
     return result;
   }, []);
 
+  // IDs selected live while the drag-rect is being drawn (applied on release)
+  const dragSelectedIds = useRef<Set<string>>(new Set());
+
   // --- Desktop drag-select ---
   const onGridMouseDown = useCallback((e: React.MouseEvent) => {
     // Only start drag on the grid background / card media, not on buttons
@@ -870,39 +873,64 @@ export default function Profile({
     // Only if already in select mode (at least one card confirmed)
     if (!isSelectMode) return;
 
-    e.preventDefault();
+    // Don't start drag immediately — wait for movement (threshold in mousemove)
     dragState.current = {
-      active: true,
+      active: false,
       startX: e.clientX,
       startY: e.clientY,
       scrollTop: 0,
       touch: false,
       longPressTimer: null,
     };
-    setDragRect({ x: e.clientX, y: e.clientY, w: 0, h: 0 });
+    dragSelectedIds.current.clear();
   }, [isSelectMode]);
 
   const onGridMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!dragState.current.active || dragState.current.touch) return;
+    if (dragState.current.touch) return;
     const { startX, startY } = dragState.current;
-    setDragRect({ x: startX, y: startY, w: e.clientX - startX, h: e.clientY - startY });
-  }, []);
+    const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
+
+    // Activate drag only after moving ≥ 5px
+    if (!dragState.current.active) {
+      if (startX === 0 && startY === 0) return; // no mousedown tracked
+      if (dist < 5) return;
+      dragState.current.active = true;
+      setDragRect({ x: startX, y: startY, w: 0, h: 0 });
+    }
+
+    const rect = { x: startX, y: startY, w: e.clientX - startX, h: e.clientY - startY };
+    setDragRect(rect);
+
+    // Live-select: apply selections as the rect sweeps over cards
+    const ids = getCardsInRect(rect);
+    const newIds = new Set(ids);
+    const prev = dragSelectedIds.current;
+
+    // Only update if the set changed
+    if (newIds.size !== prev.size || ids.some((id) => !prev.has(id))) {
+      dragSelectedIds.current = newIds;
+      setConfirmDeleteIds((cur) => {
+        const next = { ...cur };
+        // Remove IDs that were drag-selected before but no longer under the rect
+        prev.forEach((id) => { if (!newIds.has(id)) delete next[id]; });
+        // Add new IDs under the rect
+        newIds.forEach((id) => { next[id] = true; });
+        return next;
+      });
+    }
+  }, [getCardsInRect]);
 
   const onGridMouseUp = useCallback(() => {
-    if (!dragState.current.active || dragState.current.touch) return;
+    const wasDragging = dragState.current.active;
     dragState.current.active = false;
-    if (dragRect) {
-      const ids = getCardsInRect(dragRect);
-      if (ids.length > 0) {
-        setConfirmDeleteIds((prev) => {
-          const next = { ...prev };
-          for (const id of ids) next[id] = true;
-          return next;
-        });
-      }
+    dragState.current.startX = 0;
+    dragState.current.startY = 0;
+    dragSelectedIds.current.clear();
+    if (wasDragging) {
+      // Selection already applied live — just clear the visual rect
+      setDragRect(null);
     }
-    setDragRect(null);
-  }, [dragRect, getCardsInRect]);
+  }, []);
 
   // --- Touch drag-select (long-press to start, drag to sweep) ---
   const onGridTouchStart = useCallback((e: React.TouchEvent) => {
@@ -944,8 +972,24 @@ export default function Profile({
     if (!st.active) return;
 
     e.preventDefault(); // prevent scroll while dragging
-    setDragRect({ x: st.startX, y: st.startY, w: touch.clientX - st.startX, h: touch.clientY - st.startY });
-  }, []);
+    const rect = { x: st.startX, y: st.startY, w: touch.clientX - st.startX, h: touch.clientY - st.startY };
+    setDragRect(rect);
+
+    // Live-select: apply selections as the rect sweeps over cards
+    const ids = getCardsInRect(rect);
+    const newIds = new Set(ids);
+    const prev = dragSelectedIds.current;
+
+    if (newIds.size !== prev.size || ids.some((id) => !prev.has(id))) {
+      dragSelectedIds.current = newIds;
+      setConfirmDeleteIds((cur) => {
+        const next = { ...cur };
+        prev.forEach((id) => { if (!newIds.has(id)) delete next[id]; });
+        newIds.forEach((id) => { next[id] = true; });
+        return next;
+      });
+    }
+  }, [getCardsInRect]);
 
   const onGridTouchEnd = useCallback(() => {
     const st = dragState.current;
@@ -959,18 +1003,10 @@ export default function Profile({
     }
     st.active = false;
     st.touch = false;
-    if (dragRect) {
-      const ids = getCardsInRect(dragRect);
-      if (ids.length > 0) {
-        setConfirmDeleteIds((prev) => {
-          const next = { ...prev };
-          for (const id of ids) next[id] = true;
-          return next;
-        });
-      }
-    }
+    dragSelectedIds.current.clear();
+    // Selection already applied live — just clear the visual rect
     setDragRect(null);
-  }, [dragRect, getCardsInRect]);
+  }, []);
 
   // Keyboard shortcuts: Delete/Backspace → delete selected, Escape → cancel
   useEffect(() => {
