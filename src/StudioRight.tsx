@@ -686,6 +686,11 @@ export default function StudioRight(props: StudioRightProps) {
       } else if (ftActiveModel === "flux_fill") {
         inputs.mask = maskDataUrl;
         inputs.prompt = ftPrompt || "";
+        inputs.num_inference_steps = 50;
+        inputs.guidance = 30;
+        inputs.megapixels = "match_input";
+        inputs.output_format = "png";
+        inputs.output_quality = 100;
       }
 
       const result = await onFingertipsGenerate({ modelKey: ftActiveModel, inputs });
