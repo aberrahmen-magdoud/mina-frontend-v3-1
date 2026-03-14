@@ -684,13 +684,12 @@ export default function StudioRight(props: StudioRightProps) {
       if (ftActiveModel === "eraser") {
         inputs.mask_image = maskDataUrl;
       } else if (ftActiveModel === "flux_fill") {
+        // bria/genfill inputs — GPT generates negative_prompt on the backend
         inputs.mask = maskDataUrl;
         inputs.prompt = ftPrompt || "";
-        inputs.num_inference_steps = 50;
-        inputs.guidance = 30;
-        inputs.megapixels = "match_input";
-        inputs.output_format = "png";
-        inputs.output_quality = 100;
+        inputs.mask_type = "manual";
+        inputs.sync = true;
+        inputs.preserve_alpha = true;
       }
 
       const result = await onFingertipsGenerate({ modelKey: ftActiveModel, inputs });
@@ -1043,10 +1042,13 @@ export default function StudioRight(props: StudioRightProps) {
       {!isEmpty && ftMode === "toolbar" && (
         <div className="studio-fingertips-bar">
           {([
-            { key: "remove_bg" as FtModelKey, label: "Remove BG", sep: false },
-            { key: "upscale" as FtModelKey, label: "Enhance", sep: false },
+            /* unhide from here: Remove BG */
+            // { key: "remove_bg" as FtModelKey, label: "Remove BG", sep: false },
+            /* unhide from here: Enhance */
+            // { key: "upscale" as FtModelKey, label: "Enhance", sep: false },
             { key: "expand" as FtModelKey, label: "Expand", sep: false },
-            { key: "vectorize" as FtModelKey, label: "Vectorize", sep: false },
+            /* unhide from here: Vectorize */
+            // { key: "vectorize" as FtModelKey, label: "Vectorize", sep: false },
             { key: "flux_fill" as FtModelKey, label: "Draw", sep: true },
             { key: "eraser" as FtModelKey, label: "Erase", sep: false },
           ]).map((item, idx) => (
@@ -1076,14 +1078,14 @@ export default function StudioRight(props: StudioRightProps) {
             </React.Fragment>
           ))}
 
-          {/* Separator before studio-style actions */}
+          {/* unhide from here: Set Scene, Recreate, Animate buttons + separator */}
+          {/*
           <span
             className={`ft-btn-separator ${ftBtnVisible ? "is-visible" : ""}`}
             style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 7 * FT_STAGGER}ms` : "0ms" }}
             aria-hidden="true"
           >|</span>
 
-          {/* Set Scene — same as tweak bar */}
           {!!onSetScene && safeStillUrl && (
             <button
               type="button"
@@ -1099,7 +1101,6 @@ export default function StudioRight(props: StudioRightProps) {
             </button>
           )}
 
-          {/* Recreate — reuse the still with same settings */}
           {!!props.onRecreate && (
             <button
               type="button"
@@ -1115,7 +1116,6 @@ export default function StudioRight(props: StudioRightProps) {
             </button>
           )}
 
-          {/* Animate — send to motion mode */}
           {!!props.onRecreate && isImage && (
             <button
               type="button"
@@ -1130,6 +1130,7 @@ export default function StudioRight(props: StudioRightProps) {
               Animate
             </button>
           )}
+          */}
 
           <span style={{ flex: "1 1 auto" }} />
 
