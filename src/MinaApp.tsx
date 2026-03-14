@@ -4721,14 +4721,18 @@ const styleHeroUrls = (stylePresetKeys || [])
     [API_BASE_URL, currentPassId, apiFetch, ensureAssetsUrl, fetchCredits, showMinaError, dismissMinaNotice]
   );
 
-  // Cycle through entertaining phrases while fingertips is generating
+  // Cycle through entertaining phrases while fingertips is generating.
+  // Write directly to minaMessage (NOT minaOverrideText) to avoid the
+  // overlay-typing effect re-triggering on every character update.
   useEffect(() => {
     if (!fingertipsSending || !fingertipsActiveModel) return;
+
+    setMinaTalking(true);
 
     const phrases = FT_PHRASES[fingertipsActiveModel] || [];
     if (!phrases.length) {
       const label = FT_LABELS[fingertipsActiveModel] || "processing";
-      setMinaOverrideText(label + "…");
+      setMinaMessage(label + "…");
       return;
     }
 
@@ -4744,7 +4748,7 @@ const styleHeroUrls = (stylePresetKeys || [])
       charIdx += 1;
       const slice = phrase.slice(0, Math.min(charIdx, phrase.length));
 
-      setMinaOverrideText(slice || "…");
+      setMinaMessage(slice || "…");
 
       const reachedEnd = charIdx > phrase.length;
       if (reachedEnd) {
