@@ -173,22 +173,22 @@ export function humanizeMmaError(err: MmaErrorLike, mode?: "create" | "animate")
   }
 
   // Fingertips-specific errors
-  if (s.includes(“fingertips_generation_failed”) || s.includes(“fingertips_failed”)) {
-    if (s.includes(“not charged”) || s.includes(“refunded”)) return UI_ERROR_MESSAGES.fingertipsNoOutput;
+  if (s.includes("fingertips_generation_failed") || s.includes("fingertips_failed")) {
+    if (s.includes("not charged") || s.includes("refunded")) return UI_ERROR_MESSAGES.fingertipsNoOutput;
     return UI_ERROR_MESSAGES.fingertipsFailed;
   }
 
-  if (s.includes(“r2_not_configured”) || s.includes(“r2_fetch_failed”) || s.includes(“r2_store_failed”)) {
+  if (s.includes("r2_not_configured") || s.includes("r2_fetch_failed") || s.includes("r2_store_failed")) {
     return UI_ERROR_MESSAGES.fingertipsNoOutput;
   }
 
   // Generic “no URL” / pipeline failure → niche overload message only in create mode
   if (
-    s.includes(“video_no_url”) ||
-    s.includes(“mma_no_url”) ||
-    s.includes(“pipeline_error”) ||
-    s.includes(“no_output_url”) ||
-    s.includes(“no output url”)
+    s.includes("video_no_url") ||
+    s.includes("mma_no_url") ||
+    s.includes("pipeline_error") ||
+    s.includes("no_output_url") ||
+    s.includes("no output url")
   ) {
     if (mode === "create") {
       return "Mina Animate mode is currently under high demand. Please wait a bit then try again.";
