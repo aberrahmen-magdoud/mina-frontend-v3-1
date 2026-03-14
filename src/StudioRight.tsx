@@ -271,6 +271,8 @@ export default function StudioRight(props: StudioRightProps) {
   const maskLastPosRef = useRef<{ x: number; y: number } | null>(null);
   const maskOverlayRef = useRef<HTMLDivElement | null>(null);
   const maskZoomRef = useRef({ scale: 1, x: 0, y: 0 });
+  const [maskPanning, setMaskPanning] = useState(false);
+  const maskPanStartRef = useRef<{ x: number; y: number; zx: number; zy: number } | null>(null);
 
   // Exit fingertips
   const exitFingertips = useCallback(() => {
@@ -407,23 +409,39 @@ export default function StudioRight(props: StudioRightProps) {
   // ============================================================================
   // MASK DRAWING (for eraser + flux_fill)
   // ============================================================================
+  // Store real image dimensions so the mask matches the source image pixel-for-pixel
+  const maskImgDimsRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+
   const initMaskCanvas = useCallback(() => {
     const canvas = maskCanvasRef.current;
     if (!canvas) return;
-    const parent = canvas.parentElement;
-    if (!parent) return;
 
-    canvas.width = parent.clientWidth;
-    canvas.height = parent.clientHeight;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Load real image dimensions — mask MUST match the source image's pixel size
+    // for Replicate eraser/flux_fill to work correctly
+    if (safeStillUrl) {
+      const img = new Image();
+      img.onload = () => {
+        maskImgDimsRef.current = { w: img.naturalWidth, h: img.naturalHeight };
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d");
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      };
+      img.onerror = () => {
+        // Fallback to container size
+        const parent = canvas.parentElement;
+        if (!parent) return;
+        canvas.width = parent.clientWidth;
+        canvas.height = parent.clientHeight;
+        maskImgDimsRef.current = { w: canvas.width, h: canvas.height };
+      };
+      img.src = safeStillUrl;
+    }
 
     // Reset zoom
     maskZoomRef.current = { scale: 1, x: 0, y: 0 };
     applyMaskZoom();
-  }, []);
+  }, [safeStillUrl]);
 
   const applyMaskZoom = useCallback(() => {
     const { scale, x, y } = maskZoomRef.current;
@@ -453,40 +471,32 @@ export default function StudioRight(props: StudioRightProps) {
     if (!overlay) return;
     const rect = overlay.getBoundingClientRect();
     const z = maskZoomRef.current;
-    // Convert screen coords to unscaled canvas coords
+    // Convert screen coords to unscaled canvas coords (maps CSS pixels → image pixels)
     const cx = ((x - rect.left - z.x) / z.scale / overlay.clientWidth) * canvas.width;
     const cy = ((y - rect.top - z.y) / z.scale / overlay.clientHeight) * canvas.height;
 
-    const radius = 20 / z.scale; // Scale-independent brush size
+    // Brush radius proportional to image size (≈3% of shortest dimension)
+    const minDim = Math.min(canvas.width, canvas.height) || 512;
+    const radius = Math.max(8, (minDim * 0.03) / z.scale);
+
+    // Use full-opacity blue so every drawn pixel is clearly captured by mask extraction
+    const brushColor = "rgba(80, 130, 255, 0.85)";
 
     if (isStart) {
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(80, 130, 255, 0.35)";
+      ctx.fillStyle = brushColor;
       ctx.fill();
-      ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = "rgba(80, 130, 255, 0.6)";
-      ctx.lineWidth = 1.5 / z.scale;
-      ctx.stroke();
-      ctx.setLineDash([]);
     } else {
       const last = maskLastPosRef.current;
       if (last) {
         ctx.beginPath();
         ctx.moveTo(last.x, last.y);
         ctx.lineTo(cx, cy);
-        ctx.strokeStyle = "rgba(80, 130, 255, 0.35)";
+        ctx.strokeStyle = brushColor;
         ctx.lineWidth = radius * 2;
         ctx.lineCap = "round";
         ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-        ctx.setLineDash([4, 4]);
-        ctx.strokeStyle = "rgba(80, 130, 255, 0.6)";
-        ctx.lineWidth = 1.5 / z.scale;
-        ctx.stroke();
-        ctx.setLineDash([]);
       }
     }
 
@@ -522,6 +532,8 @@ export default function StudioRight(props: StudioRightProps) {
 
     const w = canvas.width;
     const h = canvas.height;
+    if (w === 0 || h === 0) return null;
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
@@ -529,26 +541,32 @@ export default function StudioRight(props: StudioRightProps) {
     const imageData = ctx.getImageData(0, 0, w, h);
     const pixels = imageData.data;
 
+    // Check if anything was actually drawn
+    let hasDrawn = false;
+    for (let i = 3; i < pixels.length; i += 4) {
+      if (pixels[i] > 5) { hasDrawn = true; break; }
+    }
+    if (!hasDrawn) return null;
+
     // Create a new canvas for the black/white mask
     const maskCanvas = document.createElement("canvas");
     maskCanvas.width = w;
     maskCanvas.height = h;
     const maskCtx = maskCanvas.getContext("2d")!;
 
-    // Fill black
+    // Fill entire canvas with solid black (fully opaque)
     maskCtx.fillStyle = "#000000";
     maskCtx.fillRect(0, 0, w, h);
 
-    // Where we drew (any non-zero alpha), paint white
+    // Where we drew (any non-zero alpha), paint solid white
     const maskData = maskCtx.getImageData(0, 0, w, h);
     const mp = maskData.data;
     for (let i = 0; i < pixels.length; i += 4) {
-      if (pixels[i + 3] > 10) {
-        // Any drawn pixel
-        mp[i] = 255;
-        mp[i + 1] = 255;
-        mp[i + 2] = 255;
-        mp[i + 3] = 255;
+      if (pixels[i + 3] > 5) {
+        mp[i] = 255;     // R
+        mp[i + 1] = 255; // G
+        mp[i + 2] = 255; // B
+        mp[i + 3] = 255; // A — fully opaque
       }
     }
     maskCtx.putImageData(maskData, 0, 0);
@@ -653,7 +671,7 @@ export default function StudioRight(props: StudioRightProps) {
 
     const maskDataUrl = extractMaskDataUrl();
     if (!maskDataUrl) {
-      setFtError("Draw a selection on the image first");
+      setFtError("Paint over the area you want to edit first");
       return;
     }
 
@@ -814,18 +832,27 @@ export default function StudioRight(props: StudioRightProps) {
               </div>
             </button>
 
-            {/* MASK OVERLAY — Canva-style: full opacity image, scroll/pinch to zoom, click to draw */}
+            {/* MASK OVERLAY — scroll to zoom, Space/Alt+drag to pan, click to draw */}
             {ftMode === "mask" && safeStillUrl && (
               <div
-                className="ft-mask-overlay"
+                className={`ft-mask-overlay${maskPanning ? " is-panning" : ""}`}
                 ref={maskOverlayRef}
                 onWheel={(e) => {
                   e.preventDefault();
                   const z = maskZoomRef.current;
-                  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+
+                  // Alt+scroll or Shift+scroll = pan
+                  if (e.altKey || e.shiftKey || (Math.abs(e.deltaX) > Math.abs(e.deltaY) * 0.5 && Math.abs(e.deltaX) > 2)) {
+                    z.x -= e.deltaX || e.deltaY;
+                    z.y -= (e.altKey || e.shiftKey) ? e.deltaY : 0;
+                    applyMaskZoom();
+                    return;
+                  }
+
+                  // Scroll = zoom toward cursor
+                  const delta = e.deltaY > 0 ? 0.92 : 1.08;
                   const newScale = Math.max(0.5, Math.min(5, z.scale * delta));
 
-                  // Zoom toward cursor position
                   const rect = maskOverlayRef.current!.getBoundingClientRect();
                   const mx = e.clientX - rect.left;
                   const my = e.clientY - rect.top;
@@ -834,6 +861,7 @@ export default function StudioRight(props: StudioRightProps) {
                   z.scale = newScale;
                   applyMaskZoom();
                 }}
+                onContextMenu={(e) => e.preventDefault()}
               >
                 <img
                   className="ft-mask-underlay"
@@ -844,12 +872,57 @@ export default function StudioRight(props: StudioRightProps) {
                 <canvas
                   ref={maskCanvasRef}
                   className="ft-mask-canvas"
-                  onPointerDown={handleMaskPointerDown}
-                  onPointerMove={handleMaskPointerMove}
-                  onPointerUp={handleMaskPointerUp}
-                  onPointerCancel={handleMaskPointerUp}
+                  onPointerDown={(e) => {
+                    // Right-click, middle-click, or Alt+click = pan mode
+                    if (e.button === 1 || e.button === 2 || e.altKey) {
+                      e.preventDefault();
+                      setMaskPanning(true);
+                      maskPanStartRef.current = {
+                        x: e.clientX,
+                        y: e.clientY,
+                        zx: maskZoomRef.current.x,
+                        zy: maskZoomRef.current.y,
+                      };
+                      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                      return;
+                    }
+                    handleMaskPointerDown(e);
+                  }}
+                  onPointerMove={(e) => {
+                    // Pan mode
+                    if (maskPanning && maskPanStartRef.current) {
+                      const ps = maskPanStartRef.current;
+                      const z = maskZoomRef.current;
+                      z.x = ps.zx + (e.clientX - ps.x);
+                      z.y = ps.zy + (e.clientY - ps.y);
+                      applyMaskZoom();
+                      return;
+                    }
+                    handleMaskPointerMove(e);
+                  }}
+                  onPointerUp={(e) => {
+                    if (maskPanning) {
+                      setMaskPanning(false);
+                      maskPanStartRef.current = null;
+                      return;
+                    }
+                    handleMaskPointerUp();
+                  }}
+                  onPointerCancel={() => {
+                    if (maskPanning) {
+                      setMaskPanning(false);
+                      maskPanStartRef.current = null;
+                      return;
+                    }
+                    handleMaskPointerUp();
+                  }}
                 />
-                <div ref={maskCursorRef} className="ft-mask-cursor" />
+                <div ref={maskCursorRef} className={`ft-mask-cursor${maskPanning ? " is-panning" : ""}`} />
+
+                {/* Zoom hint */}
+                <div className="ft-mask-hint">
+                  Scroll to zoom · Alt+drag to pan
+                </div>
               </div>
             )}
 
@@ -998,12 +1071,67 @@ export default function StudioRight(props: StudioRightProps) {
             </React.Fragment>
           ))}
 
+          {/* Separator before studio-style actions */}
+          <span
+            className={`ft-btn-separator ${ftBtnVisible ? "is-visible" : ""}`}
+            style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 7 * FT_STAGGER}ms` : "0ms" }}
+            aria-hidden="true"
+          >|</span>
+
+          {/* Set Scene — same as tweak bar */}
+          {!!onSetScene && safeStillUrl && (
+            <button
+              type="button"
+              className={`ft-btn ${ftBtnVisible ? "is-visible" : ""}`}
+              style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 7 * FT_STAGGER}ms` : "0ms" }}
+              onClick={() => {
+                onSetScene({ url: safeStillUrl, clearInspiration: true });
+                exitFingertips();
+              }}
+              disabled={isBusy}
+            >
+              Set Scene
+            </button>
+          )}
+
+          {/* Recreate — reuse the still with same settings */}
+          {!!props.onRecreate && (
+            <button
+              type="button"
+              className={`ft-btn ${ftBtnVisible ? "is-visible" : ""}`}
+              style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 8 * FT_STAGGER}ms` : "0ms" }}
+              onClick={() => {
+                props.onRecreate?.({ kind: "still", stillIndex });
+                exitFingertips();
+              }}
+              disabled={isBusy}
+            >
+              Recreate
+            </button>
+          )}
+
+          {/* Animate — send to motion mode */}
+          {!!props.onRecreate && isImage && (
+            <button
+              type="button"
+              className={`ft-btn ${ftBtnVisible ? "is-visible" : ""}`}
+              style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 9 * FT_STAGGER}ms` : "0ms" }}
+              onClick={() => {
+                props.onRecreate?.({ kind: "motion", stillIndex });
+                exitFingertips();
+              }}
+              disabled={isBusy}
+            >
+              Animate
+            </button>
+          )}
+
           <span style={{ flex: "1 1 auto" }} />
 
           <button
             type="button"
             className={`ft-btn ${ftBtnVisible ? "is-visible" : ""}`}
-            style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 6 * FT_STAGGER}ms` : "0ms" }}
+            style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 10 * FT_STAGGER}ms` : "0ms" }}
             onClick={exitFingertips}
           >
             Back
@@ -1086,12 +1214,40 @@ export default function StudioRight(props: StudioRightProps) {
             Draw on the area to {ftActiveModel === "eraser" ? "erase" : "fill"}
           </span>
 
+          <button
+            type="button"
+            className={`ft-btn ${ftBtnVisible ? "is-visible" : ""}`}
+            style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 2 * FT_STAGGER}ms` : "0ms" }}
+            onClick={() => {
+              // Clear the drawn mask
+              const canvas = maskCanvasRef.current;
+              if (canvas) {
+                const ctx = canvas.getContext("2d");
+                if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+              }
+            }}
+          >
+            Clear
+          </button>
+
+          <button
+            type="button"
+            className={`ft-btn ${ftBtnVisible ? "is-visible" : ""}`}
+            style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 2 * FT_STAGGER}ms` : "0ms" }}
+            onClick={() => {
+              maskZoomRef.current = { scale: 1, x: 0, y: 0 };
+              applyMaskZoom();
+            }}
+          >
+            Reset view
+          </button>
+
           <span style={{ flex: "1 1 auto" }} />
 
           <button
             type="button"
             className={`ft-btn is-underline ${ftBtnVisible ? "is-visible" : ""}`}
-            style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 2 * FT_STAGGER}ms` : "0ms" }}
+            style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 3 * FT_STAGGER}ms` : "0ms" }}
             onClick={handleMaskSubmit}
             disabled={isBusy}
           >
