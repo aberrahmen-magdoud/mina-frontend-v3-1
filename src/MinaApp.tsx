@@ -4491,6 +4491,15 @@ const styleHeroUrls = (stylePresetKeys || [])
     eraser: "erasing selection",
   };
 
+  // Friendly error messages shown when a fingertips generation fails
+  const FT_ERROR_PHRASES = [
+    "ooh that didn't work out — give it another try, sometimes it just needs a second chance",
+    "hmm something went sideways — try again or maybe use a smaller image, that usually helps",
+    "oops i stumbled on that one — mina might be in high demand right now, try again in a moment",
+    "that one slipped through my fingers — try reducing the image size or give it another go",
+    "oh no that didn't land — it happens when things are busy, one more try should do it",
+  ];
+
   // Entertaining phrases shown while each fingertips model is working
   const FT_PHRASES: Record<string, string[]> = {
     remove_bg: [
@@ -4650,8 +4659,10 @@ const styleHeroUrls = (stylePresetKeys || [])
         const json = await res.json();
 
         if (!res.ok) {
-          // Show pink error (same as create/animate/tweak)
-          const errMsg = json?.details?.userMessage || json?.message || json?.error || "Fingertips failed";
+          // Show friendly pink error (same as create/animate/tweak)
+          const serverMsg = json?.details?.userMessage || json?.message || json?.error || "";
+          const friendly = FT_ERROR_PHRASES[Math.floor(Math.random() * FT_ERROR_PHRASES.length)];
+          const errMsg = serverMsg || friendly;
           showMinaError({ message: errMsg });
           return { generation_id: "", status: "error", error: errMsg } as any;
         }
@@ -4694,8 +4705,9 @@ const styleHeroUrls = (stylePresetKeys || [])
 
         return json;
       } catch (err: any) {
-        showMinaError({ message: err?.message || "Fingertips failed" });
-        return { generation_id: "", status: "error", error: err?.message || "Fingertips failed" } as any;
+        const friendly = FT_ERROR_PHRASES[Math.floor(Math.random() * FT_ERROR_PHRASES.length)];
+        showMinaError({ message: friendly });
+        return { generation_id: "", status: "error", error: friendly } as any;
       } finally {
         setFingertipsSending(false);
         setFingertipsActiveModel(null);
