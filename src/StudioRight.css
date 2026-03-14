@@ -380,7 +380,7 @@
 }
 
 /* =========================================================
-   Mask drawing canvas overlay
+   Mask overlay — lasso/path selection tool
    ========================================================= */
 
 .ft-mask-overlay {
@@ -391,7 +391,12 @@
   overflow: hidden;
 }
 
-/* The visible image underneath the mask — full opacity (Canva-style) */
+/* Hide the original image behind when mask overlay is active — prevents double image on zoom */
+.studio-right-surface:has(.ft-mask-overlay) .studio-output-media {
+  opacity: 0;
+}
+
+/* The visible image underneath — NO duplicate background */
 .ft-mask-underlay {
   position: absolute;
   inset: 0;
@@ -403,28 +408,82 @@
   transform-origin: 0 0;
 }
 
-/* The canvas the user draws on — click to draw */
+/* Hidden canvas for mask data extraction only */
 .ft-mask-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+/* SVG overlay for lasso path rendering */
+.ft-mask-svg {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   touch-action: none;
   transform-origin: 0 0;
+  overflow: visible;
 }
 
-/* Custom cursor for mask drawing — double circle, blue */
+/* Lasso path fill — very subtle */
+.lasso-fill {
+  fill: rgba(80, 130, 255, 0.1);
+  stroke: none;
+}
+
+/* Lasso path stroke — marching ants dashed line */
+.lasso-stroke {
+  fill: none;
+  stroke: rgba(80, 130, 255, 0.9);
+  stroke-width: 2;
+  stroke-dasharray: 8 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Drawing-in-progress stroke — thinner, more transparent */
+.lasso-stroke--drawing {
+  stroke: rgba(80, 130, 255, 0.6);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+
+/* Custom cursor — crosshair style */
 .ft-mask-cursor {
   position: fixed;
   pointer-events: none;
   z-index: 9999;
-  border-radius: 50%;
-  border: 2px solid rgba(80, 130, 255, 0.7);
-  box-shadow: 0 0 0 4px rgba(80, 130, 255, 0.25);
+  width: 24px;
+  height: 24px;
   transform: translate(-50%, -50%);
-  width: 32px;
-  height: 32px;
-  transition: width 80ms ease, height 80ms ease;
+  /* Crosshair made with borders */
+  border-radius: 50%;
+  border: 1.5px solid rgba(80, 130, 255, 0.8);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+  transition: opacity 250ms ease, transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Cursor pop-in animation when entering the zone */
+.ft-mask-cursor.is-in {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  animation: ft-cursor-pop 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Cursor fade-out when leaving */
+.ft-mask-cursor.is-out {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.6);
+}
+
+@keyframes ft-cursor-pop {
+  0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 }
 
 /* Hide default cursor when mask is active (draw mode) */
@@ -433,7 +492,7 @@
   cursor: none !important;
 }
 
-/* Show grab cursor when panning */
+/* Show grab cursor when panning (spacebar held) */
 .ft-mask-overlay.is-panning,
 .ft-mask-overlay.is-panning * {
   cursor: grabbing !important;
@@ -441,10 +500,36 @@
 
 /* Hide custom cursor when panning */
 .ft-mask-cursor.is-panning {
-  display: none;
+  opacity: 0 !important;
 }
 
-/* Zoom/pan hint — bottom-left, fades out after a few seconds */
+/* =========================================================
+   Erase animation — diagonal gradient sweep
+   ========================================================= */
+.ft-erase-animation {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.7) 40%,
+    rgba(255, 255, 255, 0.9) 50%,
+    rgba(255, 255, 255, 0.7) 60%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 300% 300%;
+  animation: ft-erase-sweep 700ms ease-in-out forwards;
+}
+
+@keyframes ft-erase-sweep {
+  0% { background-position: 150% 150%; opacity: 1; }
+  80% { background-position: -50% -50%; opacity: 1; }
+  100% { background-position: -50% -50%; opacity: 0; }
+}
+
+/* Zoom/pan hint */
 .ft-mask-hint {
   position: absolute;
   bottom: 12px;

@@ -282,6 +282,10 @@ export default function StudioRight(props: StudioRightProps) {
     setFtError(null);
     setFtBtnVisible(false);
     setFtProcessing(false);
+    setEraseAnimating(false);
+    setCursorInZone(false);
+    lassoPointsRef.current = [];
+    closedPathsRef.current = [];
   }, []);
 
   // Stagger buttons in on toolbar show
@@ -407,17 +411,145 @@ export default function StudioRight(props: StudioRightProps) {
   };
 
   // ============================================================================
-  // MASK DRAWING (for eraser + flux_fill)
+  // MASK DRAWING — Lasso/path selection tool
   // ============================================================================
   // Store real image dimensions so the mask matches the source image pixel-for-pixel
   const maskImgDimsRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+  // Lasso path points (in image-space coordinates)
+  const lassoPointsRef = useRef<{ x: number; y: number }[]>([]);
+  // Closed paths (completed lasso selections)
+  const closedPathsRef = useRef<{ x: number; y: number }[][]>([]);
+  // SVG overlay ref for rendering the lasso path
+  const lassoSvgRef = useRef<SVGSVGElement | null>(null);
+  // Marching ants animation ref
+  const marchingAntsRef = useRef<number | null>(null);
+  // Erase animation state
+  const [eraseAnimating, setEraseAnimating] = useState(false);
+  // Cursor visibility state
+  const [cursorInZone, setCursorInZone] = useState(false);
+
+  // Smooth a set of raw points into a nice curved/angular path using Catmull-Rom
+  const smoothPoints = useCallback((pts: { x: number; y: number }[], tension = 0.4): { x: number; y: number }[] => {
+    if (pts.length < 3) return pts;
+    const result: { x: number; y: number }[] = [];
+    for (let i = 0; i < pts.length; i++) {
+      const p0 = pts[(i - 1 + pts.length) % pts.length];
+      const p1 = pts[i];
+      const p2 = pts[(i + 1) % pts.length];
+      const p3 = pts[(i + 2) % pts.length];
+      const segments = 6;
+      for (let t = 0; t < segments; t++) {
+        const s = t / segments;
+        const s2 = s * s;
+        const s3 = s2 * s;
+        const x = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * s * tension +
+          (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * s2 * tension +
+          (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * s3 * tension);
+        const y = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * s * tension +
+          (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * s2 * tension +
+          (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * s3 * tension);
+        result.push({ x, y });
+      }
+    }
+    return result;
+  }, []);
+
+  // Simplify points by removing those too close together (Douglas-Peucker lite)
+  const simplifyPoints = useCallback((pts: { x: number; y: number }[], minDist = 4): { x: number; y: number }[] => {
+    if (pts.length < 2) return pts;
+    const result = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      const last = result[result.length - 1];
+      const dx = pts[i].x - last.x;
+      const dy = pts[i].y - last.y;
+      if (dx * dx + dy * dy >= minDist * minDist) result.push(pts[i]);
+    }
+    return result;
+  }, []);
+
+  // Convert screen coordinates to image-space coordinates
+  const screenToImageCoords = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
+    const overlay = maskOverlayRef.current;
+    if (!overlay) return null;
+    const rect = overlay.getBoundingClientRect();
+    const z = maskZoomRef.current;
+    const x = (clientX - rect.left - z.x) / z.scale;
+    const y = (clientY - rect.top - z.y) / z.scale;
+    return { x, y };
+  }, []);
+
+  // Build SVG path data from points (in % of overlay)
+  const buildSvgPath = useCallback((pts: { x: number; y: number }[], closed: boolean): string => {
+    if (pts.length < 2) return "";
+    const smoothed = smoothPoints(simplifyPoints(pts, 3));
+    if (smoothed.length < 2) return "";
+    let d = `M ${smoothed[0].x} ${smoothed[0].y}`;
+    for (let i = 1; i < smoothed.length; i++) {
+      d += ` L ${smoothed[i].x} ${smoothed[i].y}`;
+    }
+    if (closed) d += " Z";
+    return d;
+  }, [smoothPoints, simplifyPoints]);
+
+  // Render lasso paths into the SVG overlay
+  const renderLassoPaths = useCallback(() => {
+    const svg = lassoSvgRef.current;
+    if (!svg) return;
+
+    // Clear existing paths (keep defs)
+    const existing = svg.querySelectorAll(".lasso-path-group");
+    existing.forEach((el) => el.remove());
+
+    const overlay = maskOverlayRef.current;
+    if (!overlay) return;
+
+    const allPaths = [...closedPathsRef.current];
+    const currentPoints = lassoPointsRef.current;
+
+    // Render closed paths
+    allPaths.forEach((pts, idx) => {
+      const d = buildSvgPath(pts, true);
+      if (!d) return;
+      const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      g.classList.add("lasso-path-group");
+
+      // Fill with low opacity
+      const fill = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      fill.setAttribute("d", d);
+      fill.setAttribute("class", "lasso-fill");
+      g.appendChild(fill);
+
+      // Dashed stroke (marching ants)
+      const stroke = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      stroke.setAttribute("d", d);
+      stroke.setAttribute("class", "lasso-stroke");
+      g.appendChild(stroke);
+
+      svg.appendChild(g);
+    });
+
+    // Render current drawing path (not yet closed)
+    if (currentPoints.length > 1) {
+      const d = buildSvgPath(currentPoints, false);
+      if (d) {
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.classList.add("lasso-path-group");
+
+        const stroke = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        stroke.setAttribute("d", d);
+        stroke.setAttribute("class", "lasso-stroke lasso-stroke--drawing");
+        g.appendChild(stroke);
+
+        svg.appendChild(g);
+      }
+    }
+  }, [buildSvgPath]);
 
   const initMaskCanvas = useCallback(() => {
     const canvas = maskCanvasRef.current;
     if (!canvas) return;
 
-    // Load real image dimensions — mask MUST match the source image's pixel size
-    // for Replicate eraser/flux_fill to work correctly
+    // Load real image dimensions
     if (safeStillUrl) {
       const img = new Image();
       img.onload = () => {
@@ -428,7 +560,6 @@ export default function StudioRight(props: StudioRightProps) {
         if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
       };
       img.onerror = () => {
-        // Fallback to container size
         const parent = canvas.parentElement;
         if (!parent) return;
         canvas.width = parent.clientWidth;
@@ -438,8 +569,10 @@ export default function StudioRight(props: StudioRightProps) {
       img.src = safeStillUrl;
     }
 
-    // Reset zoom
+    // Reset zoom and lasso state
     maskZoomRef.current = { scale: 1, x: 0, y: 0 };
+    lassoPointsRef.current = [];
+    closedPathsRef.current = [];
     applyMaskZoom();
   }, [safeStillUrl]);
 
@@ -448,66 +581,69 @@ export default function StudioRight(props: StudioRightProps) {
     const transform = `translate(${x}px, ${y}px) scale(${scale})`;
     const underlay = maskOverlayRef.current?.querySelector(".ft-mask-underlay") as HTMLElement | null;
     const canvas = maskCanvasRef.current;
+    const svg = lassoSvgRef.current;
     if (underlay) underlay.style.transform = transform;
     if (canvas) canvas.style.transform = transform;
+    if (svg) svg.style.transform = transform;
   }, []);
 
   useEffect(() => {
     if (ftMode === "mask") {
-      // Small delay for DOM to render
       const t = setTimeout(initMaskCanvas, 50);
       return () => clearTimeout(t);
     }
   }, [ftMode, initMaskCanvas]);
 
-  const drawOnMask = useCallback((x: number, y: number, isStart: boolean) => {
-    const canvas = maskCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Account for zoom transform when computing canvas coordinates
-    const overlay = maskOverlayRef.current;
-    if (!overlay) return;
-    const rect = overlay.getBoundingClientRect();
-    const z = maskZoomRef.current;
-    // Convert screen coords to unscaled canvas coords (maps CSS pixels → image pixels)
-    const cx = ((x - rect.left - z.x) / z.scale / overlay.clientWidth) * canvas.width;
-    const cy = ((y - rect.top - z.y) / z.scale / overlay.clientHeight) * canvas.height;
-
-    // Brush radius proportional to image size (≈3% of shortest dimension)
-    const minDim = Math.min(canvas.width, canvas.height) || 512;
-    const radius = Math.max(8, (minDim * 0.03) / z.scale);
-
-    // Use full-opacity blue so every drawn pixel is clearly captured by mask extraction
-    const brushColor = "rgba(80, 130, 255, 0.85)";
-
-    if (isStart) {
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      ctx.fillStyle = brushColor;
-      ctx.fill();
-    } else {
-      const last = maskLastPosRef.current;
-      if (last) {
-        ctx.beginPath();
-        ctx.moveTo(last.x, last.y);
-        ctx.lineTo(cx, cy);
-        ctx.strokeStyle = brushColor;
-        ctx.lineWidth = radius * 2;
-        ctx.lineCap = "round";
-        ctx.stroke();
-      }
+  // Start marching ants animation
+  useEffect(() => {
+    if (ftMode !== "mask") {
+      if (marchingAntsRef.current) cancelAnimationFrame(marchingAntsRef.current);
+      return;
     }
+    let offset = 0;
+    const animate = () => {
+      offset = (offset + 0.3) % 200;
+      const strokes = document.querySelectorAll(".lasso-stroke");
+      strokes.forEach((s) => (s as SVGPathElement).style.strokeDashoffset = `${offset}`);
+      marchingAntsRef.current = requestAnimationFrame(animate);
+    };
+    marchingAntsRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (marchingAntsRef.current) cancelAnimationFrame(marchingAntsRef.current);
+    };
+  }, [ftMode]);
 
-    maskLastPosRef.current = { x: cx, y: cy };
-  }, []);
+  // Spacebar = pan mode
+  useEffect(() => {
+    if (ftMode !== "mask") return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !e.repeat) {
+        e.preventDefault();
+        setMaskPanning(true);
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        setMaskPanning(false);
+        maskPanStartRef.current = null;
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [ftMode]);
 
   const handleMaskPointerDown = useCallback((e: React.PointerEvent) => {
+    const pt = screenToImageCoords(e.clientX, e.clientY);
+    if (!pt) return;
     setMaskDrawing(true);
-    drawOnMask(e.clientX, e.clientY, true);
+    lassoPointsRef.current = [pt];
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-  }, [drawOnMask]);
+  }, [screenToImageCoords]);
 
   const handleMaskPointerMove = useCallback((e: React.PointerEvent) => {
     // Update custom cursor position
@@ -517,13 +653,56 @@ export default function StudioRight(props: StudioRightProps) {
     }
 
     if (!maskDrawing) return;
-    drawOnMask(e.clientX, e.clientY, false);
-  }, [maskDrawing, drawOnMask]);
+    const pt = screenToImageCoords(e.clientX, e.clientY);
+    if (!pt) return;
+    lassoPointsRef.current.push(pt);
+    renderLassoPaths();
+  }, [maskDrawing, screenToImageCoords, renderLassoPaths]);
 
   const handleMaskPointerUp = useCallback(() => {
+    if (!maskDrawing) return;
     setMaskDrawing(false);
-    maskLastPosRef.current = null;
-  }, []);
+
+    const pts = lassoPointsRef.current;
+    if (pts.length >= 3) {
+      // Close the path — add it to completed paths
+      closedPathsRef.current.push([...pts]);
+
+      // Render the closed path onto the hidden mask canvas with feathered edges
+      const canvas = maskCanvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          const overlay = maskOverlayRef.current;
+          if (overlay) {
+            const smoothed = smoothPoints(simplifyPoints(pts, 3));
+            // Convert overlay coords to canvas (image) coords
+            const scaleX = canvas.width / overlay.clientWidth;
+            const scaleY = canvas.height / overlay.clientHeight;
+
+            ctx.save();
+            ctx.beginPath();
+            if (smoothed.length > 0) {
+              ctx.moveTo(smoothed[0].x * scaleX, smoothed[0].y * scaleY);
+              for (let i = 1; i < smoothed.length; i++) {
+                ctx.lineTo(smoothed[i].x * scaleX, smoothed[i].y * scaleY);
+              }
+            }
+            ctx.closePath();
+
+            // Feathered fill: use a slight blur for soft edges
+            ctx.filter = "blur(4px)";
+            ctx.fillStyle = "rgba(80, 130, 255, 0.85)";
+            ctx.fill();
+            ctx.filter = "none";
+            ctx.restore();
+          }
+        }
+      }
+    }
+    lassoPointsRef.current = [];
+    renderLassoPaths();
+  }, [maskDrawing, smoothPoints, simplifyPoints, renderLassoPaths]);
 
   // Extract mask as a black image with white selection for the API
   const extractMaskDataUrl = useCallback((): string | null => {
@@ -671,9 +850,13 @@ export default function StudioRight(props: StudioRightProps) {
 
     const maskDataUrl = extractMaskDataUrl();
     if (!maskDataUrl) {
-      setFtError("Paint over the area you want to edit first");
+      setFtError("Draw a selection on the area first");
       return;
     }
+
+    // Play diagonal gradient erase animation
+    setEraseAnimating(true);
+    await new Promise((r) => setTimeout(r, 700));
 
     setFtProcessing(true);
     setFtError(null);
@@ -684,7 +867,6 @@ export default function StudioRight(props: StudioRightProps) {
       if (ftActiveModel === "eraser") {
         inputs.mask_image = maskDataUrl;
       } else if (ftActiveModel === "flux_fill") {
-        // bria/genfill inputs — GPT generates negative_prompt on the backend
         inputs.mask = maskDataUrl;
         inputs.prompt = ftPrompt || "";
         inputs.mask_type = "manual";
@@ -702,6 +884,7 @@ export default function StudioRight(props: StudioRightProps) {
       setFtError(err?.message || "Generation failed");
     } finally {
       setFtProcessing(false);
+      setEraseAnimating(false);
     }
   }, [onFingertipsGenerate, safeStillUrl, ftActiveModel, ftPrompt, extractMaskDataUrl, exitFingertips]);
 
@@ -836,19 +1019,21 @@ export default function StudioRight(props: StudioRightProps) {
               </div>
             </button>
 
-            {/* MASK OVERLAY — scroll to zoom, Space/Alt+drag to pan, click to draw */}
+            {/* MASK OVERLAY — scroll to zoom, Space+drag to pan, click to draw lasso */}
             {ftMode === "mask" && safeStillUrl && (
               <div
-                className={`ft-mask-overlay${maskPanning ? " is-panning" : ""}`}
+                className={`ft-mask-overlay${maskPanning ? " is-panning" : ""}${cursorInZone ? " cursor-in" : " cursor-out"}`}
                 ref={maskOverlayRef}
+                onPointerEnter={() => setCursorInZone(true)}
+                onPointerLeave={() => setCursorInZone(false)}
                 onWheel={(e) => {
                   e.preventDefault();
                   const z = maskZoomRef.current;
 
-                  // Alt+scroll or Shift+scroll = pan
-                  if (e.altKey || e.shiftKey || (Math.abs(e.deltaX) > Math.abs(e.deltaY) * 0.5 && Math.abs(e.deltaX) > 2)) {
+                  // Shift+scroll = pan
+                  if (e.shiftKey || (Math.abs(e.deltaX) > Math.abs(e.deltaY) * 0.5 && Math.abs(e.deltaX) > 2)) {
                     z.x -= e.deltaX || e.deltaY;
-                    z.y -= (e.altKey || e.shiftKey) ? e.deltaY : 0;
+                    z.y -= e.shiftKey ? e.deltaY : 0;
                     applyMaskZoom();
                     return;
                   }
@@ -865,7 +1050,12 @@ export default function StudioRight(props: StudioRightProps) {
                   z.scale = newScale;
                   applyMaskZoom();
                 }}
-                onContextMenu={(e) => e.preventDefault()}
+                onContextMenu={(e) => {
+                  // Right-click = reset view
+                  e.preventDefault();
+                  maskZoomRef.current = { scale: 1, x: 0, y: 0 };
+                  applyMaskZoom();
+                }}
               >
                 <img
                   className="ft-mask-underlay"
@@ -873,14 +1063,20 @@ export default function StudioRight(props: StudioRightProps) {
                   alt=""
                   draggable={false}
                 />
+                {/* Hidden canvas for mask data extraction */}
                 <canvas
                   ref={maskCanvasRef}
                   className="ft-mask-canvas"
+                  style={{ opacity: 0, pointerEvents: "none" }}
+                />
+                {/* SVG overlay for lasso path rendering */}
+                <svg
+                  ref={lassoSvgRef}
+                  className="ft-mask-svg"
                   onPointerDown={(e) => {
-                    // Right-click, middle-click, or Alt+click = pan mode
-                    if (e.button === 1 || e.button === 2 || e.altKey) {
+                    // Spacebar held = pan mode (checked via keydown listener)
+                    if (maskPanning) {
                       e.preventDefault();
-                      setMaskPanning(true);
                       maskPanStartRef.current = {
                         x: e.clientX,
                         y: e.clientY,
@@ -893,7 +1089,6 @@ export default function StudioRight(props: StudioRightProps) {
                     handleMaskPointerDown(e);
                   }}
                   onPointerMove={(e) => {
-                    // Pan mode
                     if (maskPanning && maskPanStartRef.current) {
                       const ps = maskPanStartRef.current;
                       const z = maskZoomRef.current;
@@ -906,7 +1101,6 @@ export default function StudioRight(props: StudioRightProps) {
                   }}
                   onPointerUp={(e) => {
                     if (maskPanning) {
-                      setMaskPanning(false);
                       maskPanStartRef.current = null;
                       return;
                     }
@@ -914,18 +1108,23 @@ export default function StudioRight(props: StudioRightProps) {
                   }}
                   onPointerCancel={() => {
                     if (maskPanning) {
-                      setMaskPanning(false);
                       maskPanStartRef.current = null;
                       return;
                     }
                     handleMaskPointerUp();
                   }}
                 />
-                <div ref={maskCursorRef} className={`ft-mask-cursor${maskPanning ? " is-panning" : ""}`} />
 
-                {/* Zoom hint */}
+                {/* Erase animation overlay */}
+                {eraseAnimating && <div className="ft-erase-animation" />}
+
+                <div
+                  ref={maskCursorRef}
+                  className={`ft-mask-cursor${maskPanning ? " is-panning" : ""}${cursorInZone ? " is-in" : " is-out"}`}
+                />
+
                 <div className="ft-mask-hint">
-                  Scroll to zoom · Alt+drag to pan
+                  Scroll to zoom · Space+drag to pan · Right-click to reset
                 </div>
               </div>
             )}
@@ -1217,7 +1416,7 @@ export default function StudioRight(props: StudioRightProps) {
               opacity: ftBtnVisible ? 0.5 : 0,
             }}
           >
-            Draw on the area to {ftActiveModel === "eraser" ? "erase" : "fill"}
+            {ftActiveModel === "eraser" ? "Draw around the area to erase" : "Draw around the area to fill"}
           </span>
 
           <button
@@ -1225,7 +1424,10 @@ export default function StudioRight(props: StudioRightProps) {
             className={`ft-btn ${ftBtnVisible ? "is-visible" : ""}`}
             style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 2 * FT_STAGGER}ms` : "0ms" }}
             onClick={() => {
-              // Clear the drawn mask
+              // Clear all lasso paths + canvas
+              closedPathsRef.current = [];
+              lassoPointsRef.current = [];
+              renderLassoPaths();
               const canvas = maskCanvasRef.current;
               if (canvas) {
                 const ctx = canvas.getContext("2d");
@@ -1236,28 +1438,16 @@ export default function StudioRight(props: StudioRightProps) {
             Clear
           </button>
 
-          <button
-            type="button"
-            className={`ft-btn ${ftBtnVisible ? "is-visible" : ""}`}
-            style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 2 * FT_STAGGER}ms` : "0ms" }}
-            onClick={() => {
-              maskZoomRef.current = { scale: 1, x: 0, y: 0 };
-              applyMaskZoom();
-            }}
-          >
-            Reset view
-          </button>
-
           <span style={{ flex: "1 1 auto" }} />
 
           <button
             type="button"
-            className={`ft-btn is-underline ${ftBtnVisible ? "is-visible" : ""}`}
+            className={`ft-btn ${ftBtnVisible ? "is-visible" : ""}`}
             style={{ transitionDelay: ftBtnVisible ? `${FT_INITIAL_DELAY + 3 * FT_STAGGER}ms` : "0ms" }}
             onClick={handleMaskSubmit}
             disabled={isBusy}
           >
-            {ftProcessing ? "Processing…" : "Apply"}
+            {ftProcessing ? "Processing…" : ftActiveModel === "eraser" ? "Erase" : "Apply"}
           </button>
 
           {ftError && <div className="ft-error">{ftError}</div>}
