@@ -2413,32 +2413,30 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Build a Shopify cart URL with quantity + passId cart attribute
-  const buildMatchaCheckoutUrl = useCallback((base: string, qty: number) => {
-    const q = Math.max(1, Math.min(100, Math.floor(Number(qty || 1))));
+  // Create checkout via backend (passId is baked into the Shopify draft order server-side)
+  const onConfirmCheckout = useCallback(async (qty: number) => {
     try {
-      const u = new URL(String(base || ""));
-      const m = u.pathname.match(/\/cart\/(\d+)(?::(\d+))?/);
-      if (m?.[1]) u.pathname = `/cart/${m[1]}:${q}`;
-      else if (u.pathname.includes("/cart/add")) u.searchParams.set("quantity", String(q));
-      else u.searchParams.set("quantity", String(q));
-      // Embed passId so the Shopify webhook can credit the right account
-      if (currentPassId) u.searchParams.set("attributes[mina_pass_id]", currentPassId);
-      return u.toString();
-    } catch {
-      return String(base || "");
+      showMinaInfo("Preparing your checkout…");
+      const res = await apiFetch("/api/checkout/create", {
+        method: "POST",
+        body: JSON.stringify({ qty }),
+      });
+      const json = await res.json();
+      if (!json?.ok || !json?.checkoutUrl) {
+        throw new Error(json?.error || "Failed to create checkout");
+      }
+      window.open(json.checkoutUrl, "_blank");
+      showMinaInfo("Complete your purchase on Shopify, then come back here — your matchas will appear automatically.");
+    } catch (e: any) {
+      console.error("[checkout] failed", e);
+      // Fallback: open cart URL directly (without passId tracking)
+      const clamp = (n: number) => Math.max(1, Math.min(100, Math.floor(Number(n || 1))));
+      const is5000 = qty === 100;
+      const url = is5000 ? MATCHA_5000_URL : `${MATCHA_URL.replace(/:1$/, "")}:${clamp(qty)}`;
+      window.open(url, "_blank", "noopener");
+      showMinaInfo("Complete your purchase on Shopify, then come back here — your matchas will appear automatically.");
     }
-  }, [currentPassId]);
-
-  // Open Shopify checkout with passId baked in, then show reminder
-  const onConfirmCheckout = useCallback((qty: number) => {
-    const is5000 = qty === 100 && MATCHA_5000_URL;
-    const url = is5000
-      ? buildMatchaCheckoutUrl(MATCHA_5000_URL, 1)
-      : buildMatchaCheckoutUrl(MATCHA_URL, qty);
-    window.open(url, "_blank", "noopener");
-    showMinaInfo("Complete your purchase on Shopify, then come back here — your matchas will appear automatically.");
-  }, [buildMatchaCheckoutUrl, showMinaInfo]);
+  }, [apiFetch, showMinaInfo]);
 
   // Admin numbering helpers
   const getEditorialNumber = (id: string, index: number) => {
