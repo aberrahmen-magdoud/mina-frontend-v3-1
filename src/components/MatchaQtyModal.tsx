@@ -49,13 +49,13 @@ const MatchaQtyModal: React.FC<Props> = ({
   rulesLine = `1 Niche Image or 1s Video = 2 Matchas`,
 
   baseCredits = 50,
-  basePrice = 15,
-  currencySymbol = "£",
+  basePrice = 16.50,
+  currencySymbol = "$",
 
   defaultUnitsOnOpen = 2,
 
   transparencyTitle = "Price Transparency",
-  transparencyLine = "Cost £8 • New features £3 • Marketing & Branding £3 • Profit £1",
+  transparencyLine = "Cost $9 • New features $3.50 • Marketing & Branding $3 • Profit $1",
 }) => {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
@@ -67,7 +67,7 @@ const MatchaQtyModal: React.FC<Props> = ({
         { units: 1 },  // 50
         { units: 2 },  // 100
         { units: 10 }, // 500
-        { units: 100, priceOverride: 1250 }, // 5000
+        { units: 100, priceOverride: 1375 }, // 5000 (discounted)
       ],
       []
     );
