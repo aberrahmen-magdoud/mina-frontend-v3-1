@@ -623,6 +623,15 @@ const MinaApp: React.FC<MinaAppProps> = () => {
     }
   }, [stillLane]);
 
+  // =====================================================================
+  // Video lane ("short" vs "story")
+  // =====================================================================
+  const [videoLane, setVideoLane] = useState<"short" | "story">("short");
+
+  const handleToggleVideoLane = useCallback(() => {
+    setVideoLane((prev) => (prev === "short" ? "story" : "short"));
+  }, []);
+
   const effectiveStillResolution = STILL_RESOLUTION;
 
   const [, setPlatform] = useState("tiktok");
@@ -4033,6 +4042,8 @@ const styleHeroUrls = (stylePresetKeys || [])
           aspect_ratio: animateEffectiveAspectRatio,
           duration: motionDurationSec,
 
+          video_lane: videoLane,
+
           // HARD AUDIO FLAGS
           generate_audio: wantAudio,
           generateAudio: wantAudio,
@@ -4107,30 +4118,27 @@ const styleHeroUrls = (stylePresetKeys || [])
           };
         }
 
-        // Frame2 AUDIO => veed/fabric-1.0
+        // Frame2 AUDIO => routed to O3 by backend
         if (hasFrame2Audio && frame2Http) {
+          const AUDIO_MAX_SEC = 60;
           return {
             ...baseBody,
             mode: "video",
             assets: {
               ...(baseBody as any).assets,
-              image: startFrameForModel,
               audio: frame2Http,
+              audio_url: frame2Http,
+              frame2_audio_url: frame2Http,
             },
             inputs: {
               ...(baseBody as any).inputs,
 
-              provider_model: "veed/fabric-1.0",
-              model: "veed/fabric-1.0",
-              replicate_model: "veed/fabric-1.0",
-
-              image: startFrameForModel,
+              frame2_kind: "audio",
+              frame2_url: frame2Http,
+              frame2_duration_sec: audioSec || null,
               audio: frame2Http,
-              generate_audio: false,
-
-              duration: Math.min(FABRIC_AUDIO_MAX_SEC, Math.max(1, Math.round(audioSec || 5))),
-              resolution: "720p",
-              prompt: usedMotionPrompt || "",
+              generate_audio: true,
+              duration: Math.min(AUDIO_MAX_SEC, Math.max(3, audioSec || motionDurationSec)),
             },
           };
         }
@@ -6238,6 +6246,8 @@ const headerOverlayClass =
               stillLane={stillLane}
               onToggleStillLane={toggleStillLane}
               stillLaneDisabled={minaBusy}
+              videoLane={videoLane}
+              onToggleVideoLane={handleToggleVideoLane}
               onGoProfile={() => goTab("profile")}
               feedbackSending={feedbackSending}
             />
