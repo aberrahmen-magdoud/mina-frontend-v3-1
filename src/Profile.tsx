@@ -1477,7 +1477,7 @@ export default function Profile({
 
         if (removedIds[id]) return null;
 
-        const createdAt = safeString(pick(g, ["created_at", "mg_created_at", "ts", "timestamp"]), "").trim();
+        const createdAt = safeString(pick(g, ["createdAt", "created_at", "mg_created_at", "ts", "timestamp"]), "").trim();
 
         const outUrl = pick(g, ["mg_output_url", "outputUrl", "output_url"], "").trim();
         const imgUrl = pick(g, ["mg_image_url", "imageUrl", "image_url"], "").trim();
