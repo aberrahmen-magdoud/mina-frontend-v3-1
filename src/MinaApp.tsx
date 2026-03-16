@@ -1145,10 +1145,10 @@ const frame2Kind = frame2Item?.mediaType || inferMediaTypeFromUrl(frame2Url) || 
   // Matcha rules
   // - Still niche:    2
   // - Still main:     1
-  // - Motion(video):  1 second = 2 matchas
+  // - Motion(video):  1 second = 1 matcha
   // ==========================
   const imageCost = stillLane === "niche" ? 2 : 1;
-  const matchasPerSec = 2;
+  const matchasPerSec = 1;
 
   const frame2Duration = Number(frame2Item?.durationSec || 0);
 

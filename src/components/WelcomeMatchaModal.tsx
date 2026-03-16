@@ -64,7 +64,7 @@ const WelcomeMatchaModal: React.FC<Props> = ({ open, onClose }) => {
           <div className="mina-matcha-rules">
             Mina uses matchas to create your images and videos.
             
-            1 Main Image = 1 Matcha · 1 Niche Image or 1s Video = 2 Matchas.
+            1 Main Image or 1s Video = 1 Matcha.
             
             We're giving you 5 free matchas for your first month.
           </div>
