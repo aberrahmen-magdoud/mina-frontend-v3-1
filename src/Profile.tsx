@@ -884,9 +884,6 @@ export default function Profile({
 
   // --- Desktop drag-select ---
   const onGridMouseDown = useCallback((e: React.MouseEvent) => {
-    // Only start drag on the grid background / card media, not on buttons
-    const tag = (e.target as HTMLElement).tagName.toLowerCase();
-    if (tag === "button" || tag === "input" || tag === "a") return;
     // Only left-click
     if (e.button !== 0) return;
     // Only if already in select mode (at least one card confirmed)
