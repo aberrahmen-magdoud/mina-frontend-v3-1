@@ -954,8 +954,8 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
     forcedAudioSyncRef.current = true;
   }, [motionAudioLocked, onToggleMotionAudio]);
 
-  // ✅ Motion cost: 1 second = 2 matchas
-  const matchasPerSec = 2;
+  // ✅ Motion cost: 1 second = 1 matcha
+  const matchasPerSec = 1;
   const MOTION_COST_BASE = motionDurationSec * matchasPerSec;
 
   const frame2DurationSec = Number((frame2Item as any)?.durationSec || 0);

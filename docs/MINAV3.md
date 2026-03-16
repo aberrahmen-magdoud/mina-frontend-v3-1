@@ -691,7 +691,7 @@ Everything is **personalized** (likes/history/preferences) and **fully auditable
 * Mina uses **matcha** as credits.
 * **1 still generation = -1 matcha**
 * **1 still tweak regeneration = -1 matcha**
-* **1 video generation = -5 matcha**
+* **1 video generation = -1 matcha per second** (e.g. 5s = -5 matcha)
 
 ### 2.2 MMA (Mina Mind API)
 
