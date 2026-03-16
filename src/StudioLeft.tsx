@@ -177,6 +177,9 @@ type StudioLeftProps = {
   onToggleStillLane: () => void;
   stillLaneDisabled?: boolean;
 
+  videoLane: "short" | "story";
+  onToggleVideoLane: () => void;
+
   timingVars?: React.CSSProperties;
 
   onGoProfile: () => void;
@@ -461,6 +464,9 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
     stillLane,
     onToggleStillLane,
     stillLaneDisabled,
+
+    videoLane,
+    onToggleVideoLane,
 
     timingVars,
 
@@ -1702,6 +1708,22 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                     </span>
                     <span className="studio-pill-main">{motionAspectLabel}</span>
                     <span className="studio-pill-sub">{motionAspectSubtitle}</span>
+                  </button>
+
+                  {/* Short / Story toggle */}
+                  <button
+                    type="button"
+                    className={classNames(
+                      "studio-pill",
+                      "pill-infinite-toggle",
+                      videoLane === "story" ? "is-niche" : "is-main"
+                    )}
+                    style={pillBaseStyle(5)}
+                    onClick={onToggleVideoLane}
+                    aria-label="Toggle video lane"
+                    title={videoLane === "story" ? "Story mode – always uses O3" : "Short mode – V3 for single image, O3 for multi"}
+                  >
+                    <span className="studio-pill-main">{videoLane === "story" ? "Story" : "Short"}</span>
                   </button>
 
                   {/* ──────────────────────────────────────────────────────
