@@ -52,6 +52,8 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
     motionAudioLocked, effectiveMotionAudioEnabled, motionAudioLockHint,
     animateMode, isMotion, hasFrame2Video, hasFrame2Audio, hasRefMedia, refSeconds,
     allStyleCards, styleThumb, styleLabel, motionStyleThumb, motionStyleLabel,
+    motionStyleKeys, pickMotionStyle, motionBlockReason,
+    playHoverAudio, stopHoverAudio, hasMotionImage,
     effectivePanel, pillBaseStyle, getDisplayUrl,
     productThumb, logoThumb, inspirationThumb,
     createState, createLabel, createDisabled, handleCreateClick, hasMotionHandler,
