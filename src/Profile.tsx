@@ -1,13 +1,6 @@
 // =============================================================
 // FILE: src/Profile.tsx
 // Mina — Profile (Render-only, data comes from MinaApp)
-// - show real user prompt (user-typed brief, not system prompt)
-// - likes + ratio filters actually filter (not just dim)
-// - delete confirm + fade out
-// - better download
-// - Re-create + Animate (if still image)
-// - Video: autoplay muted in grid, UNMUTE on hover (desktop)
-// - Lightbox: stop click-bubbling so controls work on mobile
 // =============================================================
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -15,748 +8,27 @@ import "./Profile.css";
 import TopLoadingBar from "./components/TopLoadingBar";
 import MatchaQtyModal from "./components/MatchaQtyModal";
 import { downloadMinaAsset } from "./lib/minaDownload";
-
-type Row = Record<string, any>;
-
-function safeString(v: any, fallback = ""): string {
-  if (v === null || v === undefined) return fallback;
-  const s = String(v);
-  return s === "undefined" || s === "null" ? fallback : s;
-}
-
-function asStrOrNull(v: any): string | null {
-  if (v === null || v === undefined) return null;
-  const s = String(v).trim();
-  return s ? s : null;
-}
-
-function pick(row: any, keys: string[], fallback = ""): string {
-  for (const k of keys) {
-    const v = row?.[k];
-    if (v !== undefined && v !== null && String(v).trim() !== "") return String(v);
-  }
-  return fallback;
-}
-
-function cfThumb(url: string, width = 1200, quality = 75) {
-  if (!url) return url;
-  if (!url.includes("assets.faltastudio.com/")) return url;
-  if (url.includes("/cdn-cgi/image/")) return url; // already transformed
-  return `https://assets.faltastudio.com/cdn-cgi/image/width=${width},quality=${quality},format=auto/${url.replace(
-    "https://assets.faltastudio.com/",
-    ""
-  )}`;
-}
-
-function cfInput1080(url: string, kind: "product" | "logo" | "style" = "product") {
-  const u = String(url || "").trim();
-  if (!u) return "";
-  if (!u.includes("assets.faltastudio.com/")) return u;
-  if (u.includes("/cdn-cgi/image/")) return u;
-
-  // logo may need alpha => keep png, others => jpeg
-  const format = kind === "logo" ? "png" : "jpeg";
-  const opts = `width=1080,fit=scale-down,quality=85,format=${format}`;
-
-  return `https://assets.faltastudio.com/cdn-cgi/image/${opts}/${u.replace("https://assets.faltastudio.com/", "")}`;
-}
-
-function cfInput2048(url: string, kind: "product" | "logo" | "style" = "product") {
-  const u = String(url || "").trim();
-  if (!u) return "";
-  if (!u.includes("assets.faltastudio.com/")) return u;
-  if (u.includes("/cdn-cgi/image/")) return u;
-
-  // logo may need alpha => keep png, others => jpeg
-  const format = kind === "logo" ? "png" : "jpeg";
-  const opts = `width=2048,fit=scale-down,quality=88,format=${format}`;
-
-  return `https://assets.faltastudio.com/cdn-cgi/image/${opts}/${u.replace("https://assets.faltastudio.com/", "")}`;
-}
-
-function tryParseJson<T = any>(v: any): T | null {
-  if (!v) return null;
-  if (typeof v === "object") return v as T;
-  if (typeof v !== "string") return null;
-  const s = v.trim();
-  if (!s) return null;
-  if (!(s.startsWith("{") || s.startsWith("["))) return null;
-  try {
-    return JSON.parse(s) as T;
-  } catch {
-    return null;
-  }
-}
-
-function isVideoUrl(url: string) {
-  const u = (url || "").split("?")[0].split("#")[0].toLowerCase();
-  return u.endsWith(".mp4") || u.endsWith(".webm") || u.endsWith(".mov") || u.endsWith(".m4v");
-}
-
-function isAudioUrl(url: string) {
-  const u = (url || "").split("?")[0].split("#")[0].toLowerCase();
-  return u.endsWith(".mp3") || u.endsWith(".wav") || u.endsWith(".m4a") || u.endsWith(".aac") || u.endsWith(".ogg");
-}
-
-function isImageUrl(url: string) {
-  const u = (url || "").split("?")[0].split("#")[0].toLowerCase();
-  return u.endsWith(".jpg") || u.endsWith(".jpeg") || u.endsWith(".png") || u.endsWith(".gif") || u.endsWith(".webp");
-}
-
-function normalizeMediaUrl(url: string) {
-  if (!url) return "";
-  const base = url.split(/[?#]/)[0];
-  return base || url;
-}
-
-const AUDIO_THUMB_URL = "https://assets.faltastudio.com/Website%20Assets/audio-mina-icon.gif";
-
-// Make likes match even if one URL is Cloudflare transformed and the other is raw.
-function canonicalAssetUrl(url: string) {
-  const s = normalizeMediaUrl(url);
-  if (!s) return "";
-
-  // https://assets.faltastudio.com/cdn-cgi/image/width=...,quality=...,format=auto/<path>
-  const m = s.match(/^https?:\/\/assets\.faltastudio\.com\/cdn-cgi\/image\/[^/]+\/(.+)$/);
-  if (m?.[1]) return `https://assets.faltastudio.com/${m[1]}`;
-
-  return s;
-}
-
-function getScrollParent(node: HTMLElement | null): HTMLElement | null {
-  let el: HTMLElement | null = node?.parentElement || null;
-  while (el) {
-    const style = window.getComputedStyle(el);
-    const oy = style.overflowY;
-    const isScrollable = oy === "auto" || oy === "scroll" || oy === "overlay";
-    if (isScrollable && el.scrollHeight > el.clientHeight + 10) return el;
-    el = el.parentElement;
-  }
-  return null;
-}
-
-function fmtDate(iso: string | null) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
-}
-
-function fmtDateTime(iso: string | null) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" }) +
-    " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-}
-
-async function downloadMedia(url: string, prompt: string, isMotion: boolean) {
-  if (!url) return;
-  try {
-    await downloadMinaAsset({
-      url,
-      kind: isMotion ? "motion" : "still",
-      prompt: prompt || "",
-    });
-  } catch (err: any) {
-    const msg = err?.message || "Download failed";
-    console.warn("Download failed:", err);
-    alert(msg);
-  }
-}
-
-type AspectKey = "9-16" | "3-4" | "2-3" | "1-1";
-
-const ASPECT_OPTIONS: { key: AspectKey; ratio: string; label: string }[] = [
-  { key: "2-3", ratio: "2:3", label: "2:3" },
-  { key: "1-1", ratio: "1:1", label: "1:1" },
-  { key: "9-16", ratio: "9:16", label: "9:16" },
-  { key: "3-4", ratio: "3:4", label: "3:4" },
-];
-
-function normalizeAspectRatio(raw: string | null | undefined) {
-  if (!raw) return "";
-  const trimmed = raw.trim();
-  if (!trimmed) return "";
-
-  // ✅ Accept keys like "9-16", "2-3"
-  const asKey = trimmed.replace("/", "-").replace(":", "-");
-  const byKey = ASPECT_OPTIONS.find((opt) => opt.key === asKey);
-  if (byKey) return byKey.ratio;
-
-  // direct ratio form
-  const direct = trimmed.replace("/", ":");
-  if (direct.includes(":")) {
-    const [a, b] = direct.split(":").map((p) => p.trim());
-    if (a && b) {
-      const candidate = `${a}:${b}`;
-      const match = ASPECT_OPTIONS.find((opt) => opt.ratio === candidate);
-      if (match) return match.ratio;
-    }
-  }
-
-  // parse "9 x 16" etc and pick closest
-  const re = /([0-9.]+)\s*[xX:\/ ]\s*([0-9.]+)/;
-  const m = trimmed.match(re);
-  if (m) {
-    const w = parseFloat(m[1]);
-    const h = parseFloat(m[2]);
-    if (Number.isFinite(w) && Number.isFinite(h) && h > 0) {
-      const val = w / h;
-      let best: { opt: (typeof ASPECT_OPTIONS)[number] | null; diff: number } = { opt: null, diff: Infinity };
-      for (const opt of ASPECT_OPTIONS) {
-        const [aw, ah] = opt.ratio.split(":").map((p) => parseFloat(p));
-        if (!Number.isFinite(aw) || !Number.isFinite(ah) || ah === 0) continue;
-        const ratio = aw / ah;
-        const diff = Math.abs(ratio - val);
-        if (diff < best.diff) best = { opt, diff };
-      }
-      if (best.opt) return best.opt.ratio;
-    }
-  }
-
-  return "";
-}
-
-function looksLikeSystemPrompt(s: string) {
-  const t = (s || "").trim();
-  if (!t) return false;
-
-  const low = t.toLowerCase();
-  if (low.includes("you are") && (low.includes("assistant") || low.includes("system"))) return true;
-  if (low.includes("return strict json")) return true;
-  if (low.includes("output format")) return true;
-  if (low.includes("safety:")) return true;
-
-  return false;
-}
-
-function sanitizeUserBrief(s: string) {
-  let t = (s || "").trim();
-
-  // Fix stored typo like "chttps://..."
-  if (t.startsWith("chttp://") || t.startsWith("chttps://")) t = t.slice(1);
-
-  // Treat placeholder dashes as empty
-  const withoutDashes = t.replace(/[-–—]/g, "").trim();
-  if (!withoutDashes) return "";
-
-  return t.trim();
-}
-
-// ---------- LIKES (MMA + legacy safe) ----------
-
-function isLikeEventRow(row: Row) {
-  const metaRaw = (row as any)?.mg_meta ?? (row as any)?.meta ?? null;
-  const metaObj = tryParseJson<any>(metaRaw) ?? metaRaw ?? {};
-  const eventType = String(metaObj?.event_type ?? metaObj?.eventType ?? (row as any)?.event_type ?? "").toLowerCase();
-  if (eventType === "like") return true;
-
-  // legacy: payload.liked true
-  const payloadRaw = (row as any)?.mg_payload ?? (row as any)?.payload ?? null;
-  const payload = tryParseJson<any>(payloadRaw) ?? payloadRaw ?? {};
-  const rawLiked = payload?.liked ?? payload?.isLiked ?? payload?.like ?? (row as any)?.liked;
-  if (rawLiked === true || rawLiked === 1 || rawLiked === "true") return true;
-
-  // legacy: "likes are feedback rows where comment is empty"
-  const payloadComment = typeof payload?.comment === "string" ? payload.comment.trim() : null;
-  const commentFieldPresent =
-    Object.prototype.hasOwnProperty.call(row, "mg_comment") || Object.prototype.hasOwnProperty.call(row, "comment");
-  const commentValue = commentFieldPresent ? pick(row, ["mg_comment", "comment"], "") : null;
-  const commentTrim = typeof commentValue === "string" ? commentValue.trim() : null;
-  if ((payloadComment !== null && payloadComment === "") || (commentTrim !== null && commentTrim === "")) return true;
-
-  return false;
-}
-
-function findLikeUrl(row: Row) {
-  if (!isLikeEventRow(row)) return "";
-
-  const metaRaw = (row as any)?.mg_meta ?? (row as any)?.meta ?? null;
-  const metaObj = tryParseJson<any>(metaRaw) ?? metaRaw ?? {};
-  const metaPayloadRaw = metaObj?.payload ?? null;
-  const metaPayload = tryParseJson<any>(metaPayloadRaw) ?? metaPayloadRaw ?? {};
-
-  const payloadRaw = (row as any)?.mg_payload ?? (row as any)?.payload ?? null;
-  const payload = tryParseJson<any>(payloadRaw) ?? payloadRaw ?? {};
-
-  const out =
-    pick(metaPayload, ["output_url", "outputUrl", "url", "media_url", "mediaUrl"], "").trim() ||
-    pick(payload, ["output_url", "outputUrl", "url", "media_url", "mediaUrl"], "").trim() ||
-    pick(payload, ["image_url", "imageUrl", "video_url", "videoUrl"], "").trim() ||
-    pick(row, ["mg_output_url", "outputUrl", "output_url"], "").trim() ||
-    pick(row, ["mg_image_url", "imageUrl", "image_url"], "").trim() ||
-    pick(row, ["mg_video_url", "videoUrl", "video_url"], "").trim();
-
-  return out;
-}
-
-function findLikedGenerationId(row: Row) {
-  if (!isLikeEventRow(row)) return "";
-
-  const metaRaw = (row as any)?.mg_meta ?? (row as any)?.meta ?? null;
-  const metaObj = tryParseJson<any>(metaRaw) ?? metaRaw ?? {};
-  const metaPayloadRaw = metaObj?.payload ?? null;
-  const metaPayload = tryParseJson<any>(metaPayloadRaw) ?? metaPayloadRaw ?? {};
-
-  const payloadRaw = (row as any)?.mg_payload ?? (row as any)?.payload ?? null;
-  const payload = tryParseJson<any>(payloadRaw) ?? payloadRaw ?? {};
-
-  const gid =
-    safeString((row as any)?.mg_generation_id, "").trim() ||
-    safeString(metaPayload?.generation_id ?? metaPayload?.generationId ?? metaPayload?.generationID, "").trim() ||
-    safeString(payload?.generation_id ?? payload?.generationId ?? payload?.generationID, "").trim();
-
-  return gid;
-}
-
-// ---------- INPUT EXTRACTION (USER BRIEF) ----------
-
-function extractInputsForDisplay(row: Row, isMotionHint?: boolean) {
-  const payloadRaw = (row as any)?.mg_payload ?? (row as any)?.payload ?? null;
-  const metaRaw = (row as any)?.mg_meta ?? (row as any)?.meta ?? null;
-  const varsRaw =
-    (row as any)?.mg_mma_vars ??
-    (row as any)?.mg_vars ??
-    (row as any)?.vars ??
-    (row as any)?.mma_vars ??
-    null;
-
-  const payload = tryParseJson<any>(payloadRaw) ?? payloadRaw ?? null;
-  const meta = tryParseJson<any>(metaRaw) ?? metaRaw ?? null;
-  const vars = tryParseJson<any>(varsRaw) ?? varsRaw ?? null;
-
-  const varsAssets = vars && typeof vars === "object" ? (vars as any).assets : null;
-  const varsInputs = vars && typeof vars === "object" ? (vars as any).inputs : null;
-  const varsHistory = vars && typeof vars === "object" ? (vars as any).history : null;
-  const varsMeta = vars && typeof vars === "object" ? (vars as any).meta : null;
-  const varsFeedback = vars && typeof vars === "object" ? (vars as any).feedback : null;
-  const inputs = varsInputs || {};
-
-  const flow = String(varsMeta?.flow || meta?.flow || "").toLowerCase();
-  const mmaMode = String((row as any)?.mg_mma_mode || vars?.mode || "").toLowerCase();
-
-  const isTweak =
-    flow.includes("tweak") ||
-    flow.includes("edit") ||
-    flow.includes("revise") ||
-    flow.includes("variant") ||
-    flow.includes("iterate");
-
-  const isMotion =
-    typeof isMotionHint === "boolean"
-      ? isMotionHint
-      : mmaMode === "video" ||
-        mmaMode === "motion" ||
-        flow.includes("video") ||
-        flow.includes("animate") ||
-        flow.includes("motion");
-
-  // ----------------------------
-  // ✅ USER BRIEF ONLY (no AI prompt)
-  // ----------------------------
-
-  const commonUser = pick(varsInputs, ["brief", "user_brief", "userBrief", "prompt", "user_prompt", "userPrompt"], "");
-  const commonUserMeta = pick(varsMeta, ["brief", "user_brief", "userBrief", "prompt", "user_prompt", "userPrompt"], "");
-
-  // Still
-  const stillCreate = commonUser || commonUserMeta;
-  const stillTweak = pick(varsInputs, ["tweak_brief", "tweak_user_brief", "tweakBrief"], "");
-  const fbStill = pick(varsFeedback, ["still_feedback", "stillFeedback", "feedback_still"], "");
-
-  // Motion / Video
-  const motionCreate =
-    pick(varsInputs, ["motion_user_brief", "motionUserBrief", "motion_brief", "motionBrief"], "") ||
-    commonUser ||
-    commonUserMeta;
-
-  const motionOverride = pick(varsInputs, ["prompt_override", "motion_prompt_override", "motionPromptOverride"], "");
-
-  const motionTweak = pick(varsInputs, ["tweak_motion_user_brief", "tweakMotionUserBrief"], "");
-  const fbMotion = pick(varsFeedback, ["motion_feedback", "motionFeedback", "feedback_motion"], "");
-
-  // Last resort user-entered legacy fields (still user-typed)
-  const legacyUser =
-    pick(row, ["mg_user_prompt", "mg_user_message", "mg_brief"], "") ||
-    pick(payload?.inputs, ["brief", "user_brief", "userBrief", "motion_user_brief", "prompt", "userPrompt"], "") ||
-    pick(payload, ["brief", "user_brief", "userBrief", "motion_user_brief", "prompt", "userPrompt"], "") ||
-    pick(meta, ["brief", "user_brief", "userBrief", "userPrompt", "user_prompt", "prompt"], "");
-
-  const candidates: string[] = isMotion
-    ? isTweak
-      ? [motionTweak, fbMotion, motionOverride, motionCreate, fbStill, stillCreate, legacyUser]
-      : [motionCreate, motionOverride, fbMotion, motionTweak, fbStill, stillCreate, legacyUser]
-    : isTweak
-    ? [stillTweak, fbStill, stillCreate, fbMotion, motionCreate, legacyUser]
-    : [stillCreate, fbStill, stillTweak, legacyUser];
-
-  const brief =
-    candidates
-      .map((s) => sanitizeUserBrief(String(s || "")))
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .filter((s) => !looksLikeSystemPrompt(s))[0] || "";
-
-  // ----------------------------
-  // extractions for recreate + details
-  // ----------------------------
-
-  const aspect =
-    normalizeAspectRatio(
-      pick(row, ["mg_aspect_ratio", "aspect_ratio", "aspectRatio"], "") ||
-        pick(meta, ["aspectRatio", "aspect_ratio"], "") ||
-        pick(payload, ["aspect_ratio", "aspectRatio"], "") ||
-        pick(payload?.inputs, ["aspect_ratio", "aspectRatio"], "") ||
-        pick(varsInputs, ["aspect_ratio", "aspectRatio", "ratio"], "") ||
-        pick(varsMeta, ["aspectRatio", "aspect_ratio", "ratio"], "")
-    ) || "";
-
-  const stylePresetKeysRaw =
-    meta?.stylePresetKeys ??
-    meta?.style_preset_keys ??
-    payload?.settings?.stylePresetKeys ??
-    payload?.settings?.style_preset_keys ??
-    payload?.inputs?.stylePresetKeys ??
-    payload?.inputs?.style_preset_keys ??
-    varsMeta?.stylePresetKeys ??
-    varsMeta?.style_preset_keys ??
-    varsInputs?.stylePresetKeys ??
-    varsInputs?.style_preset_keys ??
-    vars?.stylePresetKeys ??
-    vars?.style_preset_keys ??
-    null;
-
-  const stylePresetKeyRaw =
-    meta?.stylePresetKey ??
-    meta?.style_preset_key ??
-    payload?.settings?.stylePresetKey ??
-    payload?.settings?.style_preset_key ??
-    payload?.inputs?.stylePresetKey ??
-    payload?.inputs?.style_preset_key ??
-    varsMeta?.stylePresetKey ??
-    varsMeta?.style_preset_key ??
-    varsInputs?.stylePresetKey ??
-    varsInputs?.style_preset_key ??
-    vars?.stylePresetKey ??
-    vars?.style_preset_key ??
-    null;
-
-  const stylePresetKeys: string[] = Array.isArray(stylePresetKeysRaw)
-    ? stylePresetKeysRaw.map(String).filter(Boolean)
-    : stylePresetKeyRaw
-    ? [String(stylePresetKeyRaw)]
-    : [];
-
-  const minaVisionEnabled =
-    typeof meta?.minaVisionEnabled === "boolean"
-      ? meta.minaVisionEnabled
-      : typeof payload?.settings?.minaVisionEnabled === "boolean"
-      ? payload.settings.minaVisionEnabled
-      : typeof payload?.inputs?.minaVisionEnabled === "boolean"
-      ? payload.inputs.minaVisionEnabled
-      : typeof varsHistory?.vision_intelligence === "boolean"
-      ? varsHistory.vision_intelligence
-      : typeof varsHistory?.visionIntelligence === "boolean"
-      ? varsHistory.visionIntelligence
-      : undefined;
-
-  const productImageUrl =
-    varsAssets?.product_image_url ||
-    varsAssets?.productImageUrl ||
-    varsInputs?.product_image_url ||
-    varsInputs?.productImageUrl ||
-    meta?.productImageUrl ||
-    payload?.assets?.productImageUrl ||
-    payload?.assets?.product_image_url ||
-    payload?.assets?.product_image ||
-    vars?.productImageUrl ||
-    vars?.product_image_url ||
-    "";
-
-  const logoImageUrl =
-    varsAssets?.logo_image_url ||
-    varsAssets?.logoImageUrl ||
-    varsInputs?.logo_image_url ||
-    varsInputs?.logoImageUrl ||
-    meta?.logoImageUrl ||
-    payload?.assets?.logoImageUrl ||
-    payload?.assets?.logo_image_url ||
-    payload?.assets?.logo_image ||
-    vars?.logoImageUrl ||
-    vars?.logo_image_url ||
-    "";
-
-  const styleImageUrls =
-    varsAssets?.style_image_urls ||
-    varsAssets?.styleImageUrls ||
-    varsAssets?.inspiration_image_urls ||
-    varsAssets?.inspirationImageUrls ||
-    varsInputs?.style_image_urls ||
-    varsInputs?.styleImageUrls ||
-    meta?.styleImageUrls ||
-    payload?.assets?.styleImageUrls ||
-    payload?.assets?.style_image_urls ||
-    payload?.assets?.inspiration_image_urls ||
-    vars?.styleImageUrls ||
-    vars?.style_image_urls ||
-    [];
-
-  const styleImages: string[] = Array.isArray(styleImageUrls)
-    ? styleImageUrls.map(String).filter((u) => String(u).startsWith("http"))
-    : [];
-
-  const startImageUrl =
-    String(
-      varsAssets?.start_image_url ||
-        varsAssets?.startImageUrl ||
-        varsInputs?.start_image_url ||
-        varsInputs?.startImageUrl ||
-        varsInputs?.kling_start_image_url ||
-        varsInputs?.klingStartImageUrl ||
-        ""
-    ).trim() || "";
-
-  const endImageUrl =
-    String(
-      varsAssets?.end_image_url ||
-        varsAssets?.endImageUrl ||
-        varsInputs?.end_image_url ||
-        varsInputs?.endImageUrl ||
-        varsInputs?.kling_end_image_url ||
-        varsInputs?.klingEndImageUrl ||
-        ""
-    ).trim() || "";
-
-  const klingFramesRaw =
-    varsAssets?.kling_image_urls ||
-    varsAssets?.klingImageUrls ||
-    varsInputs?.kling_image_urls ||
-    varsInputs?.klingImageUrls ||
-    vars?.kling_image_urls ||
-    vars?.klingImageUrls ||
-    [];
-
-  const klingFrameUrls: string[] = Array.isArray(klingFramesRaw)
-    ? klingFramesRaw.map(String).filter((u) => /^https?:\/\//i.test(String(u)))
-    : [];
-
-  // ✅ Reference video/audio (Frame 2 types) — NEW AI support (frame2_* + video/audio)
-  const frame2VideoUrl =
-    asStrOrNull(inputs.frame2_video_url || inputs.frame2VideoUrl) ||
-    asStrOrNull(varsAssets?.frame2_video_url || varsAssets?.frame2VideoUrl) ||
-    asStrOrNull((vars as any)?.frame2_video_url || (vars as any)?.frame2VideoUrl);
-
-  const frame2AudioUrl =
-    asStrOrNull(inputs.frame2_audio_url || inputs.frame2AudioUrl) ||
-    asStrOrNull(varsAssets?.frame2_audio_url || varsAssets?.frame2AudioUrl) ||
-    asStrOrNull((vars as any)?.frame2_audio_url || (vars as any)?.frame2AudioUrl);
-
-  // ✅ Frame2 routing fields (controllers usually read from vars.inputs)
-  const frame2Kind = safeString(
-    inputs.frame2_kind ||
-      inputs.frame2Kind ||
-      (frame2VideoUrl ? "video" : frame2AudioUrl ? "audio" : ""),
-    ""
-  );
-
-  const frame2Url =
-    asStrOrNull(inputs.frame2_url || inputs.frame2Url) ||
-    frame2VideoUrl ||
-    frame2AudioUrl ||
-    null;
-
-  const frame2DurationSec = (() => {
-    const raw =
-      inputs.frame2_duration_sec ||
-      inputs.frame2DurationSec ||
-      inputs.duration_sec ||
-      inputs.durationSec ||
-      inputs.duration ||
-      null;
-
-    const n = Number(raw);
-    if (!Number.isFinite(n) || n <= 0) return null;
-    return Math.max(1, Math.min(30, Math.floor(n))); // clamp 1..30
-  })();
-
-  const frame2KindLower = frame2Kind.toLowerCase();
-
-  const referenceVideoUrlRaw =
-    // new keys
-    varsAssets?.frame2_video_url ||
-    varsAssets?.frame2VideoUrl ||
-    varsAssets?.reference_video_url ||
-    varsAssets?.referenceVideoUrl ||
-    varsAssets?.ref_video_url ||
-    varsAssets?.refVideoUrl ||
-    varsAssets?.kling_reference_video_url ||
-    varsAssets?.klingReferenceVideoUrl ||
-    varsAssets?.video_url ||
-    varsAssets?.videoUrl ||
-    varsAssets?.video ||
-    // inputs fallbacks
-    varsInputs?.frame2_video_url ||
-    varsInputs?.frame2VideoUrl ||
-    varsInputs?.reference_video_url ||
-    varsInputs?.referenceVideoUrl ||
-    varsInputs?.ref_video_url ||
-    varsInputs?.refVideoUrl ||
-    varsInputs?.video_url ||
-    varsInputs?.videoUrl ||
-    varsInputs?.video ||
-    // last resort
-    (vars as any)?.frame2_video_url ||
-    (vars as any)?.frame2VideoUrl ||
-    (vars as any)?.reference_video_url ||
-    (vars as any)?.referenceVideoUrl ||
-    (vars as any)?.ref_video_url ||
-    (vars as any)?.refVideoUrl ||
-    (vars as any)?.video_url ||
-    (vars as any)?.videoUrl ||
-    (vars as any)?.video ||
-    "";
-
-  const referenceAudioUrlRaw =
-    // new keys
-    varsAssets?.frame2_audio_url ||
-    varsAssets?.frame2AudioUrl ||
-    varsAssets?.reference_audio_url ||
-    varsAssets?.referenceAudioUrl ||
-    varsAssets?.ref_audio_url ||
-    varsAssets?.refAudioUrl ||
-    varsAssets?.audio_url ||
-    varsAssets?.audioUrl ||
-    varsAssets?.audio ||
-    // inputs fallbacks
-    varsInputs?.frame2_audio_url ||
-    varsInputs?.frame2AudioUrl ||
-    varsInputs?.reference_audio_url ||
-    varsInputs?.referenceAudioUrl ||
-    varsInputs?.ref_audio_url ||
-    varsInputs?.refAudioUrl ||
-    varsInputs?.audio_url ||
-    varsInputs?.audioUrl ||
-    varsInputs?.audio ||
-    // last resort
-    (vars as any)?.frame2_audio_url ||
-    (vars as any)?.frame2AudioUrl ||
-    (vars as any)?.reference_audio_url ||
-    (vars as any)?.referenceAudioUrl ||
-    (vars as any)?.ref_audio_url ||
-    (vars as any)?.refAudioUrl ||
-    (vars as any)?.audio_url ||
-    (vars as any)?.audioUrl ||
-    (vars as any)?.audio ||
-    "";
-
-  const referenceVideoUrl = String(referenceVideoUrlRaw || "").trim();
-  const referenceAudioUrl = String(referenceAudioUrlRaw || "").trim();
-
-  // ✅ accept URLs even if they don't end with .mp4/.mp3 (some R2/public links won't)
-  const refVideo =
-    /^https?:\/\//i.test(referenceVideoUrl) &&
-    (isVideoUrl(referenceVideoUrl) || frame2KindLower.includes("video"))
-      ? referenceVideoUrl
-      : "";
-
-  const refAudio =
-    /^https?:\/\//i.test(referenceAudioUrl) &&
-    (isAudioUrl(referenceAudioUrl) || frame2KindLower.includes("audio") || !isVideoUrl(referenceAudioUrl))
-      ? referenceAudioUrl
-      : "";
-
-  const stillLane = String(
-    varsInputs?.still_lane ||
-      varsInputs?.stillLane ||
-      varsMeta?.still_lane ||
-      varsMeta?.stillLane ||
-      ""
-  ).trim();
-
-  const movementStyle = String(
-    varsInputs?.selected_movement_style ||
-      varsInputs?.selectedMovementStyle ||
-      varsInputs?.movement_style ||
-      varsInputs?.movementStyle ||
-      ""
-  ).trim();
-
-  const motionDurationSec = (() => {
-    const raw =
-      varsInputs?.motion_duration_sec ||
-      varsInputs?.motionDurationSec ||
-      varsInputs?.duration_sec ||
-      varsInputs?.durationSec ||
-      varsInputs?.duration ||
-      varsMeta?.motion_duration_sec ||
-      varsMeta?.motionDurationSec ||
-      varsMeta?.duration ||
-      null;
-
-    const n = Number(raw);
-    if (n === 10) return 10 as const;
-    if (n === 5) return 5 as const;
-    return undefined;
-  })();
-
-  const generateAudio = (() => {
-    const raw =
-      varsInputs?.generate_audio ??
-      varsInputs?.generateAudio ??
-      varsMeta?.generate_audio ??
-      varsMeta?.generateAudio ??
-      null;
-
-    if (typeof raw === "boolean") return raw;
-    if (raw === 1 || raw === "1" || raw === "true") return true;
-    if (raw === 0 || raw === "0" || raw === "false") return false;
-    return undefined;
-  })();
-
-  const styleLabel = (movementStyle || stillLane || "").trim();
-
-  const tone = String(
-    meta?.tone || payload?.inputs?.tone || payload?.tone || varsInputs?.tone || varsMeta?.tone || vars?.tone || ""
-  ).trim();
-
-  const platform = String(
-    meta?.platform ||
-      payload?.inputs?.platform ||
-      payload?.platform ||
-      varsInputs?.platform ||
-      varsMeta?.platform ||
-      vars?.platform ||
-      ""
-  ).trim();
-
-  return {
-    brief,
-    aspectRatio: aspect,
-    stylePresetKeys,
-    minaVisionEnabled,
-    productImageUrl: String(productImageUrl || "").trim(),
-    logoImageUrl: String(logoImageUrl || "").trim(),
-    styleImageUrls: styleImages,
-    startImageUrl,
-    endImageUrl,
-    klingFrameUrls,
-    styleLabel,
-    tone,
-    platform,
-    motionDurationSec,
-    generateAudio,
-    // ✅ NEW: frame2 routing (Fabric / Motion-Control)
-    frame2_kind: frame2Kind,
-    frame2_url: frame2Url,
-    frame2_duration_sec: frame2DurationSec,
-
-    // ✅ also expose direct urls (extra-safe)
-    frame2_audio_url: frame2AudioUrl,
-    frame2_video_url: frame2VideoUrl,
-    referenceVideoUrl: refVideo,
-    referenceAudioUrl: refAudio,
-  };
-}
+import { cfInput1080 } from "./lib/cfInput1080";
+import { isVideoUrl, isAudioUrl } from "./lib/mediaHelpers";
+import type { Row } from "./lib/profileHelpers";
+import {
+  safeString, asStrOrNull, pick, cfThumb, cfInput2048,
+  tryParseJson, isImageUrl, normalizeMediaUrl,
+  AUDIO_THUMB_URL, canonicalAssetUrl, getScrollParent,
+  fmtDate, fmtDateTime, downloadMedia,
+  ASPECT_OPTIONS, normalizeAspectRatio,
+  looksLikeSystemPrompt, sanitizeUserBrief,
+  isLikeEventRow, findLikeUrl, findLikedGenerationId,
+  extractInputsForDisplay,
+} from "./lib/profileHelpers";
+import { useProfileDragSelect } from "./hooks/useProfileDragSelect";
+import { useProfileLightbox } from "./hooks/useProfileLightbox";
+import { useVideoAutoplay } from "./hooks/useVideoAutoplay";
+import { useMatchaCheckout } from "./hooks/useMatchaCheckout";
+import { useInfiniteScroll } from "./hooks/useInfiniteScroll";
+import { useDeleteFlow } from "./hooks/useDeleteFlow";
+import { computeProfileItems } from "./lib/profileItems";
+import type { ProfileItem } from "./lib/profileItems";
 
 type RecreateDraft = {
   mode: "still" | "motion";
@@ -783,26 +55,18 @@ type ProfileProps = {
   email?: string;
   credits?: number | null;
   expiresAt?: string | null;
-
   generations?: Row[];
   feedbacks?: Row[];
-
   loading?: boolean;
   error?: string | null;
-
   onBackToStudio?: () => void;
   onLogout?: () => void;
-
-  // ✅ for Matcha popup (same URL you pass to StudioLeft)
   matchaUrl?: string;
   matcha5000Url?: string;
   onConfirmCheckout?: (qty: number) => void;
-
   onRefresh?: () => void;
-
   onDelete?: (id: string) => Promise<void> | void;
   onRecreate?: (draft: RecreateDraft) => void;
-
   onLoadMore?: () => void;
   hasMore?: boolean;
   loadingMore?: boolean;
@@ -834,214 +98,22 @@ export default function Profile({
   }, []);
   const dateRangeLabel = dateRange === "all" ? "All time" : dateRange === "today" ? "Today" : dateRange === "7d" ? "7 days" : "30 days";
 
-  const [deletingIds, setDeletingIds] = useState<Record<string, boolean>>({});
-  const [removingIds, setRemovingIds] = useState<Record<string, boolean>>({});
-  const [removedIds, setRemovedIds] = useState<Record<string, boolean>>({});
-  const [ghostIds, setGhostIds] = useState<Record<string, boolean>>({});
-  const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({});
-  const [confirmDeleteIds, setConfirmDeleteIds] = useState<Record<string, boolean>>({});
-  const [lightbox, setLightbox] = useState<{ url: string; isMotion: boolean } | null>(null);
+  // Delete state
+  const {
+    deletingIds, removingIds, removedIds, ghostIds, deleteErrors, confirmDeleteIds, setConfirmDeleteIds,
+    askDelete, cancelDeleteAll, deleteByIds, deleteItem, deleteAllConfirmed,
+  } = useDeleteFlow(onDelete);
 
-  // How many cards are in confirm-delete state
-  const confirmCount = useMemo(() => Object.values(confirmDeleteIds).filter(Boolean).length, [confirmDeleteIds]);
-  const isSelectMode = confirmCount > 0;
-
-  // Drag-select rectangle (desktop + touch)
+  // Drag-select hook
   const gridRef = useRef<HTMLDivElement>(null);
-  const [dragRect, setDragRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  const dragState = useRef<{
-    active: boolean;
-    startX: number;
-    startY: number;
-    scrollTop: number;
-    touch: boolean;
-    longPressTimer: ReturnType<typeof setTimeout> | null;
-  }>({ active: false, startX: 0, startY: 0, scrollTop: 0, touch: false, longPressTimer: null });
-
-  // Get all card elements and their IDs that intersect a rect
-  const getCardsInRect = useCallback((rect: { x: number; y: number; w: number; h: number }) => {
-    if (!gridRef.current) return [];
-    const cards = gridRef.current.querySelectorAll<HTMLElement>("[data-card-id]");
-    const result: string[] = [];
-    const rx1 = Math.min(rect.x, rect.x + rect.w);
-    const ry1 = Math.min(rect.y, rect.y + rect.h);
-    const rx2 = Math.max(rect.x, rect.x + rect.w);
-    const ry2 = Math.max(rect.y, rect.y + rect.h);
-
-    cards.forEach((card) => {
-      const cr = card.getBoundingClientRect();
-      // Check overlap
-      if (cr.left < rx2 && cr.right > rx1 && cr.top < ry2 && cr.bottom > ry1) {
-        const id = card.getAttribute("data-card-id");
-        if (id) result.push(id);
-      }
-    });
-    return result;
-  }, []);
-
-  // IDs selected live while the drag-rect is being drawn (applied on release)
-  const dragSelectedIds = useRef<Set<string>>(new Set());
-
-  // --- Desktop drag-select ---
-  const onGridMouseDown = useCallback((e: React.MouseEvent) => {
-    // Only left-click
-    if (e.button !== 0) return;
-    // Only if already in select mode (at least one card confirmed)
-    if (!isSelectMode) return;
-
-    // Don't start drag immediately — wait for movement (threshold in mousemove)
-    dragState.current = {
-      active: false,
-      startX: e.clientX,
-      startY: e.clientY,
-      scrollTop: 0,
-      touch: false,
-      longPressTimer: null,
-    };
-    dragSelectedIds.current.clear();
-  }, [isSelectMode]);
-
-  const onGridMouseMove = useCallback((e: React.MouseEvent) => {
-    if (dragState.current.touch) return;
-    const { startX, startY } = dragState.current;
-    const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
-
-    // Activate drag only after moving ≥ 5px
-    if (!dragState.current.active) {
-      if (startX === 0 && startY === 0) return; // no mousedown tracked
-      if (dist < 5) return;
-      dragState.current.active = true;
-      setDragRect({ x: startX, y: startY, w: 0, h: 0 });
-    }
-
-    const rect = { x: startX, y: startY, w: e.clientX - startX, h: e.clientY - startY };
-    setDragRect(rect);
-
-    // Live-select: apply selections as the rect sweeps over cards
-    const ids = getCardsInRect(rect);
-    const newIds = new Set(ids);
-    const prev = dragSelectedIds.current;
-
-    // Only update if the set changed
-    if (newIds.size !== prev.size || ids.some((id) => !prev.has(id))) {
-      dragSelectedIds.current = newIds;
-      setConfirmDeleteIds((cur) => {
-        const next = { ...cur };
-        // Remove IDs that were drag-selected before but no longer under the rect
-        prev.forEach((id) => { if (!newIds.has(id)) delete next[id]; });
-        // Add new IDs under the rect
-        newIds.forEach((id) => { next[id] = true; });
-        return next;
-      });
-    }
-  }, [getCardsInRect]);
-
-  const onGridMouseUp = useCallback(() => {
-    const wasDragging = dragState.current.active;
-    dragState.current.active = false;
-    dragState.current.startX = 0;
-    dragState.current.startY = 0;
-    dragSelectedIds.current.clear();
-    if (wasDragging) {
-      // Selection already applied live — just clear the visual rect
-      setDragRect(null);
-    }
-  }, []);
-
-  // --- Touch drag-select (long-press to start, drag to sweep) ---
-  const onGridTouchStart = useCallback((e: React.TouchEvent) => {
-    if (!isSelectMode) return;
-    const tag = (e.target as HTMLElement).tagName.toLowerCase();
-    if (tag === "button" || tag === "input" || tag === "a") return;
-
-    const touch = e.touches[0];
-    const st = dragState.current;
-    st.startX = touch.clientX;
-    st.startY = touch.clientY;
-    st.touch = true;
-    st.active = false;
-
-    // Long-press: 400ms to start drag-select
-    if (st.longPressTimer) clearTimeout(st.longPressTimer);
-    st.longPressTimer = setTimeout(() => {
-      st.active = true;
-      setDragRect({ x: touch.clientX, y: touch.clientY, w: 0, h: 0 });
-    }, 400);
-  }, [isSelectMode]);
-
-  const onGridTouchMove = useCallback((e: React.TouchEvent) => {
-    const st = dragState.current;
-    if (!st.touch) return;
-
-    const touch = e.touches[0];
-    const dist = Math.hypot(touch.clientX - st.startX, touch.clientY - st.startY);
-
-    // If moved before long-press fires, cancel it (normal scroll)
-    if (!st.active && dist > 10) {
-      if (st.longPressTimer) {
-        clearTimeout(st.longPressTimer);
-        st.longPressTimer = null;
-      }
-      return;
-    }
-
-    if (!st.active) return;
-
-    e.preventDefault(); // prevent scroll while dragging
-    const rect = { x: st.startX, y: st.startY, w: touch.clientX - st.startX, h: touch.clientY - st.startY };
-    setDragRect(rect);
-
-    // Live-select: apply selections as the rect sweeps over cards
-    const ids = getCardsInRect(rect);
-    const newIds = new Set(ids);
-    const prev = dragSelectedIds.current;
-
-    if (newIds.size !== prev.size || ids.some((id) => !prev.has(id))) {
-      dragSelectedIds.current = newIds;
-      setConfirmDeleteIds((cur) => {
-        const next = { ...cur };
-        prev.forEach((id) => { if (!newIds.has(id)) delete next[id]; });
-        newIds.forEach((id) => { next[id] = true; });
-        return next;
-      });
-    }
-  }, [getCardsInRect]);
-
-  const onGridTouchEnd = useCallback(() => {
-    const st = dragState.current;
-    if (st.longPressTimer) {
-      clearTimeout(st.longPressTimer);
-      st.longPressTimer = null;
-    }
-    if (!st.active || !st.touch) {
-      st.touch = false;
-      return;
-    }
-    st.active = false;
-    st.touch = false;
-    dragSelectedIds.current.clear();
-    // Selection already applied live — just clear the visual rect
-    setDragRect(null);
-  }, []);
-
-  // Keyboard shortcuts: Delete/Backspace → delete selected, Escape → cancel
-  useEffect(() => {
-    if (!isSelectMode) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        cancelDeleteAll();
-      } else if (e.key === "Delete" || e.key === "Backspace") {
-        // Don't trigger if user is typing in an input
-        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-        if (tag === "input" || tag === "textarea") return;
-        e.preventDefault();
-        deleteAllConfirmed();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [isSelectMode, confirmDeleteIds]);
+  const {
+    dragRect, dragSelectedIds, isSelectMode, confirmCount,
+    onGridMouseDown, onGridMouseMove, onGridMouseUp,
+    onGridTouchStart, onGridTouchMove, onGridTouchEnd,
+  } = useProfileDragSelect(
+    gridRef, confirmDeleteIds, removedIds, ghostIds,
+    deleteByIds, cancelDeleteAll, setConfirmDeleteIds,
+  );
 
   // Filters
   const [motion, setMotion] = useState<"all" | "still" | "motion">("all");
@@ -1054,7 +126,6 @@ export default function Profile({
   const aspectFilterLabel = activeAspectFilter ? activeAspectFilter.label : "Ratio";
 
   const [expandedPromptIds, setExpandedPromptIds] = useState<Record<string, boolean>>({});
-
   const SCENE_PROMPT =
     "Replace my product in the scene, keep my scene, composition, tone, aesthetic, highlights, and vibe style exactly the same";
 
@@ -1062,7 +133,6 @@ export default function Profile({
   const [visibleCount, setVisibleCount] = useState(20);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
-  const loadingMoreRefFlag = useRef(false);
 
   // Video refs
   const videoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -1070,28 +140,14 @@ export default function Profile({
 
   const registerVideoEl = useCallback((id: string, el: HTMLVideoElement | null) => {
     const m = videoElsRef.current;
-    if (el) {
-      el.dataset.minaId = id; // ✅ safe
-      m.set(id, el);
-    } else {
-      m.delete(id);
-    }
+    if (el) { el.dataset.minaId = id; m.set(id, el); } else m.delete(id);
   }, []);
 
-  // Hover audio (desktop only). Browsers may still block sound in some cases,
-  // but this is the correct / safest approach.
   const setVideoHover = useCallback((id: string, hovering: boolean) => {
     const el = videoElsRef.current.get(id);
     if (!el) return;
-
-    hoveredVideoIdRef.current =
-      hovering ? id : hoveredVideoIdRef.current === id ? null : hoveredVideoIdRef.current;
-
-    try {
-      el.muted = !hovering;
-      el.volume = 1;
-      if (hovering) el.play().catch(() => {});
-    } catch {}
+    hoveredVideoIdRef.current = hovering ? id : hoveredVideoIdRef.current === id ? null : hoveredVideoIdRef.current;
+    try { el.muted = !hovering; el.volume = 1; if (hovering) el.play().catch(() => {}); } catch {}
   }, []);
 
   const hoverAudioRef = useRef<Map<string, HTMLAudioElement>>(new Map());
@@ -1100,337 +156,20 @@ export default function Profile({
     if (!url) return;
     const cache = hoverAudioRef.current;
     let audio = cache.get(url);
-    if (!audio) {
-      audio = new Audio(url);
-      audio.loop = true;
-      cache.set(url, audio);
-    }
-
+    if (!audio) { audio = new Audio(url); audio.loop = true; cache.set(url, audio); }
     if (hovering) {
-      try {
-        audio.currentTime = 0;
-      } catch {}
+      try { audio.currentTime = 0; } catch {}
       const p = audio.play();
-      if (p && typeof (p as Promise<void>).catch === "function") {
-        (p as Promise<void>).catch(() => {});
-      }
+      if (p && typeof (p as Promise<void>).catch === "function") (p as Promise<void>).catch(() => {});
       return;
     }
-
     audio.pause();
-    try {
-      audio.currentTime = 0;
-    } catch {}
+    try { audio.currentTime = 0; } catch {}
   }, []);
 
-  const [lbZoomed, setLbZoomed] = useState(false);
-  const [lbZoomOrigin, setLbZoomOrigin] = useState("center center");
-  const lbClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [lbHintVisible, setLbHintVisible] = useState(false);
-  const lbHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleLbMediaClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    // Compute click position as percentage for zoom origin
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
-    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
-    setLbZoomOrigin(`${xPct}% ${yPct}%`);
-
-    // Delay single-click to allow double-click detection
-    if (lbClickTimer.current) clearTimeout(lbClickTimer.current);
-    lbClickTimer.current = setTimeout(() => {
-      setLbZoomed((z) => !z);
-      lbClickTimer.current = null;
-    }, 250);
-  }, []);
-
-  const handleLbMediaDblClick = useCallback((url: string, isMotion: boolean) => {
-    // Cancel the pending single-click zoom toggle
-    if (lbClickTimer.current) {
-      clearTimeout(lbClickTimer.current);
-      lbClickTimer.current = null;
-    }
-    downloadMedia(url, "", isMotion);
-  }, []);
-
-  // Show "double-click to download" hint after 1s hover, hide on leave
-  const handleLbMediaEnter = useCallback(() => {
-    if (lbHintTimer.current) clearTimeout(lbHintTimer.current);
-    lbHintTimer.current = setTimeout(() => setLbHintVisible(true), 1000);
-  }, []);
-  const handleLbMediaLeave = useCallback(() => {
-    if (lbHintTimer.current) clearTimeout(lbHintTimer.current);
-    lbHintTimer.current = null;
-    setLbHintVisible(false);
-  }, []);
-
-  const openLightbox = (url: string | null, isMotion: boolean) => {
-    if (!url) return;
-    setLightbox({ url, isMotion });
-    setLbZoomed(false);
-  };
-  const closeLightbox = () => {
-    setLightbox(null);
-    setLbZoomed(false);
-  };
-
-  const preloadedRef = useRef<Set<string>>(new Set());
-
-  const prefetchImage = useCallback((url: string) => {
-    if (!url) return;
-    if (preloadedRef.current.has(url)) return;
-    preloadedRef.current.add(url);
-
-    const img = new Image();
-    try {
-      (img as any).decoding = "async";
-    } catch {}
-    img.src = url;
-  }, []);
-
-  // -----------------------------
-  // Lightbox close: swipe any direction (mobile) + click/esc (desktop)
-  // -----------------------------
-  const lightboxSwipeRef = useRef<{
-    active: boolean;
-    pointerId: number;
-    startX: number;
-    startY: number;
-    startedAt: number;
-    pointerType: string;
-  }>({
-    active: false,
-    pointerId: -1,
-    startX: 0,
-    startY: 0,
-    startedAt: 0,
-    pointerType: "",
-  });
-
-  const lightboxJustSwipedRef = useRef(false);
-
-  const SWIPE_CLOSE_PX = 70;
-  const SWIPE_MAX_MS = 900;
-
-  const onLightboxPointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (!lightbox) return;
-
-      const pt = String((e as any).pointerType || "");
-      if (pt === "mouse") return;
-
-      lightboxSwipeRef.current = {
-        active: true,
-        pointerId: e.pointerId,
-        startX: e.clientX,
-        startY: e.clientY,
-        startedAt: Date.now(),
-        pointerType: pt,
-      };
-
-      try {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      } catch {}
-
-      e.preventDefault();
-    },
-    [lightbox]
-  );
-
-  const onLightboxPointerMove = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      const st = lightboxSwipeRef.current;
-      if (!lightbox) return;
-      if (!st.active) return;
-      if (st.pointerId !== e.pointerId) return;
-
-      const dx = e.clientX - st.startX;
-      const dy = e.clientY - st.startY;
-      const dist = Math.hypot(dx, dy);
-      const age = Date.now() - st.startedAt;
-
-      if (dist >= SWIPE_CLOSE_PX && age <= SWIPE_MAX_MS) {
-        lightboxJustSwipedRef.current = true;
-        st.active = false;
-        try {
-          e.currentTarget.releasePointerCapture(e.pointerId);
-        } catch {}
-        closeLightbox();
-        e.preventDefault();
-      }
-    },
-    [lightbox, closeLightbox]
-  );
-
-  const onLightboxPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const st = lightboxSwipeRef.current;
-    if (st.pointerId !== e.pointerId) return;
-    st.active = false;
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {}
-  }, []);
-
-  // ============================================================
-  // Matcha quantity popup (same behavior as StudioLeft)
-  // ============================================================
-  const [matchaQtyOpen, setMatchaQtyOpen] = useState(false);
-  const [matchaQty, setMatchaQty] = useState(1);
-
-  const clampQty = (n: number) => Math.max(1, Math.min(100, Math.floor(Number(n || 1))));
-
-  const buildMatchaCheckoutUrl = (base: string, qty: number) => {
-    const q = clampQty(qty);
-    try {
-      const u = new URL(String(base || ""));
-
-      const m = u.pathname.match(/\/cart\/(\d+)(?::(\d+))?/);
-      if (m?.[1]) {
-        const id = m[1];
-        u.pathname = `/cart/${id}:${q}`;
-        return u.toString();
-      }
-
-      if (u.pathname.includes("/cart/add")) {
-        u.searchParams.set("quantity", String(q));
-        return u.toString();
-      }
-
-      u.searchParams.set("quantity", String(q));
-      return u.toString();
-    } catch {
-      return String(base || "");
-    }
-  };
-
-  const openMatchaQty = () => {
-    setMatchaQty(1);
-    setMatchaQtyOpen(true);
-  };
-
-  const confirmMatchaQty = (qty: number) => {
-    setMatchaQtyOpen(false);
-    if (onConfirmCheckout) {
-      onConfirmCheckout(qty);
-    } else {
-      const is5000 = qty === 100 && matcha5000Url;
-      const url = is5000 ? matcha5000Url : buildMatchaCheckoutUrl(matchaUrl, qty);
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
-  };
-
-  useEffect(() => {
-    if (!lightbox) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" || e.key === "Backspace") {
-        e.preventDefault();
-        closeLightbox();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [lightbox]);
-
-  // Toggle a card into/out of confirm-delete state (re-click deselects just that one)
-  const askDelete = (id: string) => {
-    setDeleteErrors((prev) => ({ ...prev, [id]: "" }));
-    setConfirmDeleteIds((prev) => {
-      if (prev[id]) {
-        // re-click: deselect just this one
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      }
-      return { ...prev, [id]: true };
-    });
-  };
-
-  // Cancel on any card clears ALL confirmed selections
-  const cancelDeleteAll = () => {
-    setConfirmDeleteIds({});
-  };
-
-  // Delete a single item (when only 1 card is confirmed)
-  const deleteItem = async (id: string) => {
-    setRemovingIds((prev) => ({ ...prev, [id]: true }));
-    setDeletingIds((prev) => ({ ...prev, [id]: true }));
-    setConfirmDeleteIds({});
-
-    try {
-      if (!onDelete) throw new Error("Delete not available.");
-      await onDelete(id);
-
-      setGhostIds((prev) => ({ ...prev, [id]: true }));
-
-      setTimeout(() => {
-        setRemovedIds((prev) => ({ ...prev, [id]: true }));
-        setGhostIds((prev) => {
-          const next = { ...prev };
-          delete next[id];
-          return next;
-        });
-      }, 260);
-    } catch (e: any) {
-      setDeleteErrors((prev) => ({ ...prev, [id]: safeString(e?.message, "Delete failed.") }));
-      setRemovingIds((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-    } finally {
-      setDeletingIds((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      setRemovingIds((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-    }
-  };
-
-  // Delete ALL confirmed cards
-  const deleteAllConfirmed = async () => {
-    const ids = Object.keys(confirmDeleteIds).filter((id) => confirmDeleteIds[id]);
-    if (!ids.length || !onDelete) return;
-
-    setConfirmDeleteIds({});
-
-    for (const id of ids) {
-      setRemovingIds((prev) => ({ ...prev, [id]: true }));
-      setDeletingIds((prev) => ({ ...prev, [id]: true }));
-    }
-
-    for (const id of ids) {
-      try {
-        await onDelete(id);
-        setGhostIds((prev) => ({ ...prev, [id]: true }));
-        setTimeout(() => {
-          setRemovedIds((prev) => ({ ...prev, [id]: true }));
-          setGhostIds((prev) => {
-            const next = { ...prev };
-            delete next[id];
-            return next;
-          });
-        }, 260);
-      } catch (e: any) {
-        setDeleteErrors((prev) => ({ ...prev, [id]: safeString(e?.message, "Delete failed.") }));
-      }
-      setRemovingIds((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      setDeletingIds((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-    }
-  };
+  // Matcha quantity popup
+  const { matchaQtyOpen, matchaQty, setMatchaQty, setMatchaQtyOpen, openMatchaQty, confirmMatchaQty, clampQty } =
+    useMatchaCheckout({ matchaUrl, matcha5000Url, onConfirmCheckout });
 
   // Likes set (by canonical URL)
   const likedUrlSet = useMemo(() => {
@@ -1449,344 +188,52 @@ export default function Profile({
     return "profile-card--tall";
   }, []);
 
-  const { items, activeCount, totalMatchas } = useMemo(() => {
-    // liked generation ids from feedback events
-    const likedGenIdSet = new Set<string>();
-    for (const f of feedbacks) {
-      const gid = findLikedGenerationId(f);
-      if (gid) likedGenIdSet.add(gid);
-    }
+  // Items computation (extracted to computeProfileItems)
+  const { items, activeCount, totalMatchas } = useMemo(() =>
+    computeProfileItems({
+      generations, feedbacks, likedUrlSet, dateRange, motion,
+      activeAspectFilter, removedIds, ghostIds, deletingIds,
+      confirmDeleteIds, dragSelectedIds: dragSelectedIds.current,
+      deleteErrors, onRecreate, sizeClassForIndex,
+    }),
+    [generations, feedbacks, likedUrlSet, motion, activeAspectFilter, dateRange, onRecreate, removedIds, sizeClassForIndex],
+  );
 
-    const baseRows: Array<{ row: Row; source: "generation" }> = generations.map((g) => ({
-      row: g,
-      source: "generation" as const,
-    }));
+  // Lightbox hook
+  const {
+    lightbox, lbZoomed, lbZoomOrigin, lbHintVisible, lightboxJustSwipedRef,
+    openLightbox, closeLightbox, prefetchImage,
+    handleLbMediaClick, handleLbMediaDblClick, handleLbMediaEnter, handleLbMediaLeave,
+    onLightboxPointerDown, onLightboxPointerMove, onLightboxPointerUp,
+  } = useProfileLightbox(items);
 
-    let base = baseRows
-      .map(({ row: g, source }, idx) => {
-        const payloadRaw: any = (g as any)?.mg_payload ?? (g as any)?.payload ?? null;
-        const metaRaw: any = (g as any)?.mg_meta ?? (g as any)?.meta ?? null;
-        const payload: any = tryParseJson<any>(payloadRaw) ?? payloadRaw ?? null;
-        const meta: any = tryParseJson<any>(metaRaw) ?? metaRaw ?? null;
+  // Reset visible count on filter change
+  useEffect(() => { setVisibleCount(20); }, [motion, activeAspectFilter]);
+  useEffect(() => { setVisibleCount((c) => Math.min(c, items.length)); }, [items.length]);
 
-        const generationId = safeString(pick(g, ["mg_generation_id", "generation_id", "generationId", "id"]), "").trim();
-        const id = generationId || safeString(pick(g, ["mg_id", "id"]), `row_${idx}`).trim();
-
-        if (removedIds[id]) return null;
-
-        const createdAt = safeString(pick(g, ["createdAt", "created_at", "mg_created_at", "ts", "timestamp"]), "").trim();
-
-        const outUrl = pick(g, ["mg_output_url", "outputUrl", "output_url"], "").trim();
-        const imgUrl = pick(g, ["mg_image_url", "imageUrl", "image_url"], "").trim();
-        const vidUrl = pick(g, ["mg_video_url", "videoUrl", "video_url"], "").trim();
-
-        const aspectRaw =
-          pick(g, ["mg_aspect_ratio", "aspect_ratio", "aspectRatio"], "") ||
-          pick(meta, ["aspectRatio", "aspect_ratio"], "") ||
-          pick(payload, ["aspect_ratio", "aspectRatio"], "") ||
-          pick(payload?.inputs, ["aspect_ratio", "aspectRatio"], "");
-
-        const contentType = pick(g, ["mg_content_type", "contentType"], "").toLowerCase();
-        const kindHint = String(pick(g, ["mg_result_type", "resultType", "mg_type", "type"], "")).toLowerCase();
-
-        const looksVideoMeta = contentType.includes("video") || kindHint.includes("motion") || kindHint.includes("video");
-        const looksImage = isImageUrl(outUrl) || isImageUrl(imgUrl);
-
-        const videoUrl = vidUrl || (isVideoUrl(outUrl) ? outUrl : looksVideoMeta && !looksImage ? outUrl : "");
-        const imageUrl = imgUrl || (!videoUrl ? outUrl : "");
-        const url = (videoUrl || imageUrl || outUrl).trim();
-        const isMotion = Boolean(videoUrl);
-
-        const inputs = extractInputsForDisplay(g, isMotion || looksVideoMeta);
-
-        const aspectRatio =
-          inputs.aspectRatio ||
-          normalizeAspectRatio(aspectRaw) ||
-          normalizeAspectRatio(
-            typeof payload?.aspect_ratio === "string"
-              ? payload.aspect_ratio
-              : typeof payload?.aspectRatio === "string"
-              ? payload.aspectRatio
-              : ""
-          );
-
-        const liked =
-          (generationId && likedGenIdSet.has(generationId)) ||
-          (url ? likedUrlSet.has(canonicalAssetUrl(url)) : false);
-
-        const prompt = (inputs.brief || "").trim();
-
-        // Detect fingertips generations (they have no prompt but can be used as scene / animated)
-        const mmaMode = String(pick(g, ["mg_mma_mode"], "")).toLowerCase();
-        const isFingertips = mmaMode === "fingertips";
-
-        // ✅ For video/audio "reference-only" runs, prompt can be empty.
-        // Still allow recreate if we have ref media or frames.
-        const hasRefMedia =
-          !!inputs.referenceAudioUrl ||
-          !!inputs.referenceVideoUrl ||
-          !!inputs.startImageUrl ||
-          !!inputs.endImageUrl ||
-          (Array.isArray(inputs.klingFrameUrls) && inputs.klingFrameUrls.length > 0);
-
-        // Fingertips items can always be used as scene / animated even without a prompt
-        const canRecreate = source === "generation" && !!onRecreate && (!!prompt || hasRefMedia || isFingertips);
-
-        const draft: RecreateDraft | null = canRecreate
-          ? {
-              mode: isMotion ? "motion" : "still",
-              brief: prompt,
-              settings: {
-                aspect_ratio: inputs.aspectRatio || undefined,
-                minaVisionEnabled: inputs.minaVisionEnabled,
-                stylePresetKeys: inputs.stylePresetKeys.length ? inputs.stylePresetKeys : undefined,
-                ...(isMotion && inputs.motionDurationSec
-                  ? { motion_duration_sec: inputs.motionDurationSec }
-                  : {}),
-                ...(isMotion
-                  ? {
-                      generate_audio: inputs.endImageUrl
-                        ? false
-                        : typeof inputs.generateAudio === "boolean"
-                        ? inputs.generateAudio
-                        : undefined,
-                    }
-                  : {}),
-              },
-              assets: {
-                // For fingertips, use the output image as the scene/product image
-                productImageUrl: inputs.productImageUrl || (isFingertips && url ? url : undefined),
-                logoImageUrl: inputs.logoImageUrl || undefined,
-                styleImageUrls: inputs.styleImageUrls.length ? inputs.styleImageUrls : undefined,
-                ...(isMotion && inputs.startImageUrl ? { kling_start_image_url: inputs.startImageUrl } : {}),
-                ...(isMotion && inputs.endImageUrl ? { kling_end_image_url: inputs.endImageUrl } : {}),
-                ...(isMotion && inputs.referenceAudioUrl ? { frame2_audio_url: inputs.referenceAudioUrl } : {}),
-                ...(isMotion && inputs.referenceVideoUrl ? { frame2_video_url: inputs.referenceVideoUrl } : {}),
-              },
-            }
-          : null;
-
-        // Extract cost (matchas charged) from generation record
-        const matchasCost = Number(
-          pick(g, ["mg_credits_cost", "credits_cost", "matchas_charged", "cost"], "") ||
-          pick(meta, ["credits_cost", "matchas_charged", "cost"], "") ||
-          pick(payload, ["credits_cost", "matchas_charged"], "")
-        ) || 0;
-
-        return {
-          id,
-          createdAt,
-          prompt,
-          url,
-          liked,
-          isMotion,
-          aspectRatio,
-          source,
-          sourceRank: source === "generation" ? 2 : 1,
-          inputs,
-          canRecreate,
-          draft,
-          matchasCost,
-        };
-      })
-      .filter((x): x is NonNullable<typeof x> => Boolean(x && x.url));
-
-    base.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-
-    // Merge duplicates by canonical URL
-    const merged = new Map<string, typeof base[number]>();
-    for (const it of base) {
-      const key = canonicalAssetUrl(it.url);
-      const existing = merged.get(key);
-      if (!existing) {
-        merged.set(key, it);
-        continue;
-      }
-
-      const preferred = existing.sourceRank >= it.sourceRank ? existing : it;
-      const other = preferred === existing ? it : existing;
-
-      const next = { ...preferred };
-      if (other.liked && !next.liked) next.liked = true;
-      if (!next.aspectRatio && other.aspectRatio) next.aspectRatio = other.aspectRatio;
-
-      merged.set(key, next);
-    }
-
-    const deduped = Array.from(merged.values());
-
-    // ✅ ACTUAL FILTERING (not just dimming)
-    const now = Date.now();
-    const dateThreshold = dateRange === "today" ? now - 86400000
-      : dateRange === "7d" ? now - 7 * 86400000
-      : dateRange === "30d" ? now - 30 * 86400000
-      : 0;
-
-    const filtered = deduped.filter((it) => {
-      const matchesMotion = motion === "all" ? true : motion === "motion" ? it.isMotion : !it.isMotion;
-      const matchesAspect = !activeAspectFilter || it.aspectRatio === activeAspectFilter.ratio;
-      const matchesDate = dateRange === "all" || (it.createdAt && new Date(it.createdAt).getTime() >= dateThreshold);
-      return matchesMotion && matchesAspect && matchesDate;
-    });
-
-    // Compute total matchas for the filtered set
-    const totalMatchas = filtered.reduce((sum, it) => sum + (it.matchasCost || 0), 0);
-
-    const out = filtered.map((it, idx) => ({ ...it, sizeClass: sizeClassForIndex(idx) }));
-
-    return { items: out, activeCount: out.length, totalMatchas };
-  }, [generations, feedbacks, likedUrlSet, motion, activeAspectFilter, dateRange, onRecreate, removedIds, sizeClassForIndex]);
-
-  useEffect(() => {
-    setVisibleCount(20);
-  }, [motion, activeAspectFilter]);
-
-  useEffect(() => {
-    setVisibleCount((current) => Math.min(current, items.length));
-  }, [items.length]);
-
-  useEffect(() => {
-    loadingMoreRefFlag.current = !!loadingMore;
-  }, [loadingMore]);
-
-  // Infinite load
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el) return;
-
-    const root = getScrollParent(el);
-
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry || !entry.isIntersecting) return;
-        setVisibleCount((c) => Math.min(items.length, c + 24));
-      },
-      {
-        root,
-        rootMargin: root ? "900px 0px 900px 0px" : "1400px 0px 1400px 0px",
-        threshold: 0.01,
-      }
-    );
-
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [items.length]);
-
-  useEffect(() => {
-    if (!hasMore) return;
-    if (!onLoadMore) return;
-
-    const el = loadMoreRef.current;
-    if (!el) return;
-
-    const root = getScrollParent(el); // ✅ critical for "popup" scroll containers
-
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (!entries[0]?.isIntersecting) return;
-        if (!hasMore) return;
-        if (loadingMoreRefFlag.current) return; // ✅ guard
-        loadingMoreRefFlag.current = true; // ✅ lock until parent flips loadingMore back
-        onLoadMore();
-      },
-      {
-        root: root || null,
-        rootMargin: root ? "1200px 0px 1200px 0px" : "1400px 0px 1400px 0px",
-        threshold: 0.01,
-      }
-    );
-
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [hasMore, onLoadMore]);
+  // Infinite scroll + server pagination
+  useInfiniteScroll({
+    itemCount: items.length, setVisibleCount, sentinelRef, loadMoreRef,
+    hasMore, loadingMore, onLoadMore, getScrollParent,
+  });
 
   const visibleItems = useMemo(() => items.slice(0, visibleCount), [items, visibleCount]);
   const showInitialSkeletons = loading && items.length === 0;
   const skeletonCount = 12;
 
-  // Grid video autoplay (muted) + hover audio (desktop)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!("IntersectionObserver" in window)) return;
+  // Video autoplay hook
+  useVideoAutoplay(items, visibleItems, videoElsRef, hoveredVideoIdRef);
 
-    const els = videoElsRef.current;
-    const visible = new Map<HTMLVideoElement, number>();
+  const onTogglePrompt = (id: string) =>
+    setExpandedPromptIds((prev) => (prev[id] ? {} : { [id]: true }));
 
-    const pauseAll = () => {
-      els.forEach((v) => {
-        try {
-          v.pause();
-        } catch {}
-      });
-    };
-
-    const playVisible = () => {
-      els.forEach((v) => {
-        const ratio = visible.get(v) ?? 0;
-        const shouldPlay = ratio >= 0.35;
-
-        try {
-          const id = v.dataset?.minaId || "";
-          const hovering = id && hoveredVideoIdRef.current === id;
-
-          // autoplay must be muted; only unmute on hover
-          v.muted = !hovering;
-
-          if (shouldPlay) {
-            if (v.paused) v.play().catch(() => {});
-          } else {
-            if (!v.paused) v.pause();
-          }
-        } catch {}
-      });
-    };
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          const v = e.target as HTMLVideoElement;
-          const ratio = e.intersectionRatio || 0;
-          if (e.isIntersecting && ratio >= 0.35) visible.set(v, ratio);
-          else visible.delete(v);
-        }
-        playVisible();
-      },
-      {
-        root: null,
-        rootMargin: "200px 0px 200px 0px",
-        threshold: [0, 0.35, 0.7, 1],
-      }
-    );
-
-    els.forEach((v) => observer.observe(v));
-
-    const onVis = () => {
-      if (document.hidden) pauseAll();
-      else playVisible();
-    };
-    document.addEventListener("visibilitychange", onVis);
-
-    return () => {
-      document.removeEventListener("visibilitychange", onVis);
-      observer.disconnect();
-      pauseAll();
-    };
-  }, [visibleItems.length]);
-
-  // ✅ Only one expanded at a time
-const onTogglePrompt = (id: string) =>
-  setExpandedPromptIds((prev) => (prev[id] ? {} : { [id]: true }));
-
-const openPrompt = useCallback((id: string) => {
-  setExpandedPromptIds((prev) => (prev[id] && Object.keys(prev).length === 1 ? prev : { [id]: true }));
-}, []);
-
+  const openPrompt = useCallback((id: string) => {
+    setExpandedPromptIds((prev) => (prev[id] && Object.keys(prev).length === 1 ? prev : { [id]: true }));
+  }, []);
 
   return (
     <>
       <TopLoadingBar active={loading} />
-
       <MatchaQtyModal
         open={matchaQtyOpen}
         qty={matchaQty}
@@ -1797,7 +244,6 @@ const openPrompt = useCallback((id: string) => {
         min={1}
         max={10}
       />
-
       {lightbox ? (
         <>
           {/* Backdrop — click to close */}
@@ -1811,7 +257,6 @@ const openPrompt = useCallback((id: string) => {
               closeLightbox();
             }}
           />
-
           <div
             className="profile-lightbox"
             role="dialog"
@@ -1830,7 +275,6 @@ const openPrompt = useCallback((id: string) => {
             >
               Back
             </button>
-
             <div
               className={`profile-lightbox-media${lbZoomed ? " is-zoomed" : ""}`}
               style={lbZoomed ? { transformOrigin: lbZoomOrigin } : undefined}
@@ -1880,14 +324,12 @@ const openPrompt = useCallback((id: string) => {
                 />
               )}
             </div>
-
             <div className={`profile-lightbox-hint${lbHintVisible ? " is-visible" : ""}`}>
               double-click to download
             </div>
           </div>
         </>
       ) : null}
-
       <div className="profile-shell">
         <div className="profile-header-fixed">
           <div className="profile-topbar">
@@ -1902,38 +344,31 @@ const openPrompt = useCallback((id: string) => {
                   Back to studio
                 </a>
               )}
-
               <span className="profile-topsep">|</span>
-
               <button className="profile-toplink" type="button" onClick={openMatchaQty}>
                 Get more Matchas
               </button>
             </div>
           </div>
-
           <div className="profile-meta-strip">
             <div className="profile-kv">
               <span className="profile-k">Email</span>
               <span className="profile-v">{email || "—"}</span>
             </div>
-
             <div className="profile-kv">
               <span className="profile-k">Matchas</span>
               <span className="profile-v">{credits === null ? "—" : credits}</span>
             </div>
-
             <div className="profile-kv">
               <span className="profile-k">Best before</span>
               <span className="profile-v">{expiresAt ? fmtDate(expiresAt) : "—"}</span>
             </div>
-
             <div className="profile-kv">
               <button className="profile-logout-meta" onClick={onLogout} type="button">
                 Logout
               </button>
             </div>
           </div>
-
           <div className="profile-archive-head">
             <div>
               <div className="profile-archive-title">Archive</div>
@@ -1952,7 +387,6 @@ const openPrompt = useCallback((id: string) => {
                 )}
               </div>
             </div>
-
             <div className="profile-filters">
               <button
                 type="button"
@@ -1961,7 +395,6 @@ const openPrompt = useCallback((id: string) => {
               >
                 {dateRangeLabel}
               </button>
-
               <button
                 type="button"
                 className={`profile-filter-pill ${motion !== "all" ? "active" : ""}`}
@@ -1969,7 +402,6 @@ const openPrompt = useCallback((id: string) => {
               >
                 {motionLabel}
               </button>
-
               <button
                 type="button"
                 className={`profile-filter-pill ${activeAspectFilter ? "active" : ""}`}
@@ -1980,7 +412,6 @@ const openPrompt = useCallback((id: string) => {
             </div>
           </div>
         </div>
-
         <div
           ref={gridRef}
           className="profile-grid"
@@ -2023,22 +454,17 @@ const openPrompt = useCallback((id: string) => {
             : visibleItems.map((it) => {
                 const expanded = Boolean(expandedPromptIds[it.id]);
                 const showViewMore = (it.prompt || "").length > 90 || it.canRecreate;
-
                 const deleting = Boolean(deletingIds[it.id]);
                 const removing = Boolean(removingIds[it.id]);
                 const deleteErr = deleteErrors[it.id];
                 const confirming = Boolean(confirmDeleteIds[it.id]);
-
                 const inputs = it.inputs || null;
                 const sceneImageUrl = canonicalAssetUrl(it.url);
                 const canScene = !!onRecreate && !it.isMotion && isImageUrl(sceneImageUrl);
-
                 const canAnimate = !!it.draft && !it.isMotion && isImageUrl(sceneImageUrl);
                 const canAnimateBtn = !!onRecreate && canAnimate && !!it.draft;
-
                 const canRecreateBtn = !!onRecreate && !!it.draft && it.canRecreate;
                 const showActionsRow = !!inputs && (canScene || canAnimateBtn || canRecreateBtn);
-
                 return (
                   <div
                     key={it.id}
@@ -2056,7 +482,6 @@ const openPrompt = useCallback((id: string) => {
                       >
                         Download
                       </button>
-
                       <div className="profile-card-top-right">
                         {confirming ? (
                           <div className="profile-card-confirm" role="group" aria-label="Confirm delete">
@@ -2096,9 +521,7 @@ const openPrompt = useCallback((id: string) => {
                         )}
                       </div>
                     </div>
-
                     {deleteErr ? <div className="profile-error profile-card-deleteerr">{deleteErr}</div> : null}
-
                     <div
                       className="profile-card-media"
                       role="button"
@@ -2148,9 +571,7 @@ const openPrompt = useCallback((id: string) => {
                                   : it.sizeClass === "profile-card--mini"
                                     ? 700
                                     : 900;
-
                             const thumb = cfThumb(it.url, w, 70);
-
                             return (
                               <img
                                 src={thumb}
@@ -2171,11 +592,9 @@ const openPrompt = useCallback((id: string) => {
                         <div style={{ padding: 10, fontSize: 12, opacity: 0.6 }}>No media</div>
                       )}
                     </div>
-
                     <div className="profile-card-promptline">
                       <div className={`profile-card-prompt ${expanded ? "expanded" : ""}`}>
                         {it.prompt || "—"}
-
                         {expanded && inputs ? (
                           <div className="profile-card-details">
                             {/* Actions (right aligned): Scene (still) + Animate (still) + Re-create */}
@@ -2190,9 +609,7 @@ const openPrompt = useCallback((id: string) => {
                                       // REPLACE the whole Scene button onClick handler with this:
                                       onClick={(e) => {
                                         e.stopPropagation();
-
                                         const scene = canonicalAssetUrl(sceneImageUrl);
-
                                         const draft: RecreateDraft = {
                                           mode: "still",
                                           brief: SCENE_PROMPT,
@@ -2221,7 +638,6 @@ const openPrompt = useCallback((id: string) => {
                                             styleImageUrls: [], // still force-clear
                                           },
                                         };
-
                                         onRecreate?.(draft);
                                         onBackToStudio?.();
                                       }}
@@ -2229,7 +645,6 @@ const openPrompt = useCallback((id: string) => {
                                       Set scene
                                     </button>
                                   ) : null}
-
                                   {canAnimateBtn ? (
                                     <button
                                       type="button"
@@ -2251,7 +666,6 @@ const openPrompt = useCallback((id: string) => {
                                       Animate
                                     </button>
                                   ) : null}
-
                                    {canRecreateBtn ? (
                                     <button
                                       type="button"
@@ -2265,9 +679,7 @@ const openPrompt = useCallback((id: string) => {
                                       Re-create
                                     </button>
                                   ) : null}
-
-
-                                </span>
+</span>
                               </div>
                             ) : null}
 
@@ -2370,25 +782,19 @@ const openPrompt = useCallback((id: string) => {
                             {/* Motion frames (start/end + kling frames + ref video/audio if present) */}
                             {(() => {
                               const items: Array<{ kind: "image" | "video" | "audio"; url: string }> = [];
-
                               if (inputs.startImageUrl) items.push({ kind: "image", url: inputs.startImageUrl });
                               if (inputs.endImageUrl) items.push({ kind: "image", url: inputs.endImageUrl });
-
                               if (Array.isArray((inputs as any).klingFrameUrls)) {
                                 for (const u of (inputs as any).klingFrameUrls as string[]) {
                                   if (u && !items.some((x) => x.url === u)) items.push({ kind: "image", url: u });
                                 }
                               }
-
                               const refVideo = String((inputs as any).referenceVideoUrl || "").trim();
                               const refAudio = String((inputs as any).referenceAudioUrl || "").trim();
-
                               if (refVideo) items.push({ kind: "video", url: refVideo });
                               if (refAudio) items.push({ kind: "audio", url: refAudio });
-
                               const show = it.isMotion && items.length;
                               if (!show) return null;
-
                               return (
                                 <div className="profile-card-detailrow">
                                   <span className="k">Frames</span>
@@ -2442,7 +848,6 @@ const openPrompt = useCallback((id: string) => {
                                             />
                                           );
                                         }
-
                                         if (m.kind === "audio") {
                                           return (
                                             <button
@@ -2489,7 +894,6 @@ const openPrompt = useCallback((id: string) => {
                                           />
                                         );
                                       })}
-
                                     </span>
                                   </span>
                                 </div>
@@ -2538,7 +942,6 @@ const openPrompt = useCallback((id: string) => {
                           </div>
                         ) : null}
                       </div>
-
                       {showViewMore ? (
                         <button className="profile-card-viewmore" type="button" onClick={() => onTogglePrompt(it.id)}>
                           {expanded ? "less" : "more"}
@@ -2548,7 +951,6 @@ const openPrompt = useCallback((id: string) => {
                   </div>
                 );
               })}
-
           <div ref={sentinelRef} className="profile-grid-sentinel" />
           <div ref={loadMoreRef} style={{ height: 1 }} />
           {loadingMore
@@ -2569,9 +971,7 @@ const openPrompt = useCallback((id: string) => {
               ))
             : null}
         </div>
-
-
-      </div>
+</div>
     </>
   );
 }
