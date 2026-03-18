@@ -54,7 +54,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
     allStyleCards, styleThumb, styleLabel, motionStyleThumb, motionStyleLabel,
     effectivePanel, pillBaseStyle, getDisplayUrl,
     productThumb, logoThumb, inspirationThumb,
-    createState, createLabel, createDisabled, handleCreateClick,
+    createState, createLabel, createDisabled, handleCreateClick, hasMotionHandler,
     motionSuggesting, motionHasImage, motionCreditsOk, typeForMeLabel,
     deleteConfirm, confirmDeleteYes, confirmDeleteNo,
     TUTORIAL_VIDEO_URL, tutorialOpen, setTutorialOpen, tutorialMobile, closeTutorial,

@@ -727,7 +727,7 @@ export function useStudioLeftState(props: StudioLeftProps) {
     productThumb, logoThumb, inspirationThumb,
 
     createState, createLabel, createDisabled, handleCreateClick,
-    canCreateMotion, canCreateStill,
+    canCreateMotion, canCreateStill, hasMotionHandler,
     motionSuggesting, motionHasImage, motionCreditsOk, motionBlockReason,
     typeForMeLabel,
 
