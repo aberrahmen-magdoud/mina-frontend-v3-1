@@ -1,300 +1,327 @@
-# mina-frontend
-# Mina — Editorial AI Studio
+# Mina Frontend
 
-Mina is Falta Studio’s “creative brain” for generating **editorial stills** and **motion** from product + style references.  
-It consists of:
-
-- **Frontend**: Vite + React + TypeScript (with **Supabase Auth**)
-- **Backend API**: Node.js (ESM) + Express (deployed on Render)
-- **AI Providers**: OpenAI (prompt + style profile), Replicate (SeaDream + Kling)
-- **Storage**: Cloudflare R2 (uploads + optional re-hosting of generated outputs)
-- **Credits**: wallet + ledger, top-ups via Shopify webhook
+React 18 + TypeScript + Vite single-page application for Mina Editorial AI. Features AI-powered still image and video generation, real-time streaming, image editing (Fingertips), profile/history archive, and matcha credit billing.
 
 ---
 
-## Key features
-
-- **Editorial stills**: `POST /editorial/generate` (Replicate SeaDream)
-- **Motion suggestion**: `POST /motion/suggest` (OpenAI)
-- **Motion generation**: `POST /motion/generate` (Replicate Kling)
-- **Mina Vision Intelligence**:
-  - user feedback/likes: `POST /feedback/like`
-  - lightweight style profile reused on later generations
-- **Credits system**:
-  - `GET /credits/balance`
-  - `POST /credits/add`
-  - Shopify order webhook: `POST /api/credits/shopify-order?secret=...`
-- **R2 media storage** (private bucket + signed URLs):
-  - upload UI files (product / logo / inspiration): `POST /api/r2/upload-signed`
-  - store remote outputs into R2: `POST /api/r2/store-remote-signed`
-
-### Admin access (frontend)
-
-- Admin UI/actions are shown **only** when `mega_customers.mg_admin_allowlist === true` for the current user.
-- No other heuristics are used (credits thresholds, roles, email allowlists, or legacy admin tables).
-- If the user is missing or the lookup fails, admin resolves to `false` without throwing.
-
----
-
-## Architecture
-
-### High-level diagram (text)
+## Directory Structure
 
 ```
-+---------------------------+
-|  User Browser (Mina UI)   |
-|  Vite + React + Supabase  |
-+------------+--------------+
-             |
-             | HTTPS (REST/JSON)
-             v
-+------------+-----------------------------------+
-|           Mina API (Express on Render)         |
-| /editorial /motion /credits /feedback /r2 ...  |
-+------+-------------------+---------------------+
-       |                   |
-       | OpenAI            | Replicate
-       | (prompting)       | (SeaDream + Kling)
-       v                   v
-   +---+----+          +---+----+
-   | OpenAI |          | Replicate|
-   +--------+          +---------+
-       |
-       v
-+------+-------------------+
-| Postgres (Prisma, optional) |
-| users, wallets, ledger, ... |
-+------+-------------------+
-       |
-       v
-+------+-------------------+
-| Cloudflare R2 (S3 API)   |
-| uploads + stored outputs |
-+--------------------------+
-
-Shopify (credits packs) -> webhook -> Mina API -> credits ledger
-```
-
-### Current state vs roadmap
-
-- **Current implementation** includes: still/motion generation, credits, likes, R2 uploads, Supabase-gated UI.
-- **Roadmap (production hardening)** includes: full DB persistence for all maps (sessions, generations, feedback), richer admin dashboard, auto top-up strategy, and more robust user model (see “Roadmap” below).
-
----
-
-## Repo layout (typical)
-
-> Adjust folder names to match your repo.
-
-```
-backend/
-  package.json
-  server.js
-  r2.js
-  schema.prisma
-frontend/
-  src/
-    MinaApp.tsx
-    AuthGate.tsx
-    StudioLeft.tsx
-    StudioRight.tsx
-  vite.config.ts
+├── index.html                # HTML entry point with SEO/Open Graph meta
+├── package.json              # React 18.2, Supabase, TypeScript 5, Vite 5
+├── vite.config.mts           # Vite + React plugin config
+│
+├── src/
+│   ├── main.tsx              # Bootstrap — StrictMode + ErrorBoundary + global error handlers
+│   ├── App.tsx               # AuthGate wrapper around MinaApp
+│   ├── MinaApp.tsx           # Core orchestrator — all top-level state + handler wiring
+│   ├── Profile.tsx           # Archive/history view — grid, filters, lightbox, batch delete
+│   ├── StudioLeft.tsx        # Input panel — pills, brief, uploads, styles, create buttons
+│   ├── StudioRight.tsx       # Output panel — still carousel, motion player, tweak bar, fingertips
+│   ├── index.css             # Global resets, colour system, base styles
+│   ├── Profile.css           # Profile grid + header styles
+│   ├── StudioLeft.css        # Left panel styles
+│   ├── StudioRight.css       # Right panel styles
+│   │
+│   ├── components/           # Reusable UI components
+│   │   ├── AuthGate.tsx
+│   │   ├── ErrorBoundary.tsx
+│   │   ├── Collapse.tsx
+│   │   ├── TopLoadingBar.tsx
+│   │   ├── StillImage.tsx
+│   │   ├── MatchaQtyModal.tsx
+│   │   ├── SceneLibraryModal.tsx
+│   │   ├── TutorialModal.tsx
+│   │   └── WelcomeMatchaModal.tsx
+│   │
+│   ├── hooks/                # React hooks — extracted state logic
+│   │   ├── useStudioLeftState.ts
+│   │   ├── useFingertips.ts
+│   │   ├── useDeleteFlow.ts
+│   │   ├── useProfileDragSelect.ts
+│   │   ├── useProfileLightbox.ts
+│   │   ├── useMatchaCheckout.ts
+│   │   ├── useMinaNotice.ts
+│   │   ├── useInfiniteScroll.ts
+│   │   ├── useHeaderContrast.ts
+│   │   └── useVideoAutoplay.ts
+│   │
+│   ├── handlers/             # Business logic — deps-injected, testable
+│   │   ├── minaDataFlow.ts
+│   │   ├── minaGenerateFlow.ts
+│   │   ├── minaTweakFlow.ts
+│   │   ├── minaUiFlow.ts
+│   │   ├── minaUploadFlow.ts
+│   │   ├── minaCustomStyleFlow.ts
+│   │   └── minaCdnFlow.ts
+│   │
+│   ├── lib/                  # Utilities, types, constants, API helpers
+│   │   ├── minaTypes.ts
+│   │   ├── minaConstants.ts
+│   │   ├── minaHelpers.ts
+│   │   ├── minaApi.ts
+│   │   ├── minaCdn.ts
+│   │   ├── mediaHelpers.ts
+│   │   ├── mmaErrors.ts
+│   │   ├── mmaSession.ts
+│   │   ├── megaIdentity.ts
+│   │   ├── supabaseClient.ts
+│   │   ├── errorReporting.ts
+│   │   ├── installGlobalErrorHandlers.ts
+│   │   ├── adminConfig.ts
+│   │   ├── minaDownload.ts
+│   │   ├── sceneLibrary.ts
+│   │   ├── cfInput1080.ts
+│   │   ├── uploadProcessing.ts
+│   │   ├── inboxHelpers.ts
+│   │   ├── profileHelpers.ts
+│   │   ├── profileItems.ts
+│   │   ├── studioLeftHelpers.ts
+│   │   ├── studioLeftTypes.ts
+│   │   ├── studioRightHelpers.ts
+│   │   └── useUndoRedo.ts
+│   │
+│   └── styles/
+│       └── minaPanels.css    # Modal + panel shared styles
+│
+└── docs/                     # Internal documentation
+    ├── init.md
+    ├── MINAV3.md
+    ├── mmaErrors.md
+    └── routes.md
 ```
 
 ---
 
-## Local development
+## Core Application Files
 
-### Backend
+### `main.tsx`
+Application bootstrap. Mounts the React app under `StrictMode`, wraps it in `ErrorBoundary`, installs global `window.onerror` and `unhandledrejection` handlers, and imports root stylesheets.
 
-```bash
-cd backend
-npm install
-npm start
-```
+### `App.tsx`
+Tiny wrapper that renders `AuthGate` around `MinaApp` — ensures authentication context is available before the studio loads.
 
-If you use Postgres:
+### `MinaApp.tsx`
+Central orchestrator (~780 lines). Owns **all top-level state**: studio/profile tabs, health/credits, still + motion generations, uploads, custom styles, fingertips, history, UI stage, and welcome modals. Delegates business logic to `handlers/*` modules. Maintains SSE streams for real-time MMA polling. Renders `StudioLeft`, `StudioRight`, `Profile`, header controls, and modals.
 
-```bash
-npm run db:push
-```
+### `Profile.tsx`
+Archive / history view (~977 lines). Displays past generations with feedback status. Features date / motion / aspect filtering, drag-select batch delete, lightbox viewer with zoom and swipe-close, infinite scroll pagination, matcha checkout modal, and recreation drafts. Uses `computeProfileItems()` for filtering and sorting.
 
-### Frontend
+### `StudioLeft.tsx`
+Input panel (~997 lines). Renders pills (scene, logo, inspiration, style, aspect), brief textarea, upload panels with drag-and-drop, motion controls, style grids (still + motion), and the Create button. All state logic is extracted to the `useStudioLeftState` hook.
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+### `StudioRight.tsx`
+Output / preview panel (~507 lines). Still image carousel (swipe, wheel, edge-click navigation), motion video display, tweak bar, fingertips toolbar (mask lasso, prompt, model dispatch), like / download / share buttons. Supports touch gestures and drag-to-zoom.
 
 ---
 
-## Environment variables
+## `components/` — Reusable UI Components
 
-### Frontend (`frontend/.env`)
+### `AuthGate.tsx`
+Authentication wrapper (~846 lines). Manages Pass ID initialisation, Supabase session detection, OAuth callback handling, and backend identity linking via `/me`. Provides `usePassId()` and `useAuthContext()` hooks. Handles email inbox routing helpers.
 
-> **Never commit** real values. Use `.env.example` with placeholders.
+### `ErrorBoundary.tsx`
+React error boundary. Catches uncaught render errors, sends them to the backend via `sendClientError()`, and shows a fallback "Something went wrong" message.
 
-```bash
-# Mina API
-VITE_MINA_API_BASE_URL=https://mina-editorial-ai-api.onrender.com
-VITE_BACKEND_URL=
+### `Collapse.tsx`
+Animated reveal / hide component with `max-height` transitions. Keeps children mounted while toggling visibility. Uses `ResizeObserver` for dynamic content sizing.
 
-# Optional: where “Buy credits” points (falls back to an internal default URL)
-VITE_MINA_TOPUP_URL=https://faltastudio.com/products/mina-50-matcha
+### `TopLoadingBar.tsx`
+Linear progress bar at the top of the page. Auto-ramps to 90% while busy, completes to 100% on finish, then fades away with exponential easing.
 
-# Supabase (Auth)
-VITE_SUPABASE_URL=YOUR_SUPABASE_URL
-VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+### `StillImage.tsx`
+Image preloader. Uses `ImageDecoder` API (or canvas fallback) to fully decode images before display, ensuring smooth rendering without flicker.
 
-# Optional / future admin UI usage
-VITE_MINA_ADMIN_KEY=YOUR_ADMIN_DASHBOARD_KEY
+### `MatchaQtyModal.tsx`
+Matcha purchase modal. Preset packs (50 / 100 / 500 / 5000), slider or click-to-select quantity, price transparency display, and Shopify cart link.
 
-# Optional / legacy toggles (only if your UI code uses them)
-VITE_MINA_USE_DEV_CUSTOMER=0
-```
+### `SceneLibraryModal.tsx`
+Commercial-friendly scene browser. Searchable grid (left 70%) + preview (right 30%). Parses scene data from `VITE_SCENE_LIBRARY` env var (JSON or pipe-delimited format).
 
-### Backend (`backend/.env`)
+### `TutorialModal.tsx`
+Onboarding tutorial with video + 9-step checklist (upload, aspect, prompt, etc.). Responsive layout — side-by-side on desktop, stacked on mobile.
 
-```bash
-# Server
-PORT=3000
-
-# Database (optional but recommended)
-DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB?schema=public
-
-# AI providers
-OPENAI_API_KEY=YOUR_OPENAI_KEY
-REPLICATE_API_TOKEN=YOUR_REPLICATE_TOKEN
-
-# Replicate model versions (optional overrides)
-SEADREAM_MODEL_VERSION=bytedance/seedream-4
-KLING_MODEL_VERSION=kwaivgi/kling-v2.1
-
-# Credits
-DEFAULT_FREE_CREDITS=50
-IMAGE_CREDITS_COST=1
-MOTION_CREDITS_COST=5
-
-# Admin
-ADMIN_SECRET=YOUR_ADMIN_SECRET              # header: x-admin-secret
-ADMIN_DASHBOARD_KEY=YOUR_ADMIN_DASHBOARD_KEY # query key for admin overview
-
-# Shopify webhook for paid orders -> credit topups
-SHOPIFY_ORDER_WEBHOOK_SECRET=YOUR_WEBHOOK_SECRET
-
-# Credit SKU mapping (JSON)
-CREDIT_PRODUCT_MAP={"MINA-50":50}
-
-# Cloudflare R2 (S3-compatible)
-R2_ACCOUNT_ID=YOUR_R2_ACCOUNT_ID
-R2_ACCESS_KEY_ID=YOUR_R2_ACCESS_KEY_ID
-R2_SECRET_ACCESS_KEY=YOUR_R2_SECRET_ACCESS_KEY
-R2_BUCKET=YOUR_R2_BUCKET
-R2_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com  # optional override
-R2_PUBLIC_BASE_URL=                                      # optional: if you expose a public base URL
-```
-
-### Shopify Admin / Flow (optional)
-
-If you later add Shopify Admin API calls or Flow integrations, you may also use:
-
-```bash
-SHOPIFY_ADMIN_TOKEN=YOUR_SHOPIFY_ADMIN_TOKEN
-SHOPIFY_STORE_DOMAIN=faltastudio.com
-SHOPIFY_API_VERSION=YYYY-MM
-SHOPIFY_FLOW_WEBHOOK_SECRET=YOUR_FLOW_WEBHOOK_SECRET
-SHOPIFY_MINA_TAG=Mina_users
-SHOPIFY_WELCOME_MATCHA_VARIANT_ID=YOUR_VARIANT_ID
-```
+### `WelcomeMatchaModal.tsx`
+First-time visitor welcome modal offering 5 free matcha lattes with a link to the Shopify store.
 
 ---
 
-## API overview
+## `hooks/` — React Hooks (Extracted State Logic)
 
-Base URL (local): `http://localhost:3000`
+### `useStudioLeftState.ts`
+Encapsulates all StudioLeft state (~738 lines). Handles pill visibility, popup states, drag-and-drop, render flag timing, mobile auto-cycle to 9:16 aspect. Returns ~80 computed values (styles, timings, costs, block reasons, handlers).
 
-### Health
-- `GET /health`
-- `GET /`
+### `useFingertips.ts`
+Fingertips toolbar state. Mask lasso drawing with smooth Catmull-Rom curves, marching ants animation, zoom/pan in mask mode, model selection, and prompt text.  
+**Returns:** `ftMode`, `ftActiveModel`, `ftPrompt`, mask canvas refs, error state
 
-### Credits
-- `GET /credits/balance?customerId=...`
-- `POST /credits/add` (server-side / admin usage)
+### `useDeleteFlow.ts`
+Profile batch delete state. Manages `confirmDeleteIds`, `deletingIds`, `removedIds` (ghost fade animation). Async deletion with error handling and undo support.
 
-### Generation
-- `POST /editorial/generate`
-- `POST /motion/suggest`
-- `POST /motion/generate`
+### `useProfileDragSelect.ts`
+Drag-select rectangle on the profile grid. Long-press on touch (750 ms), drag threshold (5 px). Keyboard shortcuts: A = select all, Delete = delete confirmed.  
+**Returns:** `dragRect`, `dragSelectedIds`, pointer handlers
 
-### Feedback (style memory)
-- `POST /feedback/like`
+### `useProfileLightbox.ts`
+Lightbox state — open/close, zoom, prefetch. Swipe-to-close detection (70 px, < 900 ms). Click-to-zoom, double-click to download. Hint appears after 1 s hover.
 
-### Sessions & history
-- `POST /sessions/start`
-- `GET /history/customer/:customerId`
-- `GET /history/admin/overview?key=...`
+### `useMatchaCheckout.ts`
+Matcha quantity modal + Shopify cart URL builder. `clampQty()` and `buildMatchaCheckoutUrl()` helpers.
 
-### R2 storage
-- `POST /api/r2/upload-signed`
-- `POST /api/r2/store-remote-signed`
-- `POST /store-remote-generation` (batch store)
+### `useMinaNotice.ts`
+Mina "talking" personality. Cycles through thinking / filler phrases character-by-character while busy. Shows error / info messages on demand. Dismissible except when "thinking".
 
-### Admin (requires `x-admin-secret: ...`)
-- `GET /admin/summary`
-- `GET /admin/customers`
-- `POST /admin/credits/adjust`
+### `useInfiniteScroll.ts`
+Dual-sentinel `IntersectionObserver`. First sentinel loads more items into the DOM buffer (+24). Second sentinel triggers a server fetch when `hasMore` is true. Respects scroll parent.
 
----
+### `useHeaderContrast.ts`
+Detects header colour (dark / light) by sampling the top-right 64×64 px of an image. Computes weighted luma for Profile header text contrast. CORS-aware.
 
-## Roadmap (from the architecture spec)
-
-### 1) Real storage (replace in-memory maps)
-
-Move sessions/generations/feedback/credits into Postgres tables like:
-
-- `users` (role: user/admin/superadmin)
-- `credit_wallets`, `credit_ledger`
-- `sessions`, `generations`, `feedback`
-- `style_profiles`
-- `auto_topup_settings`
-- `admin_events`
-
-### 2) Auto top-up strategy
-
-- Phase 1 (easy): when below threshold, notify user + send checkout link; credits added after paid webhook.
-- Phase 2 (advanced): true auto-charge via Stripe/subscription or Shopify subscription approach.
-
-### 3) Admin dashboard
-
-- KPIs (users, generations, credits sold vs consumed)
-- User search + wallet adjustments
-- Generation explorer + audit logs
-- Config table for pricing / model versions
+### `useVideoAutoplay.ts`
+Grid video autoplay logic. Muted by default, unmutes on hover. `IntersectionObserver` with 35% visibility threshold. Pauses when tab is hidden.
 
 ---
 
-## Security notes
+## `handlers/` — Business Logic (Deps-Injected, Testable)
 
-- If you accidentally shared **real secrets/tokens** (OpenAI, Replicate, Shopify Admin, R2 keys, DB URL, etc.), **rotate them immediately**:
-  - OpenAI: revoke/regenerate API keys in the OpenAI dashboard
-  - Replicate: regenerate token in Replicate account settings
-  - Cloudflare R2: rotate access keys
-  - Shopify: revoke & re-create Admin tokens / webhook secrets
-  - Render/Postgres: rotate DB credentials if exposed
-- Keep `.env` out of git (use `.gitignore` + `.env.example`).
+All handlers accept a `deps` object instead of using React hooks directly, making them unit-testable outside of component context.
+
+### `minaDataFlow.ts`
+Data + credits + session handlers. Fetches credits, applies credit changes from responses, ensures sessions, checks backend health, fetches generation history (initial + paginated), dispatches Fingertips generate calls, and handles like/unlike.  
+**Exports:** `fetchCredits()`, `applyCreditsFromResponse()`, `ensureSession()`, `handleCheckHealth()`, `fetchHistory()`, `fetchHistoryMore()`, `handleFingertipsGenerate()`, `handleLikeCurrent()`
+
+### `minaGenerateFlow.ts`
+Still + motion generation flow. Builds MMA motion request body, applies motion control rules (duration, aspect, audio), manages SSE polling, deducts credits, and translates provider errors to user-facing messages.  
+**Exports:** `buildMmaMotionBody()`, `applyMotionControlRules()`, `handleGenerateStill()`, `handleGenerateMotion()`, `handleTypeForMe()`
+
+### `minaTweakFlow.ts`
+Feedback (tweaking) handler. Builds MMA tweak request with current state, polls SSE for result, and updates the generation list.
+
+### `minaUiFlow.ts`
+UI interactions: cycle aspect ratio, toggle animate mode, handle brief text changes, download current asset, set scene from viewer, apply recreate drafts, sign out, and set up global drag-and-drop file listener.  
+**Exports:** `handleCycleAspect()`, `handleToggleAnimateMode()`, `handleBriefChange()`, `handleDownloadCurrent()`, `handleSetSceneFromViewer()`, `applyRecreateDraft()`, `handleSignOut()`, `setupGlobalDragDrop()`
+
+### `minaUploadFlow.ts`
+Upload CRUD. Signed PUT to R2, copy remote → R2, add files/URLs to panels, remove/move/patch items. Validates MIME types, file sizes, and duration. Panel caps: product 1–2, logo 1, inspiration 8.  
+**Exports:** `uploadFileToR2()`, `storeRemoteToR2()`, `addFilesToPanel()`, `addUrlToPanel()`, `removeUploadItem()`, `moveUploadItem()`, `patchUploadItem()`
+
+### `minaCustomStyleFlow.ts`
+Custom style training modal. Uploads 3–10 images, trains a model, creates `CustomStylePreset`, handles hero selection, file input, rename, and delete.  
+**Exports:** `handleTrainCustomStyle()`, `handleSelectCustomStyleHero()`, `handleCustomStyleFiles()`, `deleteCustomStyle()`, `handleRenameCustomPreset()`, `handleDeleteCustomPreset()`
+
+### `minaCdnFlow.ts`
+Wrapper around CDN + R2 helpers. Creates CDN optimiser, stores remote assets to R2, creates MMA runner instances, creates stop-all-MMA function, and ensures asset URLs.  
+**Exports:** `createCdnOptimizer()`, `storeRemoteToR2()`, `createMmaRunner()`, `createStopAllMma()`, `ensureAssetsUrl()`
 
 ---
 
-## Troubleshooting
+## `lib/` — Utilities, Types, Constants, API Helpers
 
-- R2 env check: `GET /debug/r2`
-- If outputs expire from provider URLs, store them in R2 via `/api/r2/store-remote-signed`.
-- If admin endpoints 401, ensure `x-admin-secret` is set.
-- If Prisma fails to init, the API can still run, but history/credits may be in-memory only.
+### `minaTypes.ts`
+TypeScript type definitions: `HealthState`, `CreditsState`, `GenerationRecord`, `FeedbackRecord`, `StillItem`, `MotionItem`, `UploadItem`, `AspectKey`, `CustomStylePreset`, `MmaCreateResponse`, `MmaGenerationResponse`, `FingertipsResult`, and more.
+
+### `minaConstants.ts`
+App constants: API URLs, localStorage keys, storage limits (uploads 25 MB, max dims 3840 px), matcha URLs, aspect options, style presets, animation timings, Fingertips error phrases.
+
+### `minaHelpers.ts`
+Pure utilities: `classNames`, `padEditorialNumber`, `stripSignedQuery`, `isHttpUrl`, `aspectRatioToNumber`, `fileToDataUrl`, `preloadImage`, `saveCustomStyles` / `loadCustomStyles`, `scheduleIdle`, `swapAspectRatio`, `normalizeNonExpiringUrl`, `getFileExt`.
+
+### `minaApi.ts`
+MMA API helpers: `deepPickHttpUrl()` (recursive URL extraction from nested responses), `buildMmaActionKey()` (idempotency), `attachIdempotencyKey()`, `makeIdempotencyKey()`, `pickMmaImageUrl()`, `pickMmaVideoUrl()`, `mmaWaitForFinal()`, SSE event parsing.
+
+### `minaCdn.ts`
+CDN optimisation manager. `createCdnOptimizer()` returns stateful functions for building and caching Cloudflare resize URLs. One-shot probe to detect if CDN resizing is supported.
+
+### `mediaHelpers.ts`
+Media detection: `isVideoUrl`, `isAudioUrl`, `isAssetsUrl`, `isMinaGeneratedAssetsUrl`, `inferMediaTypeFromFile` / `inferMediaTypeFromUrl`, `probeMediaUrl` (with timeout), `getMediaDurationSec`.
+
+### `cfInput1080.ts`
+Cloudflare image transformation builder. Resizes `assets.faltastudio.com` images to 1080 px (or custom width) with quality/format control (JPEG for product/inspiration, PNG for logos).
+
+### `errorReporting.ts`
+Client error logger. Sends crashes and unhandled rejections to the backend `/api/log-error` with stack, URL, user agent, and optional Pass ID / email.
+
+### `installGlobalErrorHandlers.ts`
+Installs `window` listeners for `error` and `unhandledrejection` events, forwarding them to `errorReporting`.
+
+### `adminConfig.ts`
+Admin configuration in localStorage. Shape: pricing (imageCost, motionCost), AI personality (thinking / filler phrases), style presets. Helpers: `loadAdminConfig()`, `saveAdminConfig()`, `isAdmin()`.
+
+### `mmaErrors.ts`
+Centralised MMA error handling. Extracts error text from nested responses. Maps to user-friendly `UI_ERROR_MESSAGES`.  
+**Exports:** `extractMmaErrorTextFromResult()`, `humanizeMmaError()`, `humanizeUploadError()`, `isTimeoutLikeStatus()`
+
+### `mmaSession.ts`
+MMA SSE streaming infrastructure. `createIdempotencyManager()`, `createMmaRunner()` (SSE event listening + final result assembly), `mmaWaitForFinal()` promise wrapper.
+
+### `megaIdentity.ts`
+Pass ID generation + persistence. Crockford Base32 encoding for ULID-like IDs.  
+**Exports:** `generatePassId()`, `readStoredPassId()`, `persistPassId()`. Types: `MegaCustomerRow`, `EnsurePassResult`.
+
+### `minaDownload.ts`
+Robust asset download for images + videos. Desktop: fetch → blob → `<a download>`. iOS: uses `navigator.share` to save to gallery. Content-Type detection from headers.
+
+### `supabaseClient.ts`
+Supabase client factory. Persistent sessions, auto token refresh, PKCE flow.  
+**Exports:** `getSupabaseJwt()`, `withSupabaseAuthHeaders()`
+
+### `sceneLibrary.ts`
+Scene library parser. Supports JSON and pipe-delimited formats from `VITE_SCENE_LIBRARY`.  
+**Type:** `SceneLibraryItem` (id, title, url, keywords)
+
+### `inboxHelpers.ts`
+Email provider inbox URL lookup. Maps 80+ domains to direct inbox links (Gmail, Outlook, Yahoo, ProtonMail, etc.). Mobile detection fallback.
+
+### `profileHelpers.ts`
+Profile utilities: string safety wrappers, Cloudflare CDN thumbnails (`cfThumb`, `cfInput2048`), JSON parsing, media URL detection, date formatting, download wrapper, aspect normalisation, `AUDIO_THUMB_URL`, `canonicalAssetUrl`.
+
+### `profileItems.ts`
+`computeProfileItems()` pure function. Filters generations by date range / motion / aspect. Marks items as deleted / ghosting. Computes `ProfileItem` metadata (sizeClass, likedStatus, recreateDraft).
+
+### `studioLeftHelpers.ts`
+StudioLeft constants: `AUDIO_THUMB_URL`, `TYPE_FOR_ME_ICON`, `MOTION_STYLES` array (Expand, Melt, Drop, Satisfying, Slow Motion, Still Camera, Perfect Loop). `inferMediaTypeFromItem()` helper.
+
+### `studioLeftTypes.ts`
+`StudioLeftProps` interface — defines all props passed into the StudioLeft component.
+
+### `studioRightHelpers.ts`
+StudioRight constants: `MASK_MODELS` (eraser, flux_fill), `PROMPT_MODELS` (flux_fill). Fingertips timing: `FT_INITIAL_DELAY` (260 ms), `FT_STAGGER` (90 ms).
+
+### `uploadProcessing.ts`
+Image normalisation pipeline. `decodeToBitmap()`, `canvasToBlob()`, `normalizeImageForUpload()` (HEIC → JPEG conversion, downsampling to max bytes / dimension).
+
+### `useUndoRedo.ts`
+Global undo/redo system. Maintains stacks (max 50 entries). Listens for Cmd+Z / Ctrl+Z (undo) and Shift variants (redo). Shows toast notifications.
 
 ---
 
-## License
+## `styles/`
 
-Internal Falta Studio project.
+### `minaPanels.css`
+Shared modal and panel styles. `.mina-modal-backdrop` (fixed overlay with blur), `.mina-modal` (centred card with shadow), header / body / footer layout, primary and secondary button styles, fade-in animations.
+
+---
+
+## `docs/` — Internal Documentation
+
+| File | Topic |
+|------|-------|
+| `init.md` | Project initialisation notes |
+| `MINAV3.md` | Backend API spec — routes, identity rules, headers, matcha pricing, session/credits endpoints |
+| `mmaErrors.md` | Error handling philosophy — centralised extraction and user-facing messaging |
+| `routes.md` | Detailed route map — all backend endpoints with caller, conditions, headers, request/response shapes |
+
+---
+
+## Key Architecture Patterns
+
+- **State extraction to handlers** — Business logic lives in `handlers/*` with deps-injection for testability, keeping components thin
+- **Custom hook extraction** — Heavy state logic moves to `hooks/*` (e.g. `useStudioLeftState` owns ~80 values for StudioLeft)
+- **Type-safe data flow** — TypeScript interfaces (`StudioLeftProps`, `CreditsDeps`, `GenerateDeps`) enforce compile-time safety
+- **Idempotency + SSE** — MMA generation uses idempotency keys to prevent duplicates; results stream via Server-Sent Events
+- **CDN optimisation** — Cloudflare transforms (width, quality, format) applied on the fly; one-shot probe detects support
+- **localStorage caching** — Likes, custom styles, draft recreations persist locally to minimise API calls
+- **Error centralisation** — All MMA error shapes normalised in `mmaErrors.ts` for consistent user messaging
+- **Undo/redo system** — Global hook with 50-entry stack, Cmd+Z / Ctrl+Z shortcuts, toast feedback
+- **Responsive design** — Mobile auto-cycles aspect to 9:16; fingertips + StudioRight support swipe/gesture
+- **Gesture handling** — Swipe carousel, drag-select, lasso masks, zoom-pan across StudioRight, Profile lightbox, and Fingertips
