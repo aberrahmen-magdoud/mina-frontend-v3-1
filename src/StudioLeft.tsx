@@ -10,7 +10,7 @@ import Collapse from "./components/Collapse";
 import { cfInput1080 } from "./lib/cfInput1080";
 import { classNames } from "./lib/minaHelpers";
 import {
-  AUDIO_THUMB_URL, TYPE_FOR_ME_ICON,
+  AUDIO_THUMB_URL, TYPE_FOR_ME_ICON, MOTION_STYLES,
   inferMediaTypeFromItem,
 } from "./lib/studioLeftHelpers";
 import TutorialModal from "./components/TutorialModal";
