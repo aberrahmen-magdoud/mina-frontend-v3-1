@@ -200,10 +200,7 @@ export function humanizeMmaError(err: MmaErrorLike, mode?: "create" | "animate")
     s.includes("no_output_url") ||
     s.includes("no output url")
   ) {
-    if (mode === "create") {
-      return "Mina Animate mode is currently under high demand. Please wait a bit then try again.";
-    }
-    return "Something went wrong. Please try again.";
+    return "Mina is on high demand right now — please try again in a moment.";
   }
 
   // Fallback: if the raw string looks like an internal code (ALL_CAPS_SNAKE), hide it

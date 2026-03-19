@@ -238,7 +238,7 @@ export async function handleGenerateStill(deps: GenerateDeps) {
         deps.showMinaInfo("Still generating in the background – open Profile and refresh in a minute.");
         deps.stopAllMmaUiNow(); return;
       }
-      throw new Error("Mina Animate mode is currently under high demand. Please use Main mode for now.");
+      throw new Error("Mina is on high demand right now — please try again in a moment.");
     }
 
     deps.historyDirtyRef.current = true;
