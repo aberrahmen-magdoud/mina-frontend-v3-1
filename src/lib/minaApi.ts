@@ -311,8 +311,23 @@ export async function mmaWaitForFinal(
 
   const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
+  const MAX_NET_RETRIES = 6;          // up to ~18s of connectivity loss
+  let consecutiveNetErrors = 0;
+
   while (Date.now() - started < timeoutMs) {
-    last = await mmaFetchResult(generationId, apiFetch);
+    let fetchOk = false;
+    try {
+      last = await mmaFetchResult(generationId, apiFetch);
+      fetchOk = true;
+      consecutiveNetErrors = 0;
+    } catch (netErr: any) {
+      // Network error (laptop sleep/wake, WiFi drop) — retry instead of failing
+      consecutiveNetErrors++;
+      if (consecutiveNetErrors > MAX_NET_RETRIES) throw netErr;
+      await sleep(3000);
+      continue;
+    }
+    if (!fetchOk) { await sleep(intervalMs); continue; }
     try { onTick?.(last); } catch {}
 
     const earlyErr = extractMmaErrorTextFromResult(last);

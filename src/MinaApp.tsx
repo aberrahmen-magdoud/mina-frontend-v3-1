@@ -540,7 +540,7 @@ const MinaApp: React.FC<MinaAppProps> = () => {
   // Profile mount
   useEffect(() => { if (activeTab === "profile" && currentPassId) { _fetchCredits(); _fetchHistory(); } }, [activeTab, currentPassId]);
   // Refresh credits on focus
-  useEffect(() => { const m = () => { creditsDirtyRef.current = true; _fetchCredits(); }; const v = () => { if (!document.hidden) m(); }; window.addEventListener("focus", m); document.addEventListener("visibilitychange", v); return () => { window.removeEventListener("focus", m); document.removeEventListener("visibilitychange", v); }; }, [currentPassId]);
+  useEffect(() => { const m = () => { creditsDirtyRef.current = true; historyDirtyRef.current = true; _fetchCredits(); }; const v = () => { if (!document.hidden) m(); }; window.addEventListener("focus", m); document.addEventListener("visibilitychange", v); return () => { window.removeEventListener("focus", m); document.removeEventListener("visibilitychange", v); }; }, [currentPassId]);
   // Checkout redirect
   useEffect(() => {
     if (typeof window === "undefined") return;
