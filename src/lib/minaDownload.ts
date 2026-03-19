@@ -208,12 +208,21 @@ export async function downloadMinaAsset(opts: DownloadOpts): Promise<void> {
     await downloadWithBlob(opts, blob, contentType);
     return;
   } catch (e1) {
-    // 2) Try backend proxy to bypass CORS / expired URL issues
+    // 2) Try backend proxy — navigate directly so the browser handles
+    //    the download natively (preserves user-gesture activation).
     if (API_BASE_URL) {
       try {
-        const proxy = `${API_BASE_URL}/public/download?url=${encodeURIComponent(url)}`;
-        const { blob, contentType } = await fetchAsBlob(proxy);
-        await downloadWithBlob(opts, blob, contentType);
+        const urlExt = extFromUrl(url) || (opts.kind === "motion" ? ".mp4" : ".jpg");
+        const filename = buildName(opts, urlExt);
+        const proxy = `${API_BASE_URL}/public/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+        const a = document.createElement("a");
+        a.href = proxy;
+        a.download = filename;
+        a.rel = "noopener";
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
         return;
       } catch {
         // proxy also failed — fall through to throw

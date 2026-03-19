@@ -116,8 +116,12 @@ export function fmtDateTime(iso: string | null) {
     " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
+const _downloadingUrls = new Set<string>();
+
 export async function downloadMedia(url: string, prompt: string, isMotion: boolean) {
   if (!url) return;
+  if (_downloadingUrls.has(url)) return;        // prevent double-clicks
+  _downloadingUrls.add(url);
   try {
     await downloadMinaAsset({
       url,
@@ -128,6 +132,8 @@ export async function downloadMedia(url: string, prompt: string, isMotion: boole
     const msg = err?.message || "Download failed";
     console.warn("Download failed:", err);
     alert(msg);
+  } finally {
+    _downloadingUrls.delete(url);
   }
 }
 
