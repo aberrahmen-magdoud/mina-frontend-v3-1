@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./SceneLibraryModal.css";
 import {
   parseSceneLibraryEnv,
@@ -10,10 +10,7 @@ function cfThumb(url: string, width = 700, quality = 75) {
   if (!url) return url;
   if (!url.includes("assets.faltastudio.com/")) return url;
   if (url.includes("/cdn-cgi/image/")) return url;
-
-  // ✅ Force jpeg so we never get AVIF from format=auto
   const opts = `width=${width},fit=cover,quality=${quality},format=jpeg`;
-
   return `https://assets.faltastudio.com/cdn-cgi/image/${opts}/${url.replace(
     "https://assets.faltastudio.com/",
     ""
@@ -24,13 +21,70 @@ function cfInput1080(url: string) {
   if (!url) return url;
   if (!url.includes("assets.faltastudio.com/")) return url;
   if (url.includes("/cdn-cgi/image/")) return url;
-
   const opts = `width=1080,fit=scale-down,quality=85,format=jpeg`;
-
   return `https://assets.faltastudio.com/cdn-cgi/image/${opts}/${url.replace(
     "https://assets.faltastudio.com/",
     ""
   )}`;
+}
+
+// ── Tag categories for filter pills ──
+const TAG_CATEGORIES: { label: string; match: string[] }[] = [
+  { label: "Perfumery", match: ["industry perfumery", "perfume", "fragrance"] },
+  { label: "Beauty", match: ["industry beauty", "skincare", "cosmetics", "beauty"] },
+  { label: "Fashion", match: ["industry fashion", "fashion"] },
+  { label: "Jewelry", match: ["industry jewelry", "jewelry", "earrings", "necklace", "bracelet", "ring"] },
+  { label: "Lifestyle", match: ["industry lifestyle", "lifestyle", "ugc"] },
+  { label: "Food & Drink", match: ["food styling", "food", "drink", "beverage", "cocktail", "wine", "coffee"] },
+  { label: "Editorial", match: ["editorial"] },
+  { label: "Surreal", match: ["surreal", "artistic"] },
+  { label: "Minimal", match: ["minimal"] },
+  { label: "Portrait", match: ["portrait", "model", "woman", "man"] },
+  { label: "Dark", match: ["background black", "dark luxury", "dark gradient", "moody"] },
+  { label: "Light", match: ["soft light", "natural light", "warm light", "bright"] },
+];
+
+// ── Masonry height classes for visual variety ──
+function pickSizeClass(item: SceneLibraryItem, index: number): string {
+  const kw = item.keywords.join(" ").toLowerCase();
+  if (kw.includes("portrait") || kw.includes("model")) return "scene-lib-card--tall";
+  if (kw.includes("landscape") || kw.includes("wide")) return "scene-lib-card--wide";
+  // Deterministic variety based on index
+  if (index % 7 === 0) return "scene-lib-card--tall";
+  if (index % 11 === 0) return "scene-lib-card--wide";
+  return "";
+}
+
+// ── Lazy image with IntersectionObserver ──
+function LazyImage({ src, alt, onClick }: { src: string; alt: string; onClick: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } },
+      { rootMargin: "300px" }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className={`scene-lib-thumb ${loaded ? "is-loaded" : ""}`} onClick={onClick}>
+      {visible && (
+        <img
+          src={src}
+          alt={alt}
+          draggable={false}
+          loading="lazy"
+          onLoad={() => setLoaded(true)}
+        />
+      )}
+    </div>
+  );
 }
 
 export default function SceneLibraryModal({
@@ -43,120 +97,142 @@ export default function SceneLibraryModal({
   onSetScene: (url: string) => void;
 }) {
   const [q, setQ] = useState("");
-  const [hoverId, setHoverId] = useState<string>("");
+  const [activeTag, setActiveTag] = useState<string | null>(null);
 
   const items: SceneLibraryItem[] = useMemo(() => {
     const raw = getSceneLibraryRawFromViteEnv();
     return parseSceneLibraryEnv(raw);
   }, []);
 
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return items;
-    return items.filter((it) => {
-      const hay = `${it.title} ${it.keywords.join(" ")}`.toLowerCase();
-      return hay.includes(s);
-    });
-  }, [items, q]);
+  // Available tag categories (only show tags that match at least one item)
+  const availableTags = useMemo(() => {
+    return TAG_CATEGORIES.filter((cat) =>
+      items.some((it) => {
+        const kw = it.keywords.join(" ").toLowerCase();
+        return cat.match.some((m) => kw.includes(m));
+      })
+    );
+  }, [items]);
 
-  const active = useMemo(() => {
-    const byHover = hoverId ? filtered.find((x) => x.id === hoverId) : null;
-    if (byHover) return byHover;
-    return filtered[0] ?? null;
-  }, [filtered, hoverId]);
+  const filtered = useMemo(() => {
+    let list = items;
+
+    // Tag filter
+    if (activeTag) {
+      const cat = TAG_CATEGORIES.find((c) => c.label === activeTag);
+      if (cat) {
+        list = list.filter((it) => {
+          const kw = it.keywords.join(" ").toLowerCase();
+          return cat.match.some((m) => kw.includes(m));
+        });
+      }
+    }
+
+    // Text search
+    const s = q.trim().toLowerCase();
+    if (s) {
+      list = list.filter((it) => {
+        const hay = `${it.title} ${it.keywords.join(" ")}`.toLowerCase();
+        return hay.includes(s);
+      });
+    }
+
+    return list;
+  }, [items, q, activeTag]);
+
+  const handleSelect = useCallback(
+    (url: string) => {
+      onSetScene(cfInput1080(url));
+      onClose();
+    },
+    [onSetScene, onClose]
+  );
+
+  const toggleTag = useCallback((label: string) => {
+    setActiveTag((prev) => (prev === label ? null : label));
+  }, []);
 
   if (!open) return null;
 
   return (
-    <div
-      className="scene-lib-backdrop"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-    >
+    <div className="scene-lib-backdrop" onClick={onClose} role="dialog" aria-modal="true">
       <div className="scene-lib-modal" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
         <div className="scene-lib-head">
-          <div className="scene-lib-title">Commercial-friendly Library</div>
+          <div className="scene-lib-title">Scene Library</div>
           <button className="scene-lib-close" type="button" onClick={onClose}>
             ×
           </button>
         </div>
 
+        {/* Search + Tags Bar */}
         <div className="scene-lib-toolbar">
           <input
             className="scene-lib-search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search…"
+            placeholder="Search scenes…"
           />
           <div className="scene-lib-count">{filtered.length} scenes</div>
         </div>
 
+        {/* Tag Pills */}
+        {availableTags.length > 0 && (
+          <div className="scene-lib-tags">
+            {availableTags.map((cat) => (
+              <button
+                key={cat.label}
+                type="button"
+                className={`scene-lib-tag ${activeTag === cat.label ? "is-active" : ""}`}
+                onClick={() => toggleTag(cat.label)}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Pinterest-style masonry grid */}
         <div className="scene-lib-body">
-          {/* 70% */}
-          <div className="scene-lib-left">
-            {filtered.length ? (
-              <div className="scene-lib-grid">
-                {filtered.map((it) => (
-                  <div
-                    key={it.id}
-                    className="scene-lib-card"
-                    onMouseEnter={() => setHoverId(it.id)}
-                    onFocus={() => setHoverId(it.id)}
-                    tabIndex={0}
-                  >
-                    <div
-                      className="scene-lib-thumb"
-                      onClick={() => {
-                        onSetScene(cfInput1080(it.url));
-                        onClose();
+          {filtered.length ? (
+            <div className="scene-lib-masonry">
+              {filtered.map((it, idx) => (
+                <div
+                  key={it.id}
+                  className={`scene-lib-card ${pickSizeClass(it, idx)}`}
+                >
+                  <LazyImage
+                    src={cfThumb(it.url, 800, 75)}
+                    alt={it.title}
+                    onClick={() => handleSelect(it.url)}
+                  />
+                  <div className="scene-lib-overlay">
+                    <div className="scene-lib-overlay-title">{it.title}</div>
+                    <div className="scene-lib-overlay-kw">
+                      {it.keywords
+                        .filter((k) => !k.startsWith("industry ") && !k.startsWith("background "))
+                        .slice(0, 5)
+                        .map((k) => (
+                          <span key={k} className="scene-lib-kw">{k}</span>
+                        ))}
+                    </div>
+                    <button
+                      className="scene-lib-set"
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelect(it.url);
                       }}
                     >
-                      <img
-                        src={cfThumb(it.url, 800, 75)}
-                        alt=""
-                        draggable={false}
-                      />
-                    </div>
-
-                    <div className="scene-lib-meta">
-                      <button
-                        className="scene-lib-set"
-                        type="button"
-                        title={it.title}
-                        onClick={() => {
-                          onSetScene(cfInput1080(it.url));
-                          onClose();
-                        }}
-                      >
-                        Set scene
-                      </button>
-                    </div>
+                      Set scene
+                    </button>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="scene-lib-empty">No scenes yet.</div>
-            )}
-          </div>
-
-          {/* 30% */}
-          <div className="scene-lib-right">
-            {active ? (
-              <img
-                className="scene-lib-preview-img"
-                src={cfThumb(active.url, 2600, 85)}
-                alt=""
-                draggable={false}
-                onClick={() => {
-                  onSetScene(cfInput1080(active.url));
-                  onClose();
-                }}
-              />
-            ) : (
-              <div className="scene-lib-empty">No preview</div>
-            )}
-          </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="scene-lib-empty">No scenes match your search.</div>
+          )}
         </div>
       </div>
     </div>
