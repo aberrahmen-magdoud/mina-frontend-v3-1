@@ -149,10 +149,17 @@ export function normalizeAspectRatio(raw: string | null | undefined) {
   const trimmed = raw.trim();
   if (!trimmed) return "";
 
-  // ✅ Accept keys like "9-16", "2-3"
+  // ✅ Accept keys like "9-16", "2-3" (and landscape like "16-9", "3-2")
   const asKey = trimmed.replace("/", "-").replace(":", "-");
   const byKey = ASPECT_OPTIONS.find((opt) => opt.key === asKey);
   if (byKey) return byKey.ratio;
+  // Landscape key: "3-2" → swap to "2-3", return landscape form "3:2"
+  const keyParts = asKey.split("-");
+  if (keyParts.length === 2) {
+    const swapKey = `${keyParts[1]}-${keyParts[0]}`;
+    const bySwapKey = ASPECT_OPTIONS.find((opt) => opt.key === swapKey);
+    if (bySwapKey) return `${keyParts[0]}:${keyParts[1]}`;
+  }
 
   // direct ratio form
   const direct = trimmed.replace("/", ":");
@@ -162,26 +169,38 @@ export function normalizeAspectRatio(raw: string | null | undefined) {
       const candidate = `${a}:${b}`;
       const match = ASPECT_OPTIONS.find((opt) => opt.ratio === candidate);
       if (match) return match.ratio;
+      // Landscape: "3:2" is the swap of "2:3"
+      const swapped = `${b}:${a}`;
+      const swapMatch = ASPECT_OPTIONS.find((opt) => opt.ratio === swapped);
+      if (swapMatch) return candidate; // preserve landscape form
     }
   }
 
-  // parse "9 x 16" etc and pick closest
+  // parse "9 x 16" etc and pick closest (considering both orientations)
   const re = /([0-9.]+)\s*[xX:\/ ]\s*([0-9.]+)/;
   const m = trimmed.match(re);
   if (m) {
     const w = parseFloat(m[1]);
     const h = parseFloat(m[2]);
-    if (Number.isFinite(w) && Number.isFinite(h) && h > 0) {
+    if (Number.isFinite(w) && Number.isFinite(h) && h > 0 && w > 0) {
       const val = w / h;
       let best: { opt: (typeof ASPECT_OPTIONS)[number] | null; diff: number } = { opt: null, diff: Infinity };
       for (const opt of ASPECT_OPTIONS) {
         const [aw, ah] = opt.ratio.split(":").map((p) => parseFloat(p));
         if (!Number.isFinite(aw) || !Number.isFinite(ah) || ah === 0) continue;
-        const ratio = aw / ah;
-        const diff = Math.abs(ratio - val);
+        const portrait = aw / ah;
+        const landscape = ah / aw;
+        const diffP = Math.abs(portrait - val);
+        const diffL = Math.abs(landscape - val);
+        const diff = Math.min(diffP, diffL);
         if (diff < best.diff) best = { opt, diff };
       }
-      if (best.opt) return best.opt.ratio;
+      if (best.opt) {
+        const [bw, bh] = best.opt.ratio.split(":").map((p) => parseFloat(p));
+        // Return landscape form if the input is wider than tall
+        if (val > 1 && bw < bh) return `${bh}:${bw}`;
+        return best.opt.ratio;
+      }
     }
   }
 

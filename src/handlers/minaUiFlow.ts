@@ -188,6 +188,7 @@ export function applyRecreateDraft(
   setActivePanel: SetState<any>,
   setUiStage: SetState<any>,
   applyingRecreateDraftRef: MutableRef<boolean>,
+  setAspectLandscape?: SetState<boolean>,
 ) {
   if (!draft || typeof draft !== "object") return;
   const mode = String(draft.mode || "").toLowerCase();
@@ -195,8 +196,16 @@ export function applyRecreateDraft(
   if (!briefText) return;
 
   const ratioRaw = String(draft?.settings?.aspect_ratio || draft?.settings?.aspectRatio || draft?.aspect_ratio || "").trim().replace("/", ":");
-  const idx = ASPECT_OPTIONS.findIndex((o) => o.ratio === ratioRaw);
+  let idx = ASPECT_OPTIONS.findIndex((o) => o.ratio === ratioRaw);
+  let landscape = false;
+  if (idx < 0 && ratioRaw) {
+    // Try swapped (landscape) form → e.g. "3:2" → "2:3"
+    const swapped = swapAspectRatio(ratioRaw);
+    const swIdx = ASPECT_OPTIONS.findIndex((o) => o.ratio === swapped);
+    if (swIdx >= 0) { idx = swIdx; landscape = true; }
+  }
   if (idx >= 0) setAspectIndex(idx);
+  if (setAspectLandscape) setAspectLandscape(landscape);
 
   const nextStyleKeys = (draft?.settings?.stylePresetKeys || draft?.inputs?.stylePresetKeys || []) as any;
   if (Array.isArray(nextStyleKeys) && nextStyleKeys.length) setStylePresetKeys(nextStyleKeys.map(String));

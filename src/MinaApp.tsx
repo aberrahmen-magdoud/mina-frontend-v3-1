@@ -561,7 +561,7 @@ const MinaApp: React.FC<MinaAppProps> = () => {
   // Recreate draft from localStorage
   useEffect(() => {
     if (activeTab !== "studio") return;
-    try { const raw = window.localStorage.getItem(RECREATE_DRAFT_KEY); if (!raw) return; const draft = JSON.parse(raw); window.localStorage.removeItem(RECREATE_DRAFT_KEY); applyRecreateDraftFn(draft, setAnimateMode, setMotionDescription, setStillBrief, setBrief, setAspectIndex, setStylePresetKeys, setMinaVisionEnabled, setUploads, setActivePanel, setUiStage, applyingRecreateDraftRef); } catch {}
+    try { const raw = window.localStorage.getItem(RECREATE_DRAFT_KEY); if (!raw) return; const draft = JSON.parse(raw); window.localStorage.removeItem(RECREATE_DRAFT_KEY); applyRecreateDraftFn(draft, setAnimateMode, setMotionDescription, setStillBrief, setBrief, setAspectIndex, setStylePresetKeys, setMinaVisionEnabled, setUploads, setActivePanel, setUiStage, applyingRecreateDraftRef, setAspectLandscape); } catch {}
   }, [activeTab]);
 
   // Mirror product upload to right panel
@@ -598,10 +598,10 @@ const MinaApp: React.FC<MinaAppProps> = () => {
   const triggerPick = (panel: UploadPanelKey) => { if (!hasEverTyped) setHasEverTyped(true); setActivePanel(panel); setUiStage((s) => (s < 3 ? 3 : s)); if (panel === "product") productInputRef.current?.click(); if (panel === "logo") logoInputRef.current?.click(); if (panel === "inspiration") inspirationInputRef.current?.click(); };
 
   const handleRecreateFromViewer = (args: { kind: "still" | "motion"; stillIndex: number }) => {
-    if (args.kind === "motion") { const draft = (motionItems?.[motionIndex] as any)?.draft || buildRecreateDraftFromUi("motion", uploads, motionReferenceImageUrl, motionFinalPrompt, motionTextTrimmed, motionDescription, brief, lastStillPrompt, stillBrief, effectiveAspectRatio, animateEffectiveAspectRatio, stylePresetKeys, minaVisionEnabled); applyRecreateDraftFn(draft, setAnimateMode, setMotionDescription, setStillBrief, setBrief, setAspectIndex, setStylePresetKeys, setMinaVisionEnabled, setUploads, setActivePanel, setUiStage, applyingRecreateDraftRef); return; }
+    if (args.kind === "motion") { const draft = (motionItems?.[motionIndex] as any)?.draft || buildRecreateDraftFromUi("motion", uploads, motionReferenceImageUrl, motionFinalPrompt, motionTextTrimmed, motionDescription, brief, lastStillPrompt, stillBrief, effectiveAspectRatio, animateEffectiveAspectRatio, stylePresetKeys, minaVisionEnabled); applyRecreateDraftFn(draft, setAnimateMode, setMotionDescription, setStillBrief, setBrief, setAspectIndex, setStylePresetKeys, setMinaVisionEnabled, setUploads, setActivePanel, setUiStage, applyingRecreateDraftRef, setAspectLandscape); return; }
     const candidate = stillItems?.[args.stillIndex] || stillItems?.[stillIndex] || null;
     const draft = (candidate as any)?.draft || buildRecreateDraftFromUi("still", uploads, motionReferenceImageUrl, motionFinalPrompt, motionTextTrimmed, motionDescription, brief, lastStillPrompt, stillBrief, effectiveAspectRatio, animateEffectiveAspectRatio, stylePresetKeys, minaVisionEnabled);
-    applyRecreateDraftFn(draft, setAnimateMode, setMotionDescription, setStillBrief, setBrief, setAspectIndex, setStylePresetKeys, setMinaVisionEnabled, setUploads, setActivePanel, setUiStage, applyingRecreateDraftRef);
+    applyRecreateDraftFn(draft, setAnimateMode, setMotionDescription, setStillBrief, setBrief, setAspectIndex, setStylePresetKeys, setMinaVisionEnabled, setUploads, setActivePanel, setUiStage, applyingRecreateDraftRef, setAspectLandscape);
   };
 
   const handleSetScene = useCallback((args: { url: string; clearInspiration?: boolean }) => setSceneFn(args, animateMode, hasEverTyped, setHasEverTyped, setActivePanel, setUiStage, setUploads, (p, id, pt) => patchUploadItem(setUploads, p, id, pt), cdnOpt.ensureOptimizedInputUrl), [animateMode, hasEverTyped]);
