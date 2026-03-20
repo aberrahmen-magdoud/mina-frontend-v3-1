@@ -101,19 +101,23 @@ export const TEXTAREA_FLOAT_DISTANCE_PX = 12;
 
 // Upload limits
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
-export const ALLOWED_EXTS = new Set(["png", "jpg", "jpeg", "webp"]);
-export const ALLOWED_MIMES = new Set(["image/png", "image/jpeg", "image/webp"]);
+export const ALLOWED_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif", "avif", "heic", "heif", "bmp", "tiff", "tif", "svg", "ico"]);
+export const ALLOWED_MIMES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif", "image/heic", "image/heif", "image/bmp", "image/tiff", "image/svg+xml", "image/x-icon"]);
 
-export const ALLOWED_VIDEO_EXTS = new Set(["mp4", "mov"]);
-export const ALLOWED_VIDEO_MIMES = new Set(["video/mp4", "video/quicktime"]);
+export const ALLOWED_VIDEO_EXTS = new Set(["mp4", "mov", "webm", "avi", "mkv", "m4v", "flv", "wmv", "3gp"]);
+export const ALLOWED_VIDEO_MIMES = new Set(["video/mp4", "video/quicktime", "video/webm", "video/x-msvideo", "video/x-matroska", "video/x-m4v", "video/x-flv", "video/x-ms-wmv", "video/3gpp"]);
 
-export const FABRIC_AUDIO_EXTS = new Set(["mp3", "wav", "m4a", "aac"]);
+export const FABRIC_AUDIO_EXTS = new Set(["mp3", "wav", "m4a", "aac", "ogg", "flac", "wma", "opus"]);
 export const FABRIC_AUDIO_MIMES = new Set([
   "audio/mpeg",
   "audio/wav",
   "audio/x-wav",
   "audio/mp4",
   "audio/aac",
+  "audio/ogg",
+  "audio/flac",
+  "audio/x-ms-wma",
+  "audio/opus",
 ]);
 
 export const OPT_MAX_DIM = 1080;

@@ -215,12 +215,12 @@ export async function startUploadForFileItem(
     if (isAnimateFrame2Video) {
       const ext = getFileExt(file.name);
       const mime = String(file.type || "").toLowerCase();
-      if (!ALLOWED_VIDEO_EXTS.has(ext) && !ALLOWED_VIDEO_MIMES.has(mime)) { deps.showUploadNotice("product", "Video must be MP4 or MOV."); remove(); return; }
-      if (file.size > MOTION_FRAME2_VIDEO_MAX_BYTES) { deps.showUploadNotice("product", "Video too large. Max 100MB."); remove(); return; }
+      if (!ALLOWED_VIDEO_EXTS.has(ext) && !ALLOWED_VIDEO_MIMES.has(mime)) { deps.showUploadNotice("product", "Video must be MP4 or MOV."); patch({ uploading: false, error: "Unsupported video format" }); return; }
+      if (file.size > MOTION_FRAME2_VIDEO_MAX_BYTES) { deps.showUploadNotice("product", "Video too large. Max 100MB."); patch({ uploading: false, error: "Video too large" }); return; }
       const d = await getMediaDurationSec(previewUrl, "video");
       if (typeof d === "number") {
-        if (d < MOTION_FRAME2_VIDEO_MIN_SEC) { deps.showUploadNotice("product", "Video too short. Minimum 3 seconds."); remove(); return; }
-        if (d > MOTION_FRAME2_VIDEO_MAX_SEC) { deps.showUploadNotice("product", "Video too long. Max 30 seconds."); remove(); return; }
+        if (d < MOTION_FRAME2_VIDEO_MIN_SEC) { deps.showUploadNotice("product", "Video too short. Minimum 3 seconds."); patch({ uploading: false, error: "Video too short" }); return; }
+        if (d > MOTION_FRAME2_VIDEO_MAX_SEC) { deps.showUploadNotice("product", "Video too long. Max 30 seconds."); patch({ uploading: false, error: "Video too long" }); return; }
       }
     }
 
@@ -228,10 +228,10 @@ export async function startUploadForFileItem(
     if (panel === "product" && animateMode && mediaType === "audio") {
       const ext = getFileExt(file.name);
       const mime = String(file.type || "").toLowerCase();
-      if (!FABRIC_AUDIO_EXTS.has(ext) && !FABRIC_AUDIO_MIMES.has(mime)) { deps.showUploadNotice("product", "Audio must be mp3, wav, m4a, or aac."); remove(); return; }
-      if (file.size > FABRIC_AUDIO_MAX_BYTES) { deps.showUploadNotice("product", "Audio too large. Max 10MB."); remove(); return; }
+      if (!FABRIC_AUDIO_EXTS.has(ext) && !FABRIC_AUDIO_MIMES.has(mime)) { deps.showUploadNotice("product", "Audio must be mp3, wav, m4a, or aac."); patch({ uploading: false, error: "Unsupported audio format" }); return; }
+      if (file.size > FABRIC_AUDIO_MAX_BYTES) { deps.showUploadNotice("product", "Audio too large. Max 10MB."); patch({ uploading: false, error: "Audio too large" }); return; }
       const d = await getMediaDurationSec(previewUrl, "audio");
-      if (typeof d === "number" && d > FABRIC_AUDIO_MAX_SEC) { deps.showUploadNotice("product", "Audio too long. Max 60 seconds."); remove(); return; }
+      if (typeof d === "number" && d > FABRIC_AUDIO_MAX_SEC) { deps.showUploadNotice("product", "Audio too long. Max 60 seconds."); patch({ uploading: false, error: "Audio too long" }); return; }
     }
 
     // -- Animate: video/audio ONLY as product frame #2 --
@@ -242,7 +242,7 @@ export async function startUploadForFileItem(
       if (!hasFrame0 || frame0Type !== "image") {
         deps.setMinaOverrideText("first frame must be an image");
         deps.showUploadNotice("product", "First frame must be an image. Add video/audio only as frame 2.");
-        remove(); return;
+        patch({ uploading: false, error: "First frame must be an image" }); return;
       }
       const maxSec = mediaType === "video" ? MOTION_FRAME2_VIDEO_MAX_SEC : FABRIC_AUDIO_MAX_SEC;
       const minSec = mediaType === "video" ? MOTION_FRAME2_VIDEO_MIN_SEC : FABRIC_AUDIO_MIN_SEC;
@@ -251,7 +251,7 @@ export async function startUploadForFileItem(
       if (typeof d === "number" && (d > maxSec || d < minSec)) {
         deps.setMinaOverrideText(mediaType === "video" ? UI_ERROR_MESSAGES.videoTooLong : UI_ERROR_MESSAGES.audioTooLong);
         deps.showUploadNotice("product", mediaType === "video" ? UI_ERROR_MESSAGES.videoTooLongNotice : UI_ERROR_MESSAGES.audioTooLongNotice);
-        remove(); return;
+        patch({ uploading: false, error: mediaType === "video" ? "Video duration invalid" : "Audio duration invalid" }); return;
       }
     }
 
@@ -289,7 +289,7 @@ export async function startUploadForFileItem(
         } else {
           const reason = code === "TOO_BIG" || file.size > MAX_UPLOAD_BYTES ? "too_big" : !isAllowed || code === "UNSUPPORTED" ? "unsupported" : "broken";
           deps.showUploadNotice(panel, humanizeUploadError(reason as any));
-          remove(); return;
+          patch({ uploading: false, error: humanizeUploadError(reason as any) }); return;
         }
       }
     }
@@ -300,7 +300,7 @@ export async function startUploadForFileItem(
     // -- Verify uploaded URL --
     const wasNormalized = normalized !== file;
     const ok = wasNormalized || await probeMediaUrlWithRetry(remoteUrl, mediaType, 12000, 4, 2000);
-    if (!ok) { deps.showUploadNotice(panel, humanizeUploadError("broken")); remove(); return; }
+    if (!ok) { deps.showUploadNotice(panel, humanizeUploadError("broken")); patch({ uploading: false, error: "Upload verification failed" }); return; }
 
     let durationSec: number | undefined;
     if (panel === "product" && animateMode && (mediaType === "video" || mediaType === "audio")) {
@@ -311,7 +311,7 @@ export async function startUploadForFileItem(
       if (typeof d === "number" && (d > maxSec || d < minSec)) {
         deps.setMinaOverrideText(mediaType === "video" ? UI_ERROR_MESSAGES.videoTooLong : UI_ERROR_MESSAGES.audioTooLong);
         deps.showUploadNotice(panel, mediaType === "video" ? UI_ERROR_MESSAGES.videoTooLongNotice : UI_ERROR_MESSAGES.audioTooLongNotice);
-        remove(); return;
+        patch({ uploading: false, error: mediaType === "video" ? "Video duration invalid" : "Audio duration invalid" }); return;
       }
     }
 
@@ -320,7 +320,7 @@ export async function startUploadForFileItem(
     patch(finalPatch);
   } catch {
     deps.showUploadNotice(panel, UI_ERROR_MESSAGES.uploadFailed);
-    remove();
+    patch({ uploading: false, error: "Upload failed" });
   }
 }
 
@@ -347,12 +347,12 @@ export async function startStoreForUrlItem(
       : url;
 
     const ok = await probeMediaUrl(urlForStore, kind, 7000);
-    if (!ok) { deps.showUploadNotice(panel, humanizeUploadError("link_broken")); remove(); return; }
+    if (!ok) { deps.showUploadNotice(panel, humanizeUploadError("link_broken")); patch({ uploading: false, error: "Link could not be loaded" }); return; }
 
     const remoteUrl = await storeRemoteToR2(apiFetch, currentPassId, urlForStore, panel);
     const kind2 = inferMediaTypeFromUrl(remoteUrl) || kind;
     const ok2 = await probeMediaUrlWithRetry(remoteUrl, kind2, 8000, 2, 1500);
-    if (!ok2) { deps.showUploadNotice(panel, humanizeUploadError("broken")); remove(); return; }
+    if (!ok2) { deps.showUploadNotice(panel, humanizeUploadError("broken")); patch({ uploading: false, error: "Upload verification failed" }); return; }
 
     let durationSec: number | undefined;
     if (panel === "product" && animateMode && (kind2 === "video" || kind2 === "audio")) {
@@ -363,14 +363,14 @@ export async function startStoreForUrlItem(
       if (typeof d === "number" && (d > maxSec || d < minSec)) {
         deps.setMinaOverrideText(kind2 === "video" ? UI_ERROR_MESSAGES.videoTooLong : UI_ERROR_MESSAGES.audioTooLong);
         deps.showUploadNotice(panel, kind2 === "video" ? UI_ERROR_MESSAGES.videoTooLongNotice : UI_ERROR_MESSAGES.audioTooLongNotice);
-        remove(); return;
+        patch({ uploading: false, error: kind2 === "video" ? "Video duration invalid" : "Audio duration invalid" }); return;
       }
     }
 
     patch({ remoteUrl, uploading: false, error: undefined, mediaType: kind2, durationSec });
   } catch {
     deps.showUploadNotice(panel, UI_ERROR_MESSAGES.uploadFailed);
-    remove();
+    patch({ uploading: false, error: "Upload failed" });
   }
 }
 
