@@ -19,6 +19,7 @@ const STEPS = [
   <>Hit <b>Create</b>. Keep <b>Vision Intelligence</b> ON so Mina learns your taste.</>,
   <>When you like a result, tap <b>Love</b> → "more like this".</>,
   <>Small change? Use the <b>Tweak</b> bar. Want animation? Tap <b>Animate</b> and keep prompts simple.</>,
+  <>For longer videos, switch to <b>UGC</b> mode (30–60s). Mina plans shots, generates clips, and stitches them together.</>,
 ];
 
 const VideoBlock: React.FC<{ src: string }> = ({ src }) => (

@@ -156,8 +156,12 @@ const MinaApp: React.FC<MinaAppProps> = () => {
   useEffect(() => { try { window.localStorage.setItem(STILL_LANE_LS_KEY, stillLane); } catch {} }, [stillLane]);
 
   // ── Video lane ──
-  const [videoLane, setVideoLane] = useState<"short" | "story">("short");
-  const handleToggleVideoLane = useCallback(() => setVideoLane((prev) => (prev === "short" ? "story" : "short")), []);
+  const [videoLane, setVideoLane] = useState<"short" | "story" | "ugc">("short");
+  const handleToggleVideoLane = useCallback(() => setVideoLane((prev) => prev === "short" ? "story" : prev === "story" ? "ugc" : "short"), []);
+
+  // ── UGC duration ──
+  const [ugcDuration, setUgcDuration] = useState<30 | 45 | 60>(30);
+  const handleToggleUgcDuration = useCallback(() => setUgcDuration((prev) => prev === 30 ? 45 : prev === 45 ? 60 : 30), []);
 
   const effectiveStillResolution = STILL_RESOLUTION;
   const [, setPlatform] = useState("tiktok");
@@ -454,7 +458,7 @@ const MinaApp: React.FC<MinaAppProps> = () => {
     hasFrame2Video, hasFrame2Audio, videoSec, audioSec, animateAspectOption, animateEffectiveAspectRatio,
     videoLane, setMotionGenerating, setMotionError, setMotionItems, setMotionIndex, setMotionFinalPrompt,
     setMotionDescription, setMotionSuggesting, setMotionSuggestTyping, setBrief, setShowDescribeMore,
-    describeMoreTimeoutRef, brief, historyDirtyRef, creditsDirtyRef,
+    describeMoreTimeoutRef, brief, historyDirtyRef, creditsDirtyRef, ugcDuration,
   };
 
   // ═══════════════════════════════════════════════════════════════════
@@ -693,6 +697,7 @@ const MinaApp: React.FC<MinaAppProps> = () => {
                 minaError={minaTone === "error" ? minaMessage : null} onClearMinaError={clearMinaError}
                 stillLane={stillLane} onToggleStillLane={toggleStillLane} stillLaneDisabled={minaBusy}
                 videoLane={videoLane} onToggleVideoLane={handleToggleVideoLane}
+                ugcDuration={ugcDuration} onToggleUgcDuration={handleToggleUgcDuration}
                 onGoProfile={() => goTab("profile")} feedbackSending={feedbackSending}
               />
               <StudioRight

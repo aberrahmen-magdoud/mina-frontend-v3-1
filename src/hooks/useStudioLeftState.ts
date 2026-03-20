@@ -117,6 +117,9 @@ export function useStudioLeftState(props: StudioLeftProps) {
     videoLane,
     onToggleVideoLane,
 
+    ugcDuration,
+    onToggleUgcDuration,
+
     timingVars,
 
     onGoProfile,
@@ -684,6 +687,7 @@ export function useStudioLeftState(props: StudioLeftProps) {
     minaError, onClearMinaError,
     stillLane, onToggleStillLane, stillLaneDisabled,
     videoLane, onToggleVideoLane,
+    ugcDuration, onToggleUgcDuration,
     timingVars, onGoProfile,
 
     // computed / local state

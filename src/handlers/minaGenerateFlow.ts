@@ -87,7 +87,8 @@ export interface GenerateDeps {
   audioSec: number;
   animateAspectOption: { platformKey: string; ratio: string };
   animateEffectiveAspectRatio: string;
-  videoLane: "short" | "story";
+  videoLane: "short" | "story" | "ugc";
+  ugcDuration: 30 | 45 | 60;
 
   setMotionGenerating: SetState<boolean>;
   setMotionError: SetState<string | null>;
@@ -358,8 +359,13 @@ export async function handleTypeForMe(deps: GenerateDeps) {
 // ────────────────────────────────────────────────────────────────────
 export async function handleGenerateMotion(deps: GenerateDeps) {
   if (!deps.motionReferenceImageUrl) return;
-  if (!deps.motionTextTrimmed && !deps.hasFrame2Video && !deps.hasFrame2Audio) return;
+  if (!deps.motionTextTrimmed && !deps.hasFrame2Video && !deps.hasFrame2Audio && deps.videoLane !== "ugc") return;
   if (!deps.currentPassId) { deps.setMotionError(UI_ERROR_MESSAGES.missingPassIdMega); deps.showMinaError(UI_ERROR_MESSAGES.missingPassIdMega); return; }
+
+  // ── UGC mode: multi-shot pipeline ──
+  if (deps.videoLane === "ugc") {
+    return handleGenerateUgc(deps);
+  }
 
   deps.setMotionGenerating(true);
   deps.setMotionError(null);
@@ -482,6 +488,114 @@ export async function handleGenerateMotion(deps: GenerateDeps) {
         used_prompt: String(result?.prompt || "").trim() || undefined,
         assets: { start_image_url: startFrameForModel, end_image_url: endFrame || "", inspiration_image_urls: inspirationUrls },
         settings: { aspect_ratio: deps.animateEffectiveAspectRatio, stylePresetKeys: deps.stylePresetKeys, minaVisionEnabled: deps.minaVisionEnabled },
+      },
+    };
+
+    deps.setMotionItems((prev) => { const next = [item, ...prev]; deps.setMotionIndex(0); return next; });
+    deps.setActiveMediaKind("motion");
+  } catch (err: any) {
+    deps.stopAllMmaUiNow();
+    const msg = humanizeMmaError(err, "animate");
+    deps.setMotionError(msg);
+    deps.showMinaError(msg);
+  } finally {
+    deps.setMinaOverrideText(null);
+    deps.setMotionGenerating(false);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// handleGenerateUgc — multi-shot UGC pipeline
+// ────────────────────────────────────────────────────────────────────
+async function handleGenerateUgc(deps: GenerateDeps) {
+  const brief = (deps.motionFinalPrompt || deps.motionTextTrimmed || deps.brief || "").trim();
+  if (brief.length < 10) { deps.setMotionError("UGC brief too short – describe your video idea."); return; }
+
+  deps.setMotionGenerating(true);
+  deps.setMotionError(null);
+  deps.dismissMinaNotice();
+  deps.setMinaTone("thinking");
+  deps.setMinaOverrideText("Planning your UGC shots...");
+
+  try {
+    const sid = await deps.ensureSession();
+
+    const startFrame = deps.uploads.product?.[0];
+    const startUrl = isHttpUrl(startFrame?.remoteUrl || startFrame?.url || "")
+      ? await deps.ensureOptimizedInputUrl(startFrame?.remoteUrl || startFrame?.url || "", "product")
+      : "";
+
+    const inspirationUrls = collectInspirationUrls(deps);
+
+    // Audio from Frame 2 (optional)
+    const f2 = deps.uploads.product?.[1];
+    const f2Url = String(f2?.remoteUrl || f2?.url || "").trim();
+    const audioUrl = f2 && isHttpUrl(f2Url) && (f2.mediaType === "audio" || isAudioUrl(f2Url)) ? f2Url : "";
+
+    const mmaBody = {
+      passId: deps.currentPassId,
+      assets: {
+        product_image_url: startUrl,
+        inspiration_image_urls: inspirationUrls,
+      },
+      inputs: {
+        motion_user_brief: brief,
+        brief,
+        ugc_target_duration: deps.ugcDuration,
+        ugc_shot_count: 0, // auto
+        video_lane: "ugc",
+        frame2_url: audioUrl,
+        platform: deps.animateAspectOption?.platformKey || "tiktok",
+        aspect_ratio: deps.animateEffectiveAspectRatio || "9:16",
+        stylePresetKeys: deps.stylePresetKeysForApi,
+        minaVisionEnabled: deps.minaVisionEnabled,
+      },
+      settings: {},
+      history: { sessionId: sid || deps.sessionId || null, sessionTitle: deps.sessionTitle || null },
+      feedback: {},
+      prompts: {},
+    };
+
+    const { generationId } = await deps.mmaCreateAndWait("/mma/ugc/create", mmaBody, ({ status, scanLines }) => {
+      const last = scanLines.slice(-1)[0] || status || "";
+      if (last) deps.setMinaOverrideText(last);
+    });
+
+    const result = await mmaWaitForFinal(generationId, deps.apiFetch, undefined, (snap: any) => {
+      if (extractMmaErrorTextFromResult(snap)) deps.showMinaError(snap);
+    });
+
+    const status = String(result?.status || "").toLowerCase().trim();
+    if (extractMmaErrorTextFromResult(result)) throw result;
+    if (isTimeoutLikeStatus(status) || status === "queued" || status === "processing" || status === "stitching") {
+      deps.showMinaInfo("UGC is still generating – check Profile in a few minutes.");
+      deps.stopAllMmaUiNow();
+      return;
+    }
+
+    const rawUrl = pickMmaVideoUrl(result);
+    const url = rawUrl ? await deps.ensureAssetsUrl(rawUrl, "motions") : "";
+    if (!url) throw new Error("UGC generation completed but no video URL returned.");
+
+    deps.historyDirtyRef.current = true;
+    deps.creditsDirtyRef.current = true;
+    deps.fetchCredits();
+    deps.applyCreditsFromResponse(result?.credits);
+
+    const item: MotionItem = {
+      id: generationId,
+      url,
+      createdAt: new Date().toISOString(),
+      prompt: brief,
+      draft: {
+        mode: "ugc",
+        brief,
+        settings: {
+          ugc_duration: deps.ugcDuration,
+          aspect_ratio: deps.animateEffectiveAspectRatio,
+          stylePresetKeys: deps.stylePresetKeys,
+          minaVisionEnabled: deps.minaVisionEnabled,
+        },
       },
     };
 

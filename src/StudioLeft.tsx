@@ -44,6 +44,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
     minaError, onClearMinaError,
     stillLane, onToggleStillLane, stillLaneDisabled,
     videoLane, onToggleVideoLane,
+    ugcDuration, onToggleUgcDuration,
     onGoProfile,
     // computed state
     aspectLandscape, displayAspectLabel, aspectIconRotate,
@@ -311,23 +312,24 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                     <span className="studio-pill-main">Frames</span>
                   </button>
 
-                  {/* Short / Story toggle */}
+                  {/* Short / Story / UGC toggle */}
                   <button
                     type="button"
                     className={classNames(
                       "studio-pill",
                       "pill-infinite-toggle",
-                      videoLane === "story" ? "is-niche" : "is-main"
+                      videoLane === "ugc" ? "is-ugc" : videoLane === "story" ? "is-niche" : "is-main"
                     )}
                     style={pillBaseStyle(1)}
                     onClick={onToggleVideoLane}
                     aria-label="Toggle video lane"
-                    title={videoLane === "story" ? "Story mode – cinematic multi-frame" : "Short mode – quick single or multi-frame"}
+                    title={videoLane === "ugc" ? "UGC mode – raw, multi-shot, social-first (~30-60s)" : videoLane === "story" ? "Story mode – cinematic multi-frame" : "Short mode – quick single or multi-frame"}
                   >
-                    <span className="studio-pill-main">{videoLane === "story" ? "Story" : "Short"}</span>
+                    <span className="studio-pill-main">{videoLane === "ugc" ? "UGC" : videoLane === "story" ? "Story" : "Short"}</span>
                   </button>
 
-                  {/* ✅ Sound / Muted (now always visible) */}
+                  {/* ✅ Sound / Muted (now always visible, hidden in UGC mode) */}
+                  {videoLane !== "ugc" && (
                   <button
                     type="button"
                     className={classNames(
@@ -346,8 +348,20 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                   >
                     <span className="studio-pill-main">{effectiveMotionAudioEnabled ? "Sound" : "Muted"}</span>
                   </button>
+                  )}
 
-                  {/* ✅ Duration (disabled when video/audio is used) */}
+                  {/* ✅ Duration: standard (5/10/15s) or UGC (30/45/60s) */}
+                  {videoLane === "ugc" ? (
+                  <button
+                    type="button"
+                    className={classNames("studio-pill", "pill-duration-toggle", "is-ugc")}
+                    style={pillBaseStyle(2)}
+                    onClick={() => onToggleUgcDuration?.()}
+                    title={`UGC video ~${ugcDuration}s (${Math.ceil(ugcDuration / 8)} shots × 10 matchas)`}
+                  >
+                    <span className="studio-pill-main">{ugcDuration}s</span>
+                  </button>
+                  ) : (
                   <button
                     type="button"
                     className={classNames("studio-pill", "pill-duration-toggle", hasRefMedia && "studio-pill--ghost")}
@@ -363,6 +377,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                       {hasRefMedia ? `${Math.round(refSeconds || 5)}s` : `${motionDurationSec}s`}
                     </span>
                   </button>
+                  )}
 
                   {/* Movement style */}
                   <button

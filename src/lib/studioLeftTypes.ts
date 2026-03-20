@@ -115,8 +115,11 @@ export type StudioLeftProps = {
   onToggleStillLane: () => void;
   stillLaneDisabled?: boolean;
 
-  videoLane: "short" | "story";
+  videoLane: "short" | "story" | "ugc";
   onToggleVideoLane: () => void;
+
+  ugcDuration: 30 | 45 | 60;
+  onToggleUgcDuration: () => void;
 
   timingVars?: React.CSSProperties;
 

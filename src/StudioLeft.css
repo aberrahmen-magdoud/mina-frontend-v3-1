@@ -157,6 +157,15 @@ background-color 0s ease 0s,
 .pill-infinite-toggle.is-main {
 }
 
+.pill-infinite-toggle.is-ugc {
+  background: rgba(255, 140, 0, 0.1);
+  border-color: rgba(255, 140, 0, 0.25);
+}
+
+.pill-duration-toggle.is-ugc {
+  background: rgba(255, 140, 0, 0.08);
+}
+
 .pill-resolution-toggle.is-locked {
   opacity: 0.55;
 }
