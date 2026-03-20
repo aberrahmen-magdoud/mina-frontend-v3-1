@@ -328,8 +328,7 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                     <span className="studio-pill-main">{videoLane === "ugc" ? "UGC" : videoLane === "story" ? "Story" : "Short"}</span>
                   </button>
 
-                  {/* ✅ Sound / Muted (now always visible, hidden in UGC mode) */}
-                  {videoLane !== "ugc" && (
+                  {/* ✅ Sound / Muted (always visible) */}
                   <button
                     type="button"
                     className={classNames(
@@ -348,14 +347,13 @@ const StudioLeft: React.FC<StudioLeftProps> = (props) => {
                   >
                     <span className="studio-pill-main">{effectiveMotionAudioEnabled ? "Sound" : "Muted"}</span>
                   </button>
-                  )}
 
                   {/* ✅ Duration: standard (5/10/15s) or UGC (30/45/60s) */}
                   {videoLane === "ugc" ? (
                   <button
                     type="button"
                     className={classNames("studio-pill", "pill-duration-toggle", "is-ugc")}
-                    style={pillBaseStyle(2)}
+                    style={pillBaseStyle(3)}
                     onClick={() => onToggleUgcDuration?.()}
                     title={`UGC video ~${ugcDuration}s (${Math.ceil(ugcDuration / 8)} shots × 10 matchas)`}
                   >

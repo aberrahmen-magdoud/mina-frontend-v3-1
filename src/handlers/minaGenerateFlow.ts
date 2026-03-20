@@ -544,6 +544,7 @@ async function handleGenerateUgc(deps: GenerateDeps) {
         ugc_target_duration: deps.ugcDuration,
         ugc_shot_count: 0, // auto
         video_lane: "ugc",
+        generate_audio: deps.effectiveMotionAudioEnabled,
         frame2_url: audioUrl,
         platform: deps.animateAspectOption?.platformKey || "tiktok",
         aspect_ratio: deps.animateEffectiveAspectRatio || "9:16",
